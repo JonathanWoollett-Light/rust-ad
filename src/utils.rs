@@ -39,10 +39,7 @@ pub trait IsExpr {
 }
 impl IsExpr for syn::Expr {
     fn is_binary(&self) -> bool {
-        match self {
-            Self::Binary(_) => true,
-            _ => false,
-        }
+        matches!(self,Self::Binary(_))
     }
 }
 pub trait UnwrapExpr {

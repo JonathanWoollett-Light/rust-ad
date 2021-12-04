@@ -22,25 +22,25 @@ impl Forward for SimpleStruct {
     type IN = ();
     type OUT = f32;
     fn forward(&self, _: Self::IN) -> Self::OUT {
-        let p = 7 * self.x;
-        let r = 1 / self.y;
-        let q = p * self.x * 5;
-        let v = 2 * p * q + 3 * r;
+        let p = 7. * self.x;
+        let r = 1. / self.y;
+        let q = p * self.x * 5.;
+        let v = 2. * p * q + 3. * r;
         v
     }
 }
-impl SimpleStruct {
-    fn backward(&self) {
-        let p = 7 * self.x;
-        let r = 1 / self.y;
-        let q__0 = p * self.x;
-        let q = q__0 * 5;
-        let v__0 = 2 * p;
-        let v__1 = v__0 * q;
-        let v__2 = 3 * r;
-        let v = v__1 + v__2;
-    }
-}
+// impl SimpleStruct {
+//     fn backward(&self) {
+//         let p = 7. * self.x;
+//         let r = 1. / self.y;
+//         let q__0 = p * self.x;
+//         let q = q__0 * 5.;
+//         let v__0 = 2. * p;
+//         let v__1 = v__0 * q;
+//         let v__2 = 3. * r;
+//         let v = v__1 + v__2;
+//     }
+// }
 
 fn main() {
     // println!("{}", answer());
