@@ -17,7 +17,7 @@ struct SimpleStruct {
     x: f32,
     y: f32,
 }
-#[autodiff]
+#[forward_autodiff]
 impl Forward for SimpleStruct {
     type IN = ();
     type OUT = f32;

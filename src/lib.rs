@@ -1,30 +1,11 @@
-// #![feature(log_syntax)]
-
 mod utils;
 use utils::*;
 
 extern crate proc_macro;
 use proc_macro::TokenStream;
-// use syn::{parse_macro_input, DeriveInput};
-use quote::quote;
 
 #[proc_macro_attribute]
-pub fn return_as_is(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    eprintln!("\n\nitem: {:#?}\n\n", item);
-    item
-}
-
-#[proc_macro_attribute]
-pub fn return_as_is_syn(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    let ast = syn::parse_macro_input!(item as syn::Item);
-    eprintln!("\n\nast: {:#?}\n\n", ast);
-
-    let new = quote! { #ast };
-    TokenStream::from(new)
-}
-
-#[proc_macro_attribute]
-pub fn autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let ast = syn::parse_macro_input!(item as syn::Item);
 
     // Checks item is impl.
@@ -45,26 +26,59 @@ pub fn autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     };
     // eprintln!("\n\nblock:\n{:?}\n\n", block);
 
-    let new_block_statements = block
+    let statements = block
         .stmts
         .iter()
-        .flat_map(|statement| unwrap_statement(statement.clone()))
+        .flat_map(|statement| unwrap_statement(statement))
         .collect::<Vec<_>>();
+    // block.stmts = statements;
 
-    block.stmts = new_block_statements;
+    // let statements = statements
+    //     .into_iter()
+    //     .flat_map(|statement| append_derivative(statement))
+    //     .collect::<Vec<_>>();
 
-    let new = quote! { #ast };
+    block.stmts = statements;
+
+    let new = quote::quote! { #ast };
     TokenStream::from(new)
 }
 
-fn unwrap_statement(stmt: syn::Stmt) -> Vec<syn::Stmt> {
+// http://h2.jaguarpaw.co.uk/posts/automatic-differentiation-worked-examples/
+fn append_derivative(stmt: syn::Stmt) /* /-> [syn::Stmt;2] */ {
+    if let syn::Stmt::Local(local) = stmt {
+        if let Some(init) = local.init {
+            if let syn::Expr::Binary(bin_expr) = *init.1 {
+                // TODO Do the rest of the operations.
+                let new_bin_expr = match bin_expr.op {
+                    syn::BinOp::Add(_) => {
+                        // x+7 -> d_x+0
+                        // x+y -> d_x+d_y
+                    },
+                    syn::BinOp::Sub(_) => {
+                        // x-7 -> d_x-0
+                        // x-y -> d_x-d_y
+                    },
+                    syn::BinOp::Mul(_) => {
+                    },
+                    syn::BinOp::Div(_) => {
+
+                    },
+                    _ => panic!("Uncovered operation")
+                };
+            }
+        }
+    }
+}
+
+fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
     let mut statements = Vec::new();
 
     // TODO Avoid this clone.
     let mut base_statement = stmt.clone();
 
     // If the statement is local variable declaration (e.g. `let ...`).
-    if let syn::Stmt::Local(local) = &stmt {
+    if let syn::Stmt::Local(local) = stmt {
         let local_ident = &local.pat.ident().ident;
         // If our statement has some initialization (e.g. `let a = 3;`).
         if let Some(init) = local.init.as_ref() {
@@ -80,7 +94,7 @@ fn unwrap_statement(stmt: syn::Stmt) -> Vec<syn::Stmt> {
                         syn::Ident::new(&left_ident, local_ident.span());
                     *left_local.init.as_mut().unwrap().1 = syn::Expr::Binary(left_bin_expr.clone());
                     // Recurse
-                    statements.append(&mut unwrap_statement(left_stmt));
+                    statements.append(&mut unwrap_statement(&left_stmt));
 
                     // Updates statement to contain variable referencing new statement.
                     let mut p = syn::punctuated::Punctuated::new();
@@ -115,7 +129,7 @@ fn unwrap_statement(stmt: syn::Stmt) -> Vec<syn::Stmt> {
                     *right_local.init.as_mut().unwrap().1 =
                         syn::Expr::Binary(right_bin_expr.clone());
                     // Recurse
-                    statements.append(&mut unwrap_statement(right_stmt));
+                    statements.append(&mut unwrap_statement(&right_stmt));
 
                     // Updates statement to contain variable referencing new statement.
                     let mut p = syn::punctuated::Punctuated::new();
