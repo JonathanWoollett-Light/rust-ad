@@ -1,12 +1,12 @@
 [package]
-name = "rad"
+name = "rust-ad"
 version = "0.1.0"
 edition = "2021"
 
 description = "Rust Auto-Differentiation."
 license = "Apache-2.0"
-repository = "https://github.com/JonathanWoollett-Light/rad"
-documentation = "https://docs.rs/rad/"
+repository = "https://github.com/JonathanWoollett-Light/rust-ad"
+documentation = "https://docs.rs/rust-ad/"
 readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

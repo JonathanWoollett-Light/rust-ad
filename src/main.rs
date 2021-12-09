@@ -1,5 +1,5 @@
-extern crate rad;
-use rad::*;
+extern crate rust_ad;
+use rust_ad::*;
 
 #[forward_autodiff]
 fn forward((x, y): (f32, f32)) -> f32 {
