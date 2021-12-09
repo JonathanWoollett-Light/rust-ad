@@ -7,6 +7,29 @@ use proc_macro::TokenStream;
 const DERIVATIVE_PREFIX: &'static str = "der_";
 
 #[proc_macro_attribute]
+pub fn unweave(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let ast = syn::parse_macro_input!(item as syn::Item);
+
+    // Checks item is impl.
+    let mut ast = match ast {
+        syn::Item::Fn(func) => func,
+        _ => panic!("Macro must be applied to a `fn`"),
+    };
+
+    let block = &mut ast.block;
+
+    let statements = block
+        .stmts
+        .iter()
+        .flat_map(|statement| unwrap_statement(statement))
+        .collect::<Vec<_>>();
+    block.stmts = statements;
+
+    let new = quote::quote! { #ast };
+    TokenStream::from(new)
+}
+
+#[proc_macro_attribute]
 pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let ast = syn::parse_macro_input!(item as syn::Item);
 
