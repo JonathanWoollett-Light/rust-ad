@@ -1,5 +1,9 @@
 # RustAD - Rust Auto-Differentiation
 
+[![Crates.io](https://img.shields.io/crates/v/rust-ad)](https://crates.io/crates/rust-ad)
+[![lib.rs.io](https://img.shields.io/crates/v/rust-ad?color=blue&label=lib.rs)](https://lib.rs/crates/rust-ad)
+[![docs](https://img.shields.io/crates/v/rust-ad?color=yellow&label=docs)](https://docs.rs/rust-ad)
+
 A super restrictive rough WIP beginnings of a library attempting to implement auto-differentiation in Rust.
   
 ### `forward_autodiff`
