@@ -1,13 +1,13 @@
 # RAD - Rust Auto-Differentiation
 
-The super restrictive rough WIP beginnings of a library attempting to implement auto-differentiation in Rust.
+A super restrictive rough WIP beginnings of a library attempting to implement auto-differentiation in Rust.
   
 ### `forward_autodiff`
 
-Currently only forward auto-differentation is (roughly) implemented via a procedural attribute macro `forward_autodiff`:
+Currently only forward auto-differentiation is (roughly) implemented via a procedural attribute macro `forward_autodiff`:
 ```rust
 #[forward_autodiff]
-fn forward((x, y): (f32, f32)) -> (f32, f32) {
+fn forward((x, y): (f32, f32)) -> f32 {
     let p = 7. * x;
     let r = 10. - y;
     let q = p * x * 5.;
@@ -44,7 +44,7 @@ A procedural attribute macro `unweave` is also exposed:
 
 ```rust
 #[unweave]
-fn forward((x, y): (f32, f32)) -> (f32, f32) {
+fn forward((x, y): (f32, f32)) -> f32 {
     let p = 7. * x;
     let r = 10. - y;
     let q = p * x * 5.;
@@ -54,7 +54,7 @@ fn forward((x, y): (f32, f32)) -> (f32, f32) {
 ```
 Produces:
 ```rust
-fn forward((x, y): (f32, f32)) -> (f32, f32) {
+fn forward((x, y): (f32, f32)) -> f32 {
     let p = 7. * x;
     let r = 10. - y;
     let _q = p * x;

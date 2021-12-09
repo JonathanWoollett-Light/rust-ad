@@ -1,11 +1,45 @@
+//! A super restrictive rough WIP beginnings of a library attempting to implement auto-differentiation in Rust.
+//! ## Status
+//! This library is super WIP and thus extremely rough, temperamental and inconsistent.
+//!
+//! I would not recommend you use it at the moment, it is only public to allow the possibility of collaborative work on it.
+
+
 mod utils;
 use utils::*;
 
 extern crate proc_macro;
 use proc_macro::TokenStream;
 
+/// The prefix used to attached to derivatives of a variable (e.g. The derivative of `x` would be `der_x`). 
 const DERIVATIVE_PREFIX: &'static str = "der_";
 
+/// Pulls chained binary expressions apart into separate assignments.
+/// ```
+/// #[rad::unweave]
+/// fn forward((x, y): (f32, f32)) -> f32 {
+///     let p = 7. * x;
+///     let r = 10. - y;
+///     let q = p * x * 5.;
+///     let v = 2. * p * q + 3. * r;
+///     return v;
+/// }
+/// ```
+/// Produces:
+/// ```
+/// fn forward((x, y): (f32, f32)) -> f32 {
+///     let p = 7. * x;
+///     let r = 10. - y;
+///     let _q = p * x;
+///     let q = _q * 5.;
+///     let __v = 2. * p;
+///     let _v = __v * q;
+///     let v_ = 3. * r;
+///     let v = _v + v_;
+///     return v;
+/// }
+/// ```
+/// It may be worth adding `#[allow(non_snake_case)]` as many of the intermediate variables the macro sets will cause this warning.
 #[proc_macro_attribute]
 pub fn unweave(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let ast = syn::parse_macro_input!(item as syn::Item);
@@ -29,6 +63,44 @@ pub fn unweave(_attr: TokenStream, item: TokenStream) -> TokenStream {
     TokenStream::from(new)
 }
 
+/// Transforms a given function into a form for forward auto-differentiation.
+///
+/// At the moment this is super restrictive:
+/// - The function must take a tuple of `f32`s as input and output a `f32` like `fn fn_name((x,y,):(f32,f32,)) -> f32`. 
+/// - It only works with the primitive operations `-`, `+`, `*`, and `/`.
+/// ```
+/// #[rad::forward_autodiff]
+/// fn forward((x, y): (f32, f32)) -> f32 {
+///     let p = 7. * x;
+///     let r = 10. - y;
+///     let q = p * x * 5.;
+///     let v = 2. * p * q + 3. * r;
+///     return v;
+/// }
+/// ```
+/// Produces:
+/// ```
+/// fn forward((x, y): (f32, f32), (der_x, der_y): (f32, f32)) -> (f32, f32) {
+///     let p = 7. * x;
+///     let der_p = x * 0f32 + 7. * der_x;
+///     let r = 10. - y;
+///     let der_r = 0f32 - der_y;
+///     let _q = p * x;
+///     let der__q = x * der_p + p * der_x;
+///     let q = _q * 5.;
+///     let der_q = 5. * der__q + _q * 0f32;
+///     let __v = 2. * p;
+///     let der___v = p * 0f32 + 2. * der_p;
+///     let _v = __v * q;
+///     let der__v = q * der___v + __v * der_q;
+///     let v_ = 3. * r;
+///     let der_v_ = r * 0f32 + 3. * der_r;
+///     let v = _v + v_;
+///     let der_v = der__v + der_v_;
+///     return (v, der_v);
+/// }
+/// ```
+/// It may be worth adding `#[allow(non_snake_case)]` as many of the intermediate variables the macro sets will cause this warning.
 #[proc_macro_attribute]
 pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let ast = syn::parse_macro_input!(item as syn::Item);

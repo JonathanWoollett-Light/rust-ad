@@ -2,7 +2,7 @@ extern crate rad;
 use rad::*;
 
 #[forward_autodiff]
-fn forward((x, y): (f32, f32)) -> (f32, f32) {
+fn forward((x, y): (f32, f32)) -> f32 {
     let p = 7. * x;
     let r = 10. - y;
     let q = p * x * 5.;
