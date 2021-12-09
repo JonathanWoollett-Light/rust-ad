@@ -1,5 +1,5 @@
-extern crate macro_test;
-use macro_test::*;
+extern crate rad;
+use rad::*;
 
 #[forward_autodiff]
 #[allow(non_snake_case)]
