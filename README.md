@@ -1,4 +1,4 @@
-# RAD - Rust Auto-Differentiation
+# RustAD - Rust Auto-Differentiation
 
 A super restrictive rough WIP beginnings of a library attempting to implement auto-differentiation in Rust.
   
