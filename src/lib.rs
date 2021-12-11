@@ -14,7 +14,25 @@ use proc_macro::TokenStream;
 /// The prefix used to attached to derivatives of a variable (e.g. The derivative of `x` would be `der_x`). 
 const DERIVATIVE_PREFIX: &'static str = "der_";
 
-/// Pulls chained binary expressions apart into separate assignments.
+/// Flattens nested binary expressions into separate variable assignments.
+/// A basic example:
+/// ```
+/// #[rad::unweave]
+/// fn forward((x, y): (f32, f32)) -> f32 {
+///     let v = 2. * x + y / 3.;
+///     return v;
+/// }
+/// ```
+/// Produces:
+/// ```
+/// fn forward((x, y): (f32, f32)) -> f32 {
+///     let _v = 2. * x;
+///     let v_ = y / 3.;
+///     let v = _v + v_
+///     return v;
+/// }
+/// ```
+/// A more complex example:
 /// ```
 /// #[rad::unweave]
 /// fn forward((x, y): (f32, f32)) -> f32 {
