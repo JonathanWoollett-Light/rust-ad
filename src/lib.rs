@@ -4,6 +4,7 @@
 //!
 //! I would not recommend you use it at the moment, it is only public to allow the possibility of collaborative work on it.
 
+#![feature(proc_macro_span)]
 
 mod utils;
 use utils::*;
@@ -11,7 +12,10 @@ use utils::*;
 extern crate proc_macro;
 use proc_macro::TokenStream;
 
-/// The prefix used to attached to derivatives of a variable (e.g. The derivative of `x` would be `der_x`). 
+use std::collections::HashMap;
+use syn::spanned::Spanned;
+
+/// The prefix used to attached to derivatives of a variable (e.g. The derivative of `x` would be `der_x`).
 const DERIVATIVE_PREFIX: &'static str = "der_";
 
 /// Flattens nested binary expressions into separate variable assignments.
@@ -84,7 +88,7 @@ pub fn unweave(_attr: TokenStream, item: TokenStream) -> TokenStream {
 /// Transforms a given function into a form for forward auto-differentiation.
 ///
 /// At the moment this is super restrictive:
-/// - The function must take a tuple of `f32`s as input and output a `f32` like `fn fn_name((x,y,):(f32,f32,)) -> f32`. 
+/// - The function must take a tuple of `f32`s as input and output a `f32` like `fn fn_name((x,y,):(f32,f32,)) -> f32`.
 /// - It only works with the primitive operations `-`, `+`, `*`, and `/`.
 /// ```
 /// #[rad::forward_autodiff]
@@ -125,13 +129,14 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // eprintln!("{:#?}",ast);
 
-    // Checks item is impl.
+    // Checks item is function.
     let mut ast = match ast {
         syn::Item::Fn(func) => func,
-        _ => panic!("Macro must be applied to a `fn`"),
+        _ => panic!("Only `fn` items are supported."),
     };
 
     // eprintln!("sig: {:#?}",ast);
+    // Appends derivative inputs to function signature, `f((x,y))` -> `f((x,y),(dx,dy))`
     let first_input_span = ast.sig.inputs[0].typed().pat.tuple().elems[0]
         .ident()
         .ident
@@ -180,11 +185,164 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
         .into_iter()
         .flat_map(|statement| append_derivative(statement))
         .collect::<Vec<_>>();
-
     block.stmts = statements;
 
-    let new = quote::quote! { #ast };
+    let new = quote::quote! { # };
     TokenStream::from(new)
+}
+
+#[proc_macro_attribute]
+pub fn backward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let ast = syn::parse_macro_input!(item as syn::Item);
+
+    // eprintln!("{:#?}", ast);
+
+    // Checks item is function.
+    let mut function = match ast {
+        syn::Item::Fn(func) => func,
+        _ => panic!("Only `fn` items are supported."),
+    };
+    // Add input derivatives to output signature.
+    match &mut function.sig.output {
+        syn::ReturnType::Type(_, ref mut return_type_type) => {
+            // eprintln!("return_type_type: {:#?}", return_type_type);
+            let inputs = function.sig.inputs.len();
+            let output: TokenStream = format!("(f32,({}))", "f32,".repeat(inputs))
+                .parse()
+                .unwrap();
+            let new_rtn = syn::parse_macro_input!(output as syn::Type);
+            *return_type_type = Box::new(new_rtn);
+        }
+        syn::ReturnType::Default => {
+            let a = quote::quote_spanned! {
+                function.sig.span() => compile_error!("Expected return type `f32`");
+            };
+            return TokenStream::from(a);
+        }
+    }
+
+    // Unwraps nested binary expressions.
+    let statements = function.block
+        .stmts
+        .iter()
+        .flat_map(|statement| unwrap_statement(statement))
+        .collect::<Vec<_>>();
+    function.block.stmts = statements;
+
+    // eprintln!("pre_count len: {}",function.block.stmts.len());
+
+    // Counts number of times each variable appears, so they can be duplicated.
+    let mut counts = HashMap::new();
+    // Indexes at which declarations of variables where found.
+    let mut found = HashMap::new();
+    for (index,stmt) in function.block.stmts.iter_mut().enumerate() {
+        // eprintln!("counting: {}, {:#?}",index,stmt);
+        if let syn::Stmt::Local(local) = stmt {
+            if let syn::Pat::Ident(pat_ident) = &local.pat {
+                found.insert(format!("{}",pat_ident.ident),index);
+            }
+            if let Some(init) = &mut local.init {
+                if let syn::Expr::Binary(bin) = &mut *init.1 {
+                    if let syn::Expr::Path(expr_path) = &mut *bin.left {
+                        let ident = &expr_path.path.segments[0].ident;
+                        
+                        let count = add_insert(&mut counts, format!("{}", ident));
+                        expr_path.path.segments[0].ident =
+                            syn::Ident::new(&format!("{}{}", ident, count), ident.span());
+                    }
+                    if let syn::Expr::Path(expr_path) = &mut *bin.right {
+                        let ident = &expr_path.path.segments[0].ident;
+                        let count = add_insert(&mut counts, format!("{}", ident));
+                        expr_path.path.segments[0].ident =
+                            syn::Ident::new(&format!("{}{}", ident, count), ident.span());
+                    }
+                }
+            }
+        }
+    }
+    // eprintln!("counts: {:?}", counts);
+    // eprintln!("found: {:?}", found);
+
+    // Duplicates inputs for each usage.
+    let mut input_offset = 0;
+    for input in function.sig.inputs.iter() {
+        if let syn::FnArg::Typed(t) = input {
+            if let syn::Pat::Ident(i) = &*t.pat {
+                let ident_str = format!("{}", i.ident);
+                if let Some(count) = counts.remove(&ident_str) {
+                    let output: TokenStream = format!(
+                        "let ({}) = ({});",
+                        (0..count)
+                            .map(|c| format!("{}{},", ident_str, c))
+                            .collect::<String>(),
+                        format!("{}.clone(),", ident_str).repeat(count)
+                    )
+                    .parse()
+                    .unwrap();
+                    // eprintln!("here? {}",output);
+                    let new_stmt = syn::parse_macro_input!(output as syn::Stmt);
+                    // eprintln!("here??");
+                    function.block.stmts.insert(0, new_stmt);
+                    input_offset += 1;
+                }
+            }
+        }
+    }
+
+    // eprintln!("non-input counts: {:?}", counts);
+    // eprintln!("non-input found: {:?}", found);
+    // eprintln!("len: {}",function.block.stmts.len());
+
+    // let new = quote::quote! { #function };
+    // return TokenStream::from(new);
+    
+
+    // Duplicates other variables for each usage.
+    // let mut count_vec = counts.into_iter().collect::<Vec<_>>();
+    // count_vec.sort_by_key(|c|c.1.0);
+    for (ident_str,stmt_index) in found.into_iter() {
+        if let Some(count) = counts.get(&ident_str) {
+            // eprintln!("current: {}: ({},{})",ident_str,count,stmt_index);
+            let index = stmt_index+input_offset;
+            
+            // eprintln!("index: {} = {} + {} ",index,stmt_index,input_offset);
+            
+            let stmt = &mut function.block.stmts[index];
+            if stmt.is_local() {
+                let output: TokenStream = format!(
+                    "let ({}) = {{ ({}) }};",
+                    (0..*count)
+                        .map(|c| format!("{}{},", ident_str, c))
+                        .collect::<String>(),
+                    format!("{}.clone(),", ident_str).repeat(*count)
+                )
+                .parse()
+                .unwrap();
+                // eprintln!("output: {}",output);
+                let mut new_stmt = syn::parse_macro_input!(output as syn::Stmt);
+                let init_block = &mut new_stmt.local_mut().init.as_mut().unwrap().1.block_mut().block;
+                // eprintln!("init_block: {:#?}",init_block);
+                // eprintln!("existing: {:#?}",stmt);
+                init_block.stmts.insert(0,stmt.clone());
+                // eprintln!("init_block: {:#?}",init_block);
+                *stmt = new_stmt;
+            }
+        }
+    }
+
+    let new = quote::quote! { #function };
+    TokenStream::from(new)
+}
+
+fn add_insert(map: &mut HashMap<String, usize>, string: String) -> usize {    
+    if let Some(val) = map.get_mut(&string) {
+        let c = *val;
+        *val += 1;
+        c
+    } else {
+        map.insert(string, 1);
+        0
+    }
 }
 
 // http://h2.jaguarpaw.co.uk/posts/automatic-differentiation-worked-examples/

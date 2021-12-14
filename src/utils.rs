@@ -16,6 +16,14 @@ impl UnwrapStmt for syn::Stmt {
         }
     }
 }
+pub trait IsStmt {
+    fn is_local(&self) -> bool;
+}
+impl IsStmt for syn::Stmt {
+    fn is_local(&self) -> bool {
+        matches!(self,Self::Local(_))
+    }
+}
 pub trait UnwrapPat {
     fn ident_mut(&mut self) -> &mut syn::PatIdent;
     fn ident(&self) -> &syn::PatIdent;
@@ -59,6 +67,8 @@ impl IsExpr for syn::Expr {
 pub trait UnwrapExpr {
     fn binary(&self) -> &syn::ExprBinary;
     fn binary_mut(&mut self) -> &mut syn::ExprBinary;
+    fn block(&self) -> &syn::ExprBlock;
+    fn block_mut(&mut self) -> &mut syn::ExprBlock;
 }
 impl UnwrapExpr for syn::Expr {
     fn binary(&self) -> &syn::ExprBinary {
@@ -70,7 +80,19 @@ impl UnwrapExpr for syn::Expr {
     fn binary_mut(&mut self) -> &mut syn::ExprBinary {
         match self {
             Self::Binary(b) => b,
-            _ => panic!("called `Expr::binary()` on a non `Binary` value"),
+            _ => panic!("called `Expr::binary_mut()` on a non `Binary` value"),
+        }
+    }
+    fn block(&self) -> &syn::ExprBlock {
+        match self {
+            Self::Block(b) => b,
+            _ => panic!("called `Expr::block()` on a non `Block` value"),
+        }
+    }
+    fn block_mut(&mut self) -> &mut syn::ExprBlock {
+        match self {
+            Self::Block(b) => b,
+            _ => panic!("called `Expr::block_mut()` on a non `Block` value"),
         }
     }
 }
@@ -96,3 +118,46 @@ impl UnwrapFnArg for syn::FnArg {
         }
     }
 }
+
+// fn join_assign(this: &mut proc_macro::Span, other: proc_macro::Span) {
+//     *this = this.join(other).unwrap();
+// }
+
+// trait Span {
+//     // Returns span formed from `join` of all items in `self`.
+//     fn span(&self) -> proc_macro::Span;
+// }
+// impl Span for syn::Stmt {
+//     fn span(&self) -> proc_macro::Span {
+//         match self {
+//             Self::Local(l) => l.span(),
+//             Self::Item(i) => i.span(),
+//             Self::Expr(e) => e.span(),
+//             Self::Semi(s) => s.span()
+//         }
+//     }
+// }
+// impl Span for syn::Local {
+//     fn span(&self) -> proc_macro::Span {
+//         let mut base = &mut self.attrs[0].span();
+//         for i in 1..self.attrs.len() {
+//             join_assign(base,self.attrs[i].span());
+//         }
+//         join_assign(base,self.let_token.span());
+//         join_assign(base,self.pat.span());
+//         join_assign(base,self.init.span());
+//         join_assign(base,self.semi_token.span());
+//     }
+// }
+// impl Span for syn::Attribute {
+//     fn span(&self) -> proc_macro::Span {
+//         let mut base = &mut self.attrs[0].span();
+//         for i in 1..self.attrs.len() {
+//             join_assign(base,self.attrs[i].span());
+//         }
+//         join_assign(base,self.let_token.span());
+//         join_assign(base,self.pat.span());
+//         join_assign(base,self.init.span());
+//         join_assign(base,self.semi_token.span());
+//     }
+// }
