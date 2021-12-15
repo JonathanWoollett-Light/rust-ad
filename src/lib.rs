@@ -191,18 +191,37 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     TokenStream::from(new)
 }
 
+/// Given a variable and a number of times to repeat returns a tuple of clones of this variable. `dup!(x,3)` -> `(x.clone(),x.clone(),x.clone())`.
+/// 
+/// Useful internally.
+#[proc_macro]
+pub fn dup(_item: TokenStream) -> TokenStream {
+    // eprintln!("what?: {:?}",_item);
+    let vec = _item.into_iter().collect::<Vec<_>>();
+    match (vec.get(0),vec.get(1),vec.get(2)) {
+        (
+            Some(proc_macro::TokenTree::Ident(var)),
+            Some(proc_macro::TokenTree::Punct(_)),
+            Some(proc_macro::TokenTree::Literal(num))
+        ) => {
+            let tuple = format!("({})",format!("{}.clone(),",var.to_string()).repeat(num.to_string().parse().unwrap()));
+            tuple.parse().unwrap()
+        }
+        _ => panic!("Bad input")
+    }
+}
+
 #[proc_macro_attribute]
 pub fn backward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let ast = syn::parse_macro_input!(item as syn::Item);
-
-    // eprintln!("{:#?}", ast);
-
     // Checks item is function.
     let mut function = match ast {
         syn::Item::Fn(func) => func,
         _ => panic!("Only `fn` items are supported."),
     };
+
     // Add input derivatives to output signature.
+    // ---------------------------------------------------------------------------
     match &mut function.sig.output {
         syn::ReturnType::Type(_, ref mut return_type_type) => {
             // eprintln!("return_type_type: {:#?}", return_type_type);
@@ -222,6 +241,7 @@ pub fn backward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     }
 
     // Unwraps nested binary expressions.
+    // ---------------------------------------------------------------------------
     let statements = function.block
         .stmts
         .iter()
@@ -229,18 +249,12 @@ pub fn backward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
         .collect::<Vec<_>>();
     function.block.stmts = statements;
 
-    // eprintln!("pre_count len: {}",function.block.stmts.len());
-
-    // Counts number of times each variable appears, so they can be duplicated.
+    // Counts number of times each variable appears.
+    // ---------------------------------------------------------------------------
     let mut counts = HashMap::new();
-    // Indexes at which declarations of variables where found.
-    let mut found = HashMap::new();
     for (index,stmt) in function.block.stmts.iter_mut().enumerate() {
         // eprintln!("counting: {}, {:#?}",index,stmt);
         if let syn::Stmt::Local(local) = stmt {
-            if let syn::Pat::Ident(pat_ident) = &local.pat {
-                found.insert(format!("{}",pat_ident.ident),index);
-            }
             if let Some(init) = &mut local.init {
                 if let syn::Expr::Binary(bin) = &mut *init.1 {
                     if let syn::Expr::Path(expr_path) = &mut *bin.left {
@@ -260,74 +274,73 @@ pub fn backward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
             }
         }
     }
-    // eprintln!("counts: {:?}", counts);
-    // eprintln!("found: {:?}", found);
 
     // Duplicates inputs for each usage.
-    let mut input_offset = 0;
-    for input in function.sig.inputs.iter() {
-        if let syn::FnArg::Typed(t) = input {
-            if let syn::Pat::Ident(i) = &*t.pat {
-                let ident_str = format!("{}", i.ident);
-                if let Some(count) = counts.remove(&ident_str) {
-                    let output: TokenStream = format!(
-                        "let ({}) = ({});",
-                        (0..count)
-                            .map(|c| format!("{}{},", ident_str, c))
-                            .collect::<String>(),
-                        format!("{}.clone(),", ident_str).repeat(count)
-                    )
-                    .parse()
-                    .unwrap();
-                    // eprintln!("here? {}",output);
-                    let new_stmt = syn::parse_macro_input!(output as syn::Stmt);
-                    // eprintln!("here??");
-                    function.block.stmts.insert(0, new_stmt);
-                    input_offset += 1;
+    // ---------------------------------------------------------------------------
+    let mut num_used_inputs = 0;
+    // `.rev()` is unnecessary here, but it declare dupes of inputs in order that inputs are declared, so it's nice.
+    for input in function.sig.inputs.iter().rev() {
+        match input {
+            syn::FnArg::Typed(t) => {
+                match &*t.pat {
+                    syn::Pat::Ident(i) => {
+                        let ident_str = format!("{}", i.ident);
+                        if let Some(count) = counts.remove(&ident_str) {
+                            num_used_inputs += 1;
+                            let output: TokenStream = format!(
+                                "let ({}) = rust_ad::dup!({},{});",
+                                (0..count)
+                                    .map(|c| format!("{}{},", ident_str, c))
+                                    .collect::<String>(),
+                                    ident_str,count
+                            )
+                            .parse()
+                            .unwrap();
+                            // eprintln!("here? {}",output);
+                            let new_stmt = syn::parse_macro_input!(output as syn::Stmt);
+                            // eprintln!("here??");
+                            function.block.stmts.insert(0, new_stmt);
+                        }
+                    },
+                    _ => panic!("All function inputs need to be identified")
                 }
-            }
+            },
+            _ => panic!("All function inputs need to be typed")
         }
     }
 
-    // eprintln!("non-input counts: {:?}", counts);
-    // eprintln!("non-input found: {:?}", found);
-    // eprintln!("len: {}",function.block.stmts.len());
-
-    // let new = quote::quote! { #function };
-    // return TokenStream::from(new);
-    
-
-    // Duplicates other variables for each usage.
-    // let mut count_vec = counts.into_iter().collect::<Vec<_>>();
-    // count_vec.sort_by_key(|c|c.1.0);
-    for (ident_str,stmt_index) in found.into_iter() {
-        if let Some(count) = counts.get(&ident_str) {
-            // eprintln!("current: {}: ({},{})",ident_str,count,stmt_index);
-            let index = stmt_index+input_offset;
-            
-            // eprintln!("index: {} = {} + {} ",index,stmt_index,input_offset);
-            
-            let stmt = &mut function.block.stmts[index];
-            if stmt.is_local() {
-                let output: TokenStream = format!(
-                    "let ({}) = {{ ({}) }};",
-                    (0..*count)
-                        .map(|c| format!("{}{},", ident_str, c))
-                        .collect::<String>(),
-                    format!("{}.clone(),", ident_str).repeat(*count)
-                )
-                .parse()
-                .unwrap();
-                // eprintln!("output: {}",output);
-                let mut new_stmt = syn::parse_macro_input!(output as syn::Stmt);
-                let init_block = &mut new_stmt.local_mut().init.as_mut().unwrap().1.block_mut().block;
-                // eprintln!("init_block: {:#?}",init_block);
-                // eprintln!("existing: {:#?}",stmt);
-                init_block.stmts.insert(0,stmt.clone());
-                // eprintln!("init_block: {:#?}",init_block);
-                *stmt = new_stmt;
+    // Duplicates variables for each usage.
+    // ---------------------------------------------------------------------------
+    let mut dup_stmts = Vec::new();
+    for stmt in function.block.stmts.iter().skip(num_used_inputs) {
+        let mut joint = vec![stmt.clone()];
+        if let syn::Stmt::Local(local) = stmt {
+            if let syn::Pat::Ident(pat_ident) = &local.pat {
+                let str_ident = pat_ident.ident.to_string();
+                if let Some(count) = counts.get(&str_ident) {
+                    let new_token_stream: TokenStream = format!(
+                        "let ({}) = rust_ad::dup!({},{});",
+                        (0..*count)
+                            .map(|c| format!("{}{},", str_ident, c))
+                            .collect::<String>(),
+                            str_ident,
+                            count
+                    )
+                    .parse()
+                    .unwrap();
+                    let new_stmt = syn::parse_macro_input!(new_token_stream as syn::Stmt);
+                    joint.push(new_stmt);
+                }
             }
         }
+        dup_stmts.append(&mut joint);
+    }
+    function.block.stmts = dup_stmts;
+
+    // Generates reverse mode code
+    // ---------------------------------------------------------------------------
+    for stmt in function.block.stmts.iter().rev() {
+
     }
 
     let new = quote::quote! { #function };

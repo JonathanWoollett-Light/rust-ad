@@ -21,7 +21,7 @@ pub trait IsStmt {
 }
 impl IsStmt for syn::Stmt {
     fn is_local(&self) -> bool {
-        matches!(self,Self::Local(_))
+        matches!(self, Self::Local(_))
     }
 }
 pub trait UnwrapPat {
