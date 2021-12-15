@@ -1,3 +1,22 @@
+pub trait UnwrapTokenTree {
+    fn ident(&self) -> &proc_macro::Ident;
+    fn literal(&self) -> &proc_macro::Literal;
+}
+impl UnwrapTokenTree for proc_macro::TokenTree {
+    fn ident(&self) -> &proc_macro::Ident {
+        match self {
+            Self::Ident(local) => local,
+            _ => panic!("called `TokenTree::ident()` on a non `Ident` value"),
+        }
+    }
+    fn literal(&self) -> &proc_macro::Literal {
+        match self {
+            Self::Literal(lit) => lit,
+            _ => panic!("called `TokenTree::literal()` on a non `Literal` value"),
+        }
+    }
+}
+
 pub trait UnwrapStmt {
     fn local(&self) -> &syn::Local;
     fn local_mut(&mut self) -> &mut syn::Local;

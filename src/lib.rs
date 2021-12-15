@@ -5,6 +5,7 @@
 //! I would not recommend you use it at the moment, it is only public to allow the possibility of collaborative work on it.
 
 #![feature(proc_macro_span)]
+#![feature(iter_intersperse)]
 
 mod utils;
 use utils::*;
@@ -165,8 +166,7 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
         },
         ty: ast.sig.inputs[0].typed().ty.clone(),
     }));
-    let output: TokenStream = "->(f32,f32)".parse().unwrap();
-    ast.sig.output = syn::parse_macro_input!(output as syn::ReturnType);
+    ast.sig.output = syn::parse_str(&"->(f32,f32)").unwrap();
 
     let block = &mut ast.block;
     // eprintln!("\n\nblock:\n{:?}\n\n", block);
@@ -178,12 +178,9 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
         .collect::<Vec<_>>();
     // block.stmts = statements;
 
-    // for s in statements.iter() {
-    //     append_derivative(s);
-    // }
     let statements = statements
         .into_iter()
-        .flat_map(|statement| append_derivative(statement))
+        .flat_map(|statement| forward_derivative(statement))
         .collect::<Vec<_>>();
     block.stmts = statements;
 
@@ -192,22 +189,25 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 /// Given a variable and a number of times to repeat returns a tuple of clones of this variable. `dup!(x,3)` -> `(x.clone(),x.clone(),x.clone())`.
-/// 
+///
 /// Useful internally.
 #[proc_macro]
 pub fn dup(_item: TokenStream) -> TokenStream {
     // eprintln!("what?: {:?}",_item);
     let vec = _item.into_iter().collect::<Vec<_>>();
-    match (vec.get(0),vec.get(1),vec.get(2)) {
+    match (vec.get(0), vec.get(1), vec.get(2)) {
         (
             Some(proc_macro::TokenTree::Ident(var)),
             Some(proc_macro::TokenTree::Punct(_)),
-            Some(proc_macro::TokenTree::Literal(num))
+            Some(proc_macro::TokenTree::Literal(num)),
         ) => {
-            let tuple = format!("({})",format!("{}.clone(),",var.to_string()).repeat(num.to_string().parse().unwrap()));
+            let tuple = format!(
+                "({})",
+                format!("{}.clone(),", var.to_string()).repeat(num.to_string().parse().unwrap())
+            );
             tuple.parse().unwrap()
         }
-        _ => panic!("Bad input")
+        _ => panic!("Bad input"),
     }
 }
 
@@ -226,10 +226,8 @@ pub fn backward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
         syn::ReturnType::Type(_, ref mut return_type_type) => {
             // eprintln!("return_type_type: {:#?}", return_type_type);
             let inputs = function.sig.inputs.len();
-            let output: TokenStream = format!("(f32,({}))", "f32,".repeat(inputs))
-                .parse()
-                .unwrap();
-            let new_rtn = syn::parse_macro_input!(output as syn::Type);
+            let output = format!("(f32,({}))", "f32,".repeat(inputs));
+            let new_rtn: syn::Type = syn::parse_str(&output).unwrap();
             *return_type_type = Box::new(new_rtn);
         }
         syn::ReturnType::Default => {
@@ -242,7 +240,8 @@ pub fn backward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Unwraps nested binary expressions.
     // ---------------------------------------------------------------------------
-    let statements = function.block
+    let statements = function
+        .block
         .stmts
         .iter()
         .flat_map(|statement| unwrap_statement(statement))
@@ -252,14 +251,14 @@ pub fn backward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     // Counts number of times each variable appears.
     // ---------------------------------------------------------------------------
     let mut counts = HashMap::new();
-    for (index,stmt) in function.block.stmts.iter_mut().enumerate() {
+    for stmt in function.block.stmts.iter_mut() {
         // eprintln!("counting: {}, {:#?}",index,stmt);
         if let syn::Stmt::Local(local) = stmt {
             if let Some(init) = &mut local.init {
                 if let syn::Expr::Binary(bin) = &mut *init.1 {
                     if let syn::Expr::Path(expr_path) = &mut *bin.left {
                         let ident = &expr_path.path.segments[0].ident;
-                        
+
                         let count = add_insert(&mut counts, format!("{}", ident));
                         expr_path.path.segments[0].ident =
                             syn::Ident::new(&format!("{}{}", ident, count), ident.span());
@@ -287,25 +286,24 @@ pub fn backward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
                         let ident_str = format!("{}", i.ident);
                         if let Some(count) = counts.remove(&ident_str) {
                             num_used_inputs += 1;
-                            let output: TokenStream = format!(
+                            let output = format!(
                                 "let ({}) = rust_ad::dup!({},{});",
                                 (0..count)
                                     .map(|c| format!("{}{},", ident_str, c))
                                     .collect::<String>(),
-                                    ident_str,count
-                            )
-                            .parse()
-                            .unwrap();
+                                ident_str,
+                                count
+                            );
                             // eprintln!("here? {}",output);
-                            let new_stmt = syn::parse_macro_input!(output as syn::Stmt);
+                            let new_stmt: syn::Stmt = syn::parse_str(&output).unwrap();
                             // eprintln!("here??");
                             function.block.stmts.insert(0, new_stmt);
                         }
-                    },
-                    _ => panic!("All function inputs need to be identified")
+                    }
+                    _ => panic!("All function inputs need to be identified"),
                 }
-            },
-            _ => panic!("All function inputs need to be typed")
+            }
+            _ => panic!("All function inputs need to be typed"),
         }
     }
 
@@ -318,17 +316,15 @@ pub fn backward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
             if let syn::Pat::Ident(pat_ident) = &local.pat {
                 let str_ident = pat_ident.ident.to_string();
                 if let Some(count) = counts.get(&str_ident) {
-                    let new_token_stream: TokenStream = format!(
+                    let new_str = format!(
                         "let ({}) = rust_ad::dup!({},{});",
                         (0..*count)
                             .map(|c| format!("{}{},", str_ident, c))
                             .collect::<String>(),
-                            str_ident,
-                            count
-                    )
-                    .parse()
-                    .unwrap();
-                    let new_stmt = syn::parse_macro_input!(new_token_stream as syn::Stmt);
+                        str_ident,
+                        count
+                    );
+                    let new_stmt: syn::Stmt = syn::parse_str(&new_str).unwrap();
                     joint.push(new_stmt);
                 }
             }
@@ -339,15 +335,23 @@ pub fn backward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Generates reverse mode code
     // ---------------------------------------------------------------------------
-    for stmt in function.block.stmts.iter().rev() {
+    let mut reverse_stmts = function
+        .block
+        .stmts
+        .iter()
+        .rev()
+        .filter_map(|s| reverse_derivative(s))
+        .collect::<Vec<_>>();
 
-    }
+    function.block.stmts.append(&mut reverse_stmts);
 
     let new = quote::quote! { #function };
-    TokenStream::from(new)
+    let rtn = TokenStream::from(new);
+    eprintln!("rtn:\n{}", rtn);
+    rtn
 }
 
-fn add_insert(map: &mut HashMap<String, usize>, string: String) -> usize {    
+fn add_insert(map: &mut HashMap<String, usize>, string: String) -> usize {
     if let Some(val) = map.get_mut(&string) {
         let c = *val;
         *val += 1;
@@ -358,8 +362,38 @@ fn add_insert(map: &mut HashMap<String, usize>, string: String) -> usize {
     }
 }
 
+fn reverse_derivative(stmt: &syn::Stmt) -> Option<syn::Stmt> {
+    if let syn::Stmt::Local(local) = stmt {
+        if let Some(init) = &local.init {
+            let init_expr = &*init.1;
+            if let syn::Expr::Binary(bin_expr) = init_expr {
+            } else if let syn::Expr::Macro(macro_expr) = init_expr {
+                eprintln!("else: {:#?}", macro_expr);
+                let macro_token_stream =
+                    proc_macro::TokenStream::from(macro_expr.mac.tokens.clone())
+                        .into_iter()
+                        .collect::<Vec<_>>();
+                let ident = macro_token_stream[0].ident().to_string();
+                let num: usize = macro_token_stream[2].literal().to_string().parse().unwrap();
+                let token_str = format!(
+                    "let der_{} = {};",
+                    ident,
+                    (0..num)
+                        .map(|c| format!("der_{}{}", ident, c))
+                        .intersperse(String::from("+"))
+                        .collect::<String>()
+                );
+                let der_dup_stmt: syn::Stmt = syn::parse_str(&token_str).unwrap();
+                eprintln!("der_dup_stmt: {:?}", der_dup_stmt);
+                return Some(der_dup_stmt);
+            }
+        }
+    }
+    None
+}
+
 // http://h2.jaguarpaw.co.uk/posts/automatic-differentiation-worked-examples/
-fn append_derivative(stmt: syn::Stmt) -> Vec<syn::Stmt> {
+fn forward_derivative(stmt: syn::Stmt) -> Vec<syn::Stmt> {
     if let syn::Stmt::Local(ref local) = stmt {
         if let Some(ref init) = local.init {
             if let syn::Expr::Binary(bin_expr) = &*init.1 {
