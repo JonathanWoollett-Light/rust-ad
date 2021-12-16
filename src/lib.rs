@@ -19,6 +19,9 @@ use syn::spanned::Spanned;
 /// The prefix used to attached to derivatives of a variable (e.g. The derivative of `x` would be `der_x`).
 const DERIVATIVE_PREFIX: &'static str = "der_";
 
+const FORWARD_MODE_PREFIX: &'static str = "__for_";
+const REVERSE_MODE_PREFIX: &'static str = "__rev_";
+
 /// Given identifier string (e.g. `x`) appends `DERIVATIVE_PREFIX` (e.g. `der_a`).
 macro_rules! der {
     ($a:expr) => {{
@@ -136,12 +139,18 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let ast = syn::parse_macro_input!(item as syn::Item);
 
     // eprintln!("{:#?}",ast);
-
     // Checks item is function.
     let mut ast = match ast {
         syn::Item::Fn(func) => func,
         _ => panic!("Only `fn` items are supported."),
     };
+
+    let function_holder = ast.clone();
+
+    ast.sig.ident = syn::Ident::new(
+        &format!("{}{}", FORWARD_MODE_PREFIX, ast.sig.ident.to_string()),
+        ast.sig.ident.span(),
+    );
 
     // eprintln!("sig: {:#?}",ast);
     // Appends derivative inputs to function signature, `f((x,y))` -> `f((x,y),(dx,dy))`
@@ -191,7 +200,7 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
         .collect::<Vec<_>>();
     block.stmts = statements;
 
-    let new = quote::quote! { # };
+    let new = quote::quote! { #function_holder #ast };
     TokenStream::from(new)
 }
 
@@ -219,7 +228,7 @@ pub fn dup(_item: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
-pub fn backward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let ast = syn::parse_macro_input!(item as syn::Item);
     // Checks item is function.
     let mut function = match ast {
@@ -227,23 +236,18 @@ pub fn backward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
         _ => panic!("Only `fn` items are supported."),
     };
 
-    // Add input derivatives to output signature.
+    let function_holder = function.clone();
+
+    // Add input derivatives to output signature & validates output signature.
     // ---------------------------------------------------------------------------
-    match &mut function.sig.output {
-        syn::ReturnType::Type(_, ref mut return_type_type) => {
-            // eprintln!("return_type_type: {:#?}", return_type_type);
-            let inputs = function.sig.inputs.len();
-            let output = format!("(f32,({}))", "f32,".repeat(inputs));
-            let new_rtn: syn::Type = syn::parse_str(&output).unwrap();
-            *return_type_type = Box::new(new_rtn);
-        }
-        syn::ReturnType::Default => {
-            let a = quote::quote_spanned! {
-                function.sig.span() => compile_error!("Expected return type `f32`");
-            };
-            return TokenStream::from(a);
-        }
+
+    if let Err(rtn) = reverse_update_and_validate_signature(&mut function) {
+        return rtn;
     }
+    // match  {
+    //     Ok(_) => (),
+    //     Err(rtn) => return rtn
+    // }
 
     // Unwraps nested binary expressions.
     // ---------------------------------------------------------------------------
@@ -352,10 +356,60 @@ pub fn backward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     function.block.stmts.append(&mut reverse_stmts);
 
-    let new = quote::quote! { #function };
+    // Updates function identifier
+    // ---------------------------------------------------------------------------
+    function.sig.ident = syn::Ident::new(
+        &format!("{}{}", REVERSE_MODE_PREFIX, function.sig.ident.to_string()),
+        function.sig.ident.span(),
+    );
+
+    let new = quote::quote! { #function_holder #function };
     let rtn = TokenStream::from(new);
     // eprintln!("rtn:\n{}", rtn);
     rtn
+}
+
+/// Validates and updates function signature.
+fn reverse_update_and_validate_signature(function: &mut syn::ItemFn) -> Result<(), TokenStream> {
+    // If there is return statement, return user code, this will leader to compile error about no return function.
+    match &mut function.sig.output {
+        syn::ReturnType::Type(_, ref mut return_type_type) => {
+            // eprintln!("here 1");
+            if let Some(last_stmt) = function.block.stmts.last() {
+                // eprintln!("here 2");
+                if let syn::Stmt::Semi(expr, _) = last_stmt {
+                    // eprintln!("here 3");
+                    if let syn::Expr::Return(expr_return) = expr {
+                        // eprintln!("here 4");
+                        if let syn::Expr::Path(expr_path) =
+                            &**expr_return.expr.as_ref().expect("fml this is a pain")
+                        {
+                            // eprintln!("here 5");
+
+                            // Updates function input signature.
+                            let out = expr_path.path.segments[0].ident.to_string();
+                            let new_fn_arg_str = format!("{}: f32", der!(out));
+                            let new_fn_arg: syn::FnArg = syn::parse_str(&new_fn_arg_str).unwrap();
+                            function.sig.inputs.push(new_fn_arg);
+                            // Updates function output signature.
+                            let inputs = function.sig.inputs.len();
+                            let output = format!("(f32,({}))", "f32,".repeat(inputs));
+                            let new_rtn: syn::Type = syn::parse_str(&output).unwrap();
+                            *return_type_type = Box::new(new_rtn);
+
+                            // Returns return statement identifier.
+                            return Ok(());
+                        }
+                    }
+                }
+            }
+            // If return statement does not match the conditions, then simply returning the function should give the user an error.
+            Err(TokenStream::from(quote::quote! { #function }))
+        }
+        syn::ReturnType::Default => Err(TokenStream::from(quote::quote_spanned! {
+            function.sig.span() => compile_error!("Expected return type `f32`");
+        })),
+    }
 }
 
 fn add_insert(map: &mut HashMap<String, usize>, string: String) -> usize {
