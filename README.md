@@ -5,7 +5,18 @@
 [![docs](https://img.shields.io/crates/v/rust-ad?color=yellow&label=docs)](https://docs.rs/rust-ad)
 
 A super restrictive WIP beginnings of a library attempting to implement auto-differentiation in Rust.
-  
+
+## Status
+
+- [x] Forward Auto-differentiation
+- [x] Reverse Auto-differentiation
+- [ ] `f64` support
+- [ ] [ndarray](https://github.com/rust-ndarray/ndarray) support
+- [ ] [nalgebra](https://docs.rs/nalgebra/latest/nalgebra/) support
+- [ ] `if`, `if else` and `else` support
+
+## Application
+
 Auto-differentiation is implemented via 2 attribute procedural macros:
 
 ### `forward_autodiff`
