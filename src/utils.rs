@@ -1,3 +1,14 @@
+pub trait UnwrapLit {
+    fn float(&self) -> &syn::LitFloat;
+}
+impl UnwrapLit for syn::Lit {
+    fn float(&self) -> &syn::LitFloat {
+        match self {
+            Self::Float(float) => float,
+            _ => panic!("called `Lit::float()` on a non `Float` value"),
+        }
+    }
+}
 pub trait UnwrapTokenTree {
     fn ident(&self) -> &proc_macro::Ident;
     fn literal(&self) -> &proc_macro::Literal;

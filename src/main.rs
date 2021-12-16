@@ -38,9 +38,9 @@ fn forward2(x: f32, y: f32, der_d: f32) {
     let _d = y + b1;
     let d = _d + c;
     // --------------------------------------
-    let (der__d, der_c) = dup!(deriv, 2);
+    let (der__d, der_c) = dup!(d, 2);
     let (der_y, der_b1) = dup!(der__d, 2);
-    let (der_x2, der_b0) = dup!(der_c);
+    let (der_x2, der_b0) = dup!(der_c, 2);
     let der_b = der_b0 + der_b1;
     let der_x1 = 3. * der_b;
     // let der_x0 = 7. * der_a;

@@ -19,6 +19,13 @@ use syn::spanned::Spanned;
 /// The prefix used to attached to derivatives of a variable (e.g. The derivative of `x` would be `der_x`).
 const DERIVATIVE_PREFIX: &'static str = "der_";
 
+/// Given identifier string (e.g. `x`) appends `DERIVATIVE_PREFIX` (e.g. `der_a`).
+macro_rules! der {
+    ($a:expr) => {{
+        format!("{}{}", DERIVATIVE_PREFIX, $a)
+    }};
+}
+
 /// Flattens nested binary expressions into separate variable assignments.
 /// A basic example:
 /// ```
@@ -155,7 +162,7 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 .zip(pat.tuple_mut().elems.iter_mut())
             {
                 deriv.ident_mut().ident = syn::Ident::new(
-                    &format!("{}{}", DERIVATIVE_PREFIX, input.ident().ident),
+                    &der!(input.ident().ident.to_string()),
                     input.ident().ident.span(),
                 );
             }
@@ -276,16 +283,15 @@ pub fn backward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Duplicates inputs for each usage.
     // ---------------------------------------------------------------------------
-    let mut num_used_inputs = 0;
+    let mut dup_inputs = Vec::new();
     // `.rev()` is unnecessary here, but it declare dupes of inputs in order that inputs are declared, so it's nice.
-    for input in function.sig.inputs.iter().rev() {
+    for input in function.sig.inputs.iter() {
         match input {
             syn::FnArg::Typed(t) => {
                 match &*t.pat {
                     syn::Pat::Ident(i) => {
                         let ident_str = format!("{}", i.ident);
                         if let Some(count) = counts.remove(&ident_str) {
-                            num_used_inputs += 1;
                             let output = format!(
                                 "let ({}) = rust_ad::dup!({},{});",
                                 (0..count)
@@ -297,7 +303,7 @@ pub fn backward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
                             // eprintln!("here? {}",output);
                             let new_stmt: syn::Stmt = syn::parse_str(&output).unwrap();
                             // eprintln!("here??");
-                            function.block.stmts.insert(0, new_stmt);
+                            dup_inputs.push(new_stmt);
                         }
                     }
                     _ => panic!("All function inputs need to be identified"),
@@ -310,7 +316,7 @@ pub fn backward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     // Duplicates variables for each usage.
     // ---------------------------------------------------------------------------
     let mut dup_stmts = Vec::new();
-    for stmt in function.block.stmts.iter().skip(num_used_inputs) {
+    for stmt in function.block.stmts.iter() {
         let mut joint = vec![stmt.clone()];
         if let syn::Stmt::Local(local) = stmt {
             if let syn::Pat::Ident(pat_ident) = &local.pat {
@@ -331,7 +337,8 @@ pub fn backward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
         }
         dup_stmts.append(&mut joint);
     }
-    function.block.stmts = dup_stmts;
+    dup_inputs.append(&mut dup_stmts);
+    function.block.stmts = dup_inputs;
 
     // Generates reverse mode code
     // ---------------------------------------------------------------------------
@@ -347,7 +354,7 @@ pub fn backward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let new = quote::quote! { #function };
     let rtn = TokenStream::from(new);
-    eprintln!("rtn:\n{}", rtn);
+    // eprintln!("rtn:\n{}", rtn);
     rtn
 }
 
@@ -364,11 +371,144 @@ fn add_insert(map: &mut HashMap<String, usize>, string: String) -> usize {
 
 fn reverse_derivative(stmt: &syn::Stmt) -> Option<syn::Stmt> {
     if let syn::Stmt::Local(local) = stmt {
+        // eprintln!("local: {:#?}",local);
+        // panic!("just stop here");
         if let Some(init) = &local.init {
             let init_expr = &*init.1;
             if let syn::Expr::Binary(bin_expr) = init_expr {
+                // Local Ident String
+                let lis = local.pat.ident().ident.to_string();
+                return Some(match bin_expr.op {
+                    syn::BinOp::Add(_) => {
+                        let (a, b): (String, String) = match (&*bin_expr.left, &*bin_expr.right) {
+                            (syn::Expr::Path(expr_path_l), syn::Expr::Path(expr_path_r)) => (
+                                der!(expr_path_l.path.segments[0].ident.to_string()),
+                                der!(expr_path_r.path.segments[0].ident.to_string()),
+                            ),
+                            (syn::Expr::Path(expr_path_l), syn::Expr::Lit(_)) => (
+                                der!(expr_path_l.path.segments[0].ident.to_string()),
+                                String::from("_"),
+                            ),
+                            (syn::Expr::Lit(_), syn::Expr::Path(expr_path_r)) => (
+                                String::from("_"),
+                                der!(expr_path_r.path.segments[0].ident.to_string()),
+                            ),
+                            _ => panic!(
+                                "Uncovered `syn::BinOp::Add(_)` binary expression combination"
+                            ),
+                        };
+                        let stmt_str = format!("let ({},{}) = rust_ad::dup!({},2);", a, b, lis);
+                        let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse add");
+                        new_stmt
+                    }
+                    syn::BinOp::Sub(_) => {
+                        let (a, b): (String, String) = match (&*bin_expr.left, &*bin_expr.right) {
+                            (syn::Expr::Path(expr_path_l), syn::Expr::Path(expr_path_r)) => (
+                                der!(expr_path_l.path.segments[0].ident.to_string()),
+                                format!(
+                                    "-{}",
+                                    der!(expr_path_r.path.segments[0].ident.to_string())
+                                ),
+                            ),
+                            (syn::Expr::Path(expr_path_l), syn::Expr::Lit(_)) => (
+                                der!(expr_path_l.path.segments[0].ident.to_string()),
+                                String::from("_"),
+                            ),
+                            (syn::Expr::Lit(_), syn::Expr::Path(expr_path_r)) => (
+                                String::from("_"),
+                                format!(
+                                    "-{}",
+                                    der!(expr_path_r.path.segments[0].ident.to_string())
+                                ),
+                            ),
+                            _ => panic!(
+                                "Uncovered `syn::BinOp::Sub(_)` binary expression combination"
+                            ),
+                        };
+                        let stmt_str = format!("let ({},{}) = rust_ad::dup!({},2);", a, b, lis);
+                        let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse sub");
+                        new_stmt
+                    }
+                    syn::BinOp::Mul(_) => {
+                        let stmt_str = match (&*bin_expr.left, &*bin_expr.right) {
+                            (syn::Expr::Path(expr_path_l), syn::Expr::Path(expr_path_r)) => {
+                                let (l, r) = (
+                                    expr_path_l.path.segments[0].ident.to_string(),
+                                    expr_path_r.path.segments[0].ident.to_string(),
+                                );
+                                format!(
+                                    "let ({},{}) = ({}*{},{}*{});",
+                                    der!(l),
+                                    der!(r),
+                                    r,
+                                    lis,
+                                    l,
+                                    lis
+                                )
+                            }
+                            (syn::Expr::Path(expr_path_l), syn::Expr::Lit(expr_lit_r)) => {
+                                let (l, r) = (
+                                    expr_path_l.path.segments[0].ident.to_string(),
+                                    expr_lit_r.lit.float().to_string(),
+                                );
+                                format!("let {} = {}*{};", der!(l), r, lis)
+                            }
+                            (syn::Expr::Lit(expr_lit_l), syn::Expr::Path(expr_path_r)) => {
+                                let (l, r) = (
+                                    expr_lit_l.lit.float().to_string(),
+                                    expr_path_r.path.segments[0].ident.to_string(),
+                                );
+                                format!("let {} = {}*{};", der!(r), l, lis)
+                            }
+                            _ => panic!(
+                                "Uncovered `syn::BinOp::Mul(_)` binary expression combination"
+                            ),
+                        };
+                        let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse mul");
+                        new_stmt
+                    }
+                    syn::BinOp::Div(_) => {
+                        let stmt_str = match (&*bin_expr.left, &*bin_expr.right) {
+                            (syn::Expr::Path(expr_path_l), syn::Expr::Path(expr_path_r)) => {
+                                let (l, r) = (
+                                    expr_path_l.path.segments[0].ident.to_string(),
+                                    expr_path_r.path.segments[0].ident.to_string(),
+                                );
+                                format!(
+                                    "let ({},{}) = ({}/{},{}*{});",
+                                    der!(l),
+                                    der!(r),
+                                    lis,
+                                    r,
+                                    l,
+                                    lis
+                                )
+                            }
+                            (syn::Expr::Path(expr_path_l), syn::Expr::Lit(expr_lit_r)) => {
+                                let (l, r) = (
+                                    expr_path_l.path.segments[0].ident.to_string(),
+                                    expr_lit_r.lit.float().to_string(),
+                                );
+                                format!("let {} = {}/{};", der!(l), lis, r)
+                            }
+                            (syn::Expr::Lit(expr_lit_l), syn::Expr::Path(expr_path_r)) => {
+                                let (l, r) = (
+                                    expr_lit_l.lit.float().to_string(),
+                                    expr_path_r.path.segments[0].ident.to_string(),
+                                );
+                                format!("let {} = {}*{};", der!(r), l, lis)
+                            }
+                            _ => panic!(
+                                "Uncovered `syn::BinOp::Mul(_)` binary expression combination"
+                            ),
+                        };
+                        let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse div");
+                        new_stmt
+                    }
+                    _ => panic!("Uncovered operation"),
+                });
             } else if let syn::Expr::Macro(macro_expr) = init_expr {
-                eprintln!("else: {:#?}", macro_expr);
+                // eprintln!("else: {:#?}", macro_expr);
                 let macro_token_stream =
                     proc_macro::TokenStream::from(macro_expr.mac.tokens.clone())
                         .into_iter()
@@ -376,15 +516,15 @@ fn reverse_derivative(stmt: &syn::Stmt) -> Option<syn::Stmt> {
                 let ident = macro_token_stream[0].ident().to_string();
                 let num: usize = macro_token_stream[2].literal().to_string().parse().unwrap();
                 let token_str = format!(
-                    "let der_{} = {};",
-                    ident,
+                    "let {} = {};",
+                    der!(ident),
                     (0..num)
-                        .map(|c| format!("der_{}{}", ident, c))
+                        .map(|c| format!("{}{}", der!(ident), c))
                         .intersperse(String::from("+"))
                         .collect::<String>()
                 );
-                let der_dup_stmt: syn::Stmt = syn::parse_str(&token_str).unwrap();
-                eprintln!("der_dup_stmt: {:?}", der_dup_stmt);
+                let der_dup_stmt: syn::Stmt = syn::parse_str(&token_str).expect("reverse dup");
+                // eprintln!("der_dup_stmt: {:?}", der_dup_stmt);
                 return Some(der_dup_stmt);
             }
         }
@@ -509,7 +649,7 @@ fn forward_derivative(stmt: syn::Stmt) -> Vec<syn::Stmt> {
                         by_ref: None,
                         mutability: None,
                         ident: syn::Ident::new(
-                            &format!("{}{}", DERIVATIVE_PREFIX, local.pat.ident().ident),
+                            &der!(local.pat.ident().ident.to_string()),
                             local.pat.ident().ident.span(),
                         ),
                         subpat: None,
@@ -554,11 +694,9 @@ fn forward_derivative(stmt: syn::Stmt) -> Vec<syn::Stmt> {
                                                 let mut p = syn::punctuated::Punctuated::new();
                                                 p.push(syn::PathSegment {
                                                     ident: syn::Ident::new(
-                                                        &format!(
-                                                            "{}{}",
-                                                            DERIVATIVE_PREFIX,
-                                                            expr_path.path.segments[0].ident
-                                                        ),
+                                                        &der!(expr_path.path.segments[0]
+                                                            .ident
+                                                            .to_string()),
                                                         expr_path.path.segments[0].ident.span(),
                                                     ),
                                                     arguments: syn::PathArguments::None,
@@ -576,13 +714,6 @@ fn forward_derivative(stmt: syn::Stmt) -> Vec<syn::Stmt> {
                         },
                     );
                     return vec![rtn];
-                    // expr_path.path.segments.push(syn::PathSegment {
-                    //     ident: syn::Ident::new(
-                    //         &format!("{}{}",DERIVATIVE_PREFIX,expr_path.path.segments[0].ident),
-                    //         expr_path.path.segments[0].ident.span()
-                    //     ),
-                    //     arguments: syn::PathArguments::None
-                    // });
                 }
             }
         }
@@ -612,7 +743,7 @@ fn get_derivative_expr(expr: &syn::Expr) -> syn::Expr {
                     let mut p = syn::punctuated::Punctuated::new();
                     p.push(syn::PathSegment {
                         ident: syn::Ident::new(
-                            &format!("{}{}", DERIVATIVE_PREFIX, expr_path.path.segments[0].ident),
+                            &der!(expr_path.path.segments[0].ident.to_string()),
                             expr_path.path.segments[0].ident.span(),
                         ),
                         arguments: syn::PathArguments::None,
