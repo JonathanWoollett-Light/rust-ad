@@ -1,6 +1,6 @@
-//! A super restrictive rough WIP beginnings of a library attempting to implement auto-differentiation in Rust.
+//! A super restrictive WIP beginnings of a library attempting to implement auto-differentiation in Rust.
 //! ## Status
-//! This library is super WIP and thus extremely rough, temperamental and inconsistent.
+//! This library is very much a WIP and thus extremely rough, temperamental and inconsistent.
 //!
 //! I would not recommend you use it at the moment, it is only public to allow the possibility of collaborative work on it.
 
