@@ -22,6 +22,7 @@ const DERIVATIVE_PREFIX: &'static str = "der_";
 const FORWARD_MODE_PREFIX: &'static str = "__for_";
 const REVERSE_MODE_PREFIX: &'static str = "__rev_";
 
+// TODO Do we need `#[macro_export]` here?
 /// Given identifier string (e.g. `x`) appends `DERIVATIVE_PREFIX` (e.g. `der_a`).
 macro_rules! der {
     ($a:expr) => {{
@@ -29,50 +30,130 @@ macro_rules! der {
     }};
 }
 
-/// Flattens nested binary expressions into separate variable assignments.
-/// A basic example:
+/// Calls forward auto-differentiation function corresponding to a given function.
+///
+/// E.g.:
 /// ```
-/// #[rad::unweave]
-/// fn forward((x, y): (f32, f32)) -> f32 {
+/// #[rust_ad::forward_autodiff]
+/// fn function_name(x: f32, y: f32) -> f32 {
+///     let a = 7. * x;
+///     let b = 3. * y;
+///     return b;
+/// }
+/// fn main() {
+///     println!("{:?}",rust_ad::forward!(function_name,2.,4.,1.,5.))
+/// }
+/// ```
+/// This is just a replacement for:
+/// ```
+/// #[macro_export]
+/// macro_rules! forward {
+///     ($f:ident,$($x:expr),*) => {{
+///         FORWARD_MODE_PREFIX$ident($($x,)*);
+///     }}
+/// }
+/// ```
+/// Since you can't export declarative macros from a procedural macro crate.
+#[proc_macro]
+pub fn forward(_item: TokenStream) -> TokenStream {
+    let mut items = _item.into_iter();
+    let function_ident = match items.next() {
+        Some(proc_macro::TokenTree::Ident(ident)) => ident,
+        _ => panic!("Requires function identifier"),
+    };
+    let inputs = items
+        .enumerate()
+        .filter_map(|(index, token)| {
+            if index % 2 == 0 {
+                match token {
+                    proc_macro::TokenTree::Punct(_) => None,
+                    _ => panic!("punctuation token out of place"),
+                }
+            } else {
+                match token {
+                    proc_macro::TokenTree::Literal(num) => Some(num.to_string()),
+                    _ => panic!("literal token out of place"),
+                }
+            }
+        })
+        .intersperse(String::from(","))
+        .collect::<String>();
+
+    let call_str = format!("{}{}({})", FORWARD_MODE_PREFIX, function_ident, inputs);
+    call_str.parse().unwrap()
+}
+/// Calls reverse auto-differentiation function corresponding to a given function.
+///
+/// E.g.:
+/// ```
+/// #[rust_ad::reverse_autodiff]
+/// fn function_name(x: f32, y: f32) -> f32 {
+///     let a = 7. * x;
+///     let b = 3. * y;
+///     return b;
+/// }
+/// fn main() {
+///     println!("{:?}",rust_ad::reverse!(function_name,2.,4.,1.))
+/// }
+/// ```
+/// This is just a replacement for:
+/// ```
+/// #[macro_export]
+/// macro_rules! reverse {
+///     ($f:ident,$($x:expr),*) => {{
+///         REVERSE_MODE_PREFIX$ident($($x,)*);
+///     }}
+/// }
+/// ```
+/// Since you can't export declarative macros from a procedural macro crate.
+#[proc_macro]
+pub fn reverse(_item: TokenStream) -> TokenStream {
+    let mut items = _item.into_iter();
+    let function_ident = match items.next() {
+        Some(proc_macro::TokenTree::Ident(ident)) => ident,
+        _ => panic!("Requires function identifier"),
+    };
+    let inputs = items
+        .enumerate()
+        .filter_map(|(index, token)| {
+            if index % 2 == 0 {
+                match token {
+                    proc_macro::TokenTree::Punct(_) => None,
+                    _ => panic!("punctuation token out of place"),
+                }
+            } else {
+                match token {
+                    proc_macro::TokenTree::Literal(num) => Some(num.to_string()),
+                    _ => panic!("literal token out of place"),
+                }
+            }
+        })
+        .intersperse(String::from(","))
+        .collect::<String>();
+
+    let call_str = format!("{}{}({})", REVERSE_MODE_PREFIX, function_ident, inputs);
+    call_str.parse().unwrap()
+}
+
+/// Flattens nested binary expressions into separate variable assignments.
+///
+/// E.g.
+/// ```
+/// #[rust_ad::unweave]
+/// fn function_name(x: f32, y: f32) -> f32 {
 ///     let v = 2. * x + y / 3.;
 ///     return v;
 /// }
 /// ```
-/// Produces:
+/// Expands to:
 /// ```
-/// fn forward((x, y): (f32, f32)) -> f32 {
+/// fn function_name(x: f32, y: f32) -> f32 {
 ///     let _v = 2. * x;
 ///     let v_ = y / 3.;
-///     let v = _v + v_
-///     return v;
-/// }
-/// ```
-/// A more complex example:
-/// ```
-/// #[rad::unweave]
-/// fn forward((x, y): (f32, f32)) -> f32 {
-///     let p = 7. * x;
-///     let r = 10. - y;
-///     let q = p * x * 5.;
-///     let v = 2. * p * q + 3. * r;
-///     return v;
-/// }
-/// ```
-/// Produces:
-/// ```
-/// fn forward((x, y): (f32, f32)) -> f32 {
-///     let p = 7. * x;
-///     let r = 10. - y;
-///     let _q = p * x;
-///     let q = _q * 5.;
-///     let __v = 2. * p;
-///     let _v = __v * q;
-///     let v_ = 3. * r;
 ///     let v = _v + v_;
 ///     return v;
 /// }
 /// ```
-/// It may be worth adding `#[allow(non_snake_case)]` as many of the intermediate variables the macro sets will cause this warning.
 #[proc_macro_attribute]
 pub fn unweave(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let ast = syn::parse_macro_input!(item as syn::Item);
@@ -96,14 +177,16 @@ pub fn unweave(_attr: TokenStream, item: TokenStream) -> TokenStream {
     TokenStream::from(new)
 }
 
-/// Transforms a given function into a form for forward auto-differentiation.
+/// Generates the forward auto-differentiation function for a given function.
 ///
-/// At the moment this is super restrictive:
-/// - The function must take a tuple of `f32`s as input and output a `f32` like `fn fn_name((x,y,):(f32,f32,)) -> f32`.
-/// - It only works with the primitive operations `-`, `+`, `*`, and `/`.
+/// Only works with:
+/// - `f32`s
+/// - Primitive operations `-`, `+`, `*`, and `/`
+///
+/// E.g.
 /// ```
-/// #[rad::forward_autodiff]
-/// fn forward((x, y): (f32, f32)) -> f32 {
+/// #[rust_ad::forward_autodiff]
+/// fn function_name(x:f32, y:f32) -> f32 {
 ///     let p = 7. * x;
 ///     let r = 10. - y;
 ///     let q = p * x * 5.;
@@ -111,80 +194,64 @@ pub fn unweave(_attr: TokenStream, item: TokenStream) -> TokenStream {
 ///     return v;
 /// }
 /// ```
-/// Produces:
+/// Expands to:
 /// ```
-/// fn forward((x, y): (f32, f32), (der_x, der_y): (f32, f32)) -> (f32, f32) {
-///     let p = 7. * x;
-///     let der_p = x * 0f32 + 7. * der_x;
-///     let r = 10. - y;
-///     let der_r = 0f32 - der_y;
-///     let _q = p * x;
-///     let der__q = x * der_p + p * der_x;
-///     let q = _q * 5.;
-///     let der_q = 5. * der__q + _q * 0f32;
-///     let __v = 2. * p;
-///     let der___v = p * 0f32 + 2. * der_p;
-///     let _v = __v * q;
-///     let der__v = q * der___v + __v * der_q;
-///     let v_ = 3. * r;
-///     let der_v_ = r * 0f32 + 3. * der_r;
-///     let v = _v + v_;
-///     let der_v = der__v + der_v_;
-///     return (v, der_v);
+/// fn __for_function_name(x: f32, y: f32, der_x: f32, der_y: f32) -> (f32, f32) {
+///     let a = 7. * x;
+///     let der_a = x * 0f32 + 7. * der_x;
+///     let b = 3. * x;
+///     let der_b = x * 0f32 + 3. * der_x;
+///     let c = x + b;
+///     let der_c = der_x + der_b;
+///     let _d = y + b;
+///     let der__d = der_y + der_b;
+///     let d = _d + c;
+///     let der_d = der__d + der_c;
+///     return (d, der_d);
 /// }
 /// ```
-/// It may be worth adding `#[allow(non_snake_case)]` as many of the intermediate variables the macro sets will cause this warning.
+/// Much like a derive macro, this is appended to your code, the original `function_name` function remains unedited.
 #[proc_macro_attribute]
 pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let ast = syn::parse_macro_input!(item as syn::Item);
-
     // eprintln!("{:#?}",ast);
+
     // Checks item is function.
-    let mut ast = match ast {
+    let mut function = match ast {
         syn::Item::Fn(func) => func,
         _ => panic!("Only `fn` items are supported."),
     };
 
-    let function_holder = ast.clone();
+    let function_holder = function.clone();
 
-    ast.sig.ident = syn::Ident::new(
-        &format!("{}{}", FORWARD_MODE_PREFIX, ast.sig.ident.to_string()),
-        ast.sig.ident.span(),
+    // Updates signature
+    // ---------------------------------------------------------------------------
+    // Updates identifier
+    function.sig.ident = syn::Ident::new(
+        &format!("{}{}", FORWARD_MODE_PREFIX, function.sig.ident.to_string()),
+        function.sig.ident.span(),
     );
+    // Appends derivative inputs to function signature, `f(x,y)` -> `f(x,y,dx,dy)`
+    let sig_inputs = function
+        .sig
+        .inputs
+        .iter()
+        .map(|fn_arg| {
+            let ident = &fn_arg.typed().pat.ident().ident;
+            let string = format!("{}:f32", der!(ident));
+            let arg: syn::FnArg = syn::parse_str(&string).expect("failed pass str");
+            arg
+        })
+        .collect::<Vec<_>>();
+    for input in sig_inputs.into_iter() {
+        function.sig.inputs.push(input);
+    }
+    // Outputs output signature
+    function.sig.output = syn::parse_str(&"->(f32,f32)").unwrap();
 
-    // eprintln!("sig: {:#?}",ast);
-    // Appends derivative inputs to function signature, `f((x,y))` -> `f((x,y),(dx,dy))`
-    let first_input_span = ast.sig.inputs[0].typed().pat.tuple().elems[0]
-        .ident()
-        .ident
-        .span();
-    ast.sig.inputs.push(syn::FnArg::Typed(syn::PatType {
-        attrs: Vec::new(),
-        pat: Box::new({
-            let mut pat = (*ast.sig.inputs[0].typed().pat).clone();
-            for (input, deriv) in ast.sig.inputs[0]
-                .typed()
-                .pat
-                .tuple()
-                .elems
-                .iter()
-                .zip(pat.tuple_mut().elems.iter_mut())
-            {
-                deriv.ident_mut().ident = syn::Ident::new(
-                    &der!(input.ident().ident.to_string()),
-                    input.ident().ident.span(),
-                );
-            }
-            pat
-        }),
-        colon_token: syn::token::Colon {
-            spans: [first_input_span],
-        },
-        ty: ast.sig.inputs[0].typed().ty.clone(),
-    }));
-    ast.sig.output = syn::parse_str(&"->(f32,f32)").unwrap();
-
-    let block = &mut ast.block;
+    // Forward autodiff
+    // ---------------------------------------------------------------------------
+    let block = &mut function.block;
     // eprintln!("\n\nblock:\n{:?}\n\n", block);
 
     let statements = block
@@ -200,11 +267,13 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
         .collect::<Vec<_>>();
     block.stmts = statements;
 
-    let new = quote::quote! { #function_holder #ast };
+    let new = quote::quote! { #function_holder #function };
     TokenStream::from(new)
 }
 
-/// Given a variable and a number of times to repeat returns a tuple of clones of this variable. `dup!(x,3)` -> `(x.clone(),x.clone(),x.clone())`.
+/// Clones a variable a given number of times.
+///
+/// Returns a tuple of clones of this variable. `dup!(x,3)` -> `(x.clone(),x.clone(),x.clone())`.
 ///
 /// Useful internally.
 #[proc_macro]
@@ -227,6 +296,50 @@ pub fn dup(_item: TokenStream) -> TokenStream {
     }
 }
 
+/// Generates the reverse auto-differentiation function for a given function.
+///
+/// Only works with:
+/// - `f32`s
+/// - Primitive operations `-`, `+`, `*`, and `/`
+///
+/// E.g.
+/// ```
+/// #[rust_ad::reverse_autodiff]
+/// fn function_name(x: f32, y: f32) -> f32 {
+///     let a = 7. * x;
+///     let b = 3. * x;
+///     let c = x + b;
+///     let d = y + b + c;
+///     return d;
+/// }
+/// ```
+/// Expands to:
+/// ```
+/// fn __rev_function_name(x: f32, y: f32, der_d: f32) -> (f32, f32, f32) {
+///     let (x0, x1, x2) = (x.clone(), x.clone(), x.clone());
+///     let (y0,) = (y.clone(),);
+///     let a = 7. * x0;
+///     let b = 3. * x1;
+///     let (b0, b1) = (b.clone(), b.clone());
+///     let c = x2 + b0;
+///     let (c0,) = (c.clone(),);
+///     let _d = y0 + b1;
+///     let (_d0,) = (_d.clone(),);
+///     let d = _d0 + c0;
+///     let (der__d0, der_c0) = (d.clone(), d.clone());
+///     let der__d = der__d0;
+///     let (der_y0, der_b1) = (_d.clone(), _d.clone());
+///     let der_c = der_c0;
+///     let (der_x2, der_b0) = (c.clone(), c.clone());
+///     let der_b = der_b0 + der_b1;
+///     let der_x1 = 3. * b;
+///     let der_x0 = 7. * a;
+///     let der_y = der_y0;
+///     let der_x = der_x0 + der_x1 + der_x2;
+///     return (d, der_x, der_y);
+/// }
+/// ```
+/// Much like a derive macro, this is appended to your code, the original `function_name` function remains unedited.
 #[proc_macro_attribute]
 pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let ast = syn::parse_macro_input!(item as syn::Item);
@@ -240,14 +353,10 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Add input derivatives to output signature & validates output signature.
     // ---------------------------------------------------------------------------
-
-    if let Err(rtn) = reverse_update_and_validate_signature(&mut function) {
-        return rtn;
-    }
-    // match  {
-    //     Ok(_) => (),
-    //     Err(rtn) => return rtn
-    // }
+    let return_stmt = match reverse_update_and_validate_signature(&mut function) {
+        Ok(rtn_stmt) => rtn_stmt,
+        Err(rtn) => return rtn,
+    };
 
     // Unwraps nested binary expressions.
     // ---------------------------------------------------------------------------
@@ -355,6 +464,8 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
         .collect::<Vec<_>>();
 
     function.block.stmts.append(&mut reverse_stmts);
+    // Appends return statement after adding reverse code.
+    function.block.stmts.push(return_stmt);
 
     // Updates function identifier
     // ---------------------------------------------------------------------------
@@ -370,35 +481,58 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 /// Validates and updates function signature.
-fn reverse_update_and_validate_signature(function: &mut syn::ItemFn) -> Result<(), TokenStream> {
+fn reverse_update_and_validate_signature(
+    function: &mut syn::ItemFn,
+) -> Result<syn::Stmt, TokenStream> {
     // If there is return statement, return user code, this will leader to compile error about no return function.
     match &mut function.sig.output {
         syn::ReturnType::Type(_, ref mut return_type_type) => {
             // eprintln!("here 1");
-            if let Some(last_stmt) = function.block.stmts.last() {
-                // eprintln!("here 2");
-                if let syn::Stmt::Semi(expr, _) = last_stmt {
+            if let Some(mut last_stmt) = function.block.stmts.pop() {
+                // eprintln!("here 2: {:#?}",last_stmt);
+                if last_stmt.is_semi() {
+                    let expr = last_stmt.semi_mut();
                     // eprintln!("here 3");
-                    if let syn::Expr::Return(expr_return) = expr {
+                    if expr.is_return() {
+                        let expr_return = expr.return_mut();
                         // eprintln!("here 4");
-                        if let syn::Expr::Path(expr_path) =
-                            &**expr_return.expr.as_ref().expect("fml this is a pain")
-                        {
+                        if expr_return.expr.is_some() {
+                            let return_expr = expr_return.expr.as_mut().unwrap();
                             // eprintln!("here 5");
+                            if return_expr.is_path() {
+                                // eprintln!("here 6");
 
-                            // Updates function input signature.
-                            let out = expr_path.path.segments[0].ident.to_string();
-                            let new_fn_arg_str = format!("{}: f32", der!(out));
-                            let new_fn_arg: syn::FnArg = syn::parse_str(&new_fn_arg_str).unwrap();
-                            function.sig.inputs.push(new_fn_arg);
-                            // Updates function output signature.
-                            let inputs = function.sig.inputs.len();
-                            let output = format!("(f32,({}))", "f32,".repeat(inputs));
-                            let new_rtn: syn::Type = syn::parse_str(&output).unwrap();
-                            *return_type_type = Box::new(new_rtn);
+                                // Updates function output signature.
+                                // ---------------------------------------
+                                let num_inputs = function.sig.inputs.len();
+                                let output = format!("(f32,{})", "f32,".repeat(num_inputs));
+                                let new_rtn: syn::Type = syn::parse_str(&output).unwrap();
+                                *return_type_type = Box::new(new_rtn);
+                                // Updates return statement.
+                                // ---------------------------------------
+                                let out = return_expr.path().path.segments[0].ident.to_string();
+                                // Iter over idents of inputs.
+                                let input_idents_iter = function
+                                    .sig
+                                    .inputs
+                                    .iter()
+                                    .map(|fn_arg| &fn_arg.typed().pat.ident().ident);
+                                let inputs_output_str = input_idents_iter
+                                    .map(|ident| format!("{},", der!(ident)))
+                                    .collect::<String>();
+                                let return_string = format!("({},{})", out, inputs_output_str);
+                                let return_tuple: syn::Expr =
+                                    syn::parse_str(&return_string).expect("unique 3");
+                                expr_return.expr = Some(Box::new(return_tuple));
+                                // Updates function input signature.
+                                // ---------------------------------------
+                                let new_fn_arg_str = format!("{}: f32", der!(out));
+                                let new_fn_arg: syn::FnArg =
+                                    syn::parse_str(&new_fn_arg_str).unwrap();
+                                function.sig.inputs.push(new_fn_arg);
 
-                            // Returns return statement identifier.
-                            return Ok(());
+                                return Ok(last_stmt);
+                            }
                         }
                     }
                 }
