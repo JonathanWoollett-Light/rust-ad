@@ -14,6 +14,7 @@ A super restrictive WIP beginnings of a library attempting to implement auto-dif
 - [ ] [ndarray](https://github.com/rust-ndarray/ndarray) support
 - [ ] [nalgebra](https://docs.rs/nalgebra/latest/nalgebra/) support
 - [ ] `if`, `if else` and `else` support
+- [ ] `for`, `while` and `loop` support
 
 ## Application
 
