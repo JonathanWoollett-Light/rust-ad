@@ -1,8 +1,47 @@
 use rust_ad_core::utils::*;
 use rust_ad_core::*;
 
+pub fn update_forward_return(s: Option<&mut syn::Stmt>) {
+    *s.unwrap() = match s {
+        Some(syn::Stmt::Semi(syn::Expr::Return(expr_return),_)) => {
+            if let Some(b) = expr_return.expr.as_ref() {
+                if let syn::Expr::Path(expr_path) = &**b {
+                    let ident = &expr_path.path.segments[0].ident;
+                    let return_str = format!("return ({},{});",ident,der!(ident.to_string()));
+                    syn::parse_str(&return_str).expect("update_forward_return malformed statement")
+                }
+                else {
+                    panic!("No return path:\n{:#?}",b)
+                }
+            }
+            else {
+                panic!("No return expression:\n{:#?}",expr_return)
+            }
+        }
+        _ => panic!("No retun statement:\n{:#?}",s)
+    }
+}
+
+/// Insperses values with respect to the preceding values.
+pub fn interspese_succedding<T>(x: Vec<T>, f: fn(&T) -> Option<T>) -> Vec<T> {
+    let len = x.len();
+    let new_len = len*2-1;
+    let mut y = Vec::with_capacity(new_len);
+    let mut x_iter = x.into_iter().rev();
+    if let Some(last) = x_iter.next() {
+        y.push(last);
+    }
+    for a in x_iter {
+        if let Some(b) = f(&a) {
+            y.push(b);
+        }
+        y.push(a);
+    }
+    y.into_iter().rev().collect()
+}
+
 // http://h2.jaguarpaw.co.uk/posts/automatic-differentiation-worked-examples/
-pub fn forward_derivative(stmt: syn::Stmt) -> Vec<syn::Stmt> {
+pub fn forward_derivative(stmt: &syn::Stmt) -> Option<syn::Stmt> {
     if let syn::Stmt::Local(ref local) = stmt {
         if let Some(ref init) = local.init {
             if let syn::Expr::Binary(bin_expr) = &*init.1 {
@@ -21,62 +60,11 @@ pub fn forward_derivative(stmt: syn::Stmt) -> Vec<syn::Stmt> {
                     syn::BinOp::Div(_) => forward_div(&stmt),
                     _ => panic!("Uncovered operation"),
                 };
-                return vec![stmt, new_stmt];
-            }
-        }
-    } else if let syn::Stmt::Semi(semi, _) = &stmt {
-        if let syn::Expr::Return(rtn) = semi {
-            if let Some(ref rtn_expr) = rtn.expr {
-                if let syn::Expr::Path(expr_path) = &**rtn_expr {
-                    let rtn = syn::Stmt::Semi(
-                        syn::Expr::Return(syn::ExprReturn {
-                            attrs: Vec::new(),
-                            return_token: syn::token::Return {
-                                span: expr_path.path.segments[0].ident.span(),
-                            },
-                            expr: Some(Box::new(syn::Expr::Tuple(syn::ExprTuple {
-                                attrs: Vec::new(),
-                                paren_token: syn::token::Paren {
-                                    span: expr_path.path.segments[0].ident.span(),
-                                },
-                                elems: {
-                                    let mut outer_p = syn::punctuated::Punctuated::new();
-                                    outer_p.push(syn::Expr::Path(expr_path.clone()));
-                                    outer_p.push(syn::Expr::Path(syn::ExprPath {
-                                        attrs: Vec::new(),
-                                        qself: None,
-                                        path: syn::Path {
-                                            leading_colon: None,
-                                            segments: {
-                                                let mut p = syn::punctuated::Punctuated::new();
-                                                p.push(syn::PathSegment {
-                                                    ident: syn::Ident::new(
-                                                        &der!(expr_path.path.segments[0]
-                                                            .ident
-                                                            .to_string()),
-                                                        expr_path.path.segments[0].ident.span(),
-                                                    ),
-                                                    arguments: syn::PathArguments::None,
-                                                });
-                                                p
-                                            },
-                                        },
-                                    }));
-                                    outer_p
-                                },
-                            }))),
-                        }),
-                        syn::token::Semi {
-                            spans: [expr_path.path.segments[0].ident.span()],
-                        },
-                    );
-                    return vec![rtn];
-                }
+                return Some(new_stmt);
             }
         }
     }
-    // eprintln!("stmt: {:#?}",stmt);
-    vec![stmt]
+    None
 }
 
 fn forward_add(stmt: &syn::Stmt) -> syn::Stmt {
@@ -158,7 +146,7 @@ fn expr_string(expr: &syn::Expr) -> String {
 /// Derivative expression string
 fn derivative_expr_string(expr: &syn::Expr) -> String {
     match expr {
-        syn::Expr::Lit(expr_lit) => String::from("0f32"),
+        syn::Expr::Lit(_) => String::from("0f32"),
         syn::Expr::Path(expr_path) => der!(expr_path.path.segments[0].ident.to_string()),
         _ => panic!("Uncoverd expr for `derivative_expr`"),
     }

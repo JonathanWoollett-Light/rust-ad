@@ -251,11 +251,10 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
         .collect::<Vec<_>>();
     // block.stmts = statements;
 
-    let statements = statements
-        .into_iter()
-        .flat_map(|statement| forward_derivative(statement))
-        .collect::<Vec<_>>();
-    block.stmts = statements;
+    // Intersperses forward deriatives
+    block.stmts = interspese_succedding(statements,forward_derivative);
+    // Updates return statement
+    update_forward_return(block.stmts.last_mut());
 
     let new = quote::quote! { #function_holder #function };
     TokenStream::from(new)
