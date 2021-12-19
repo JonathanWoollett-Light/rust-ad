@@ -1,3 +1,5 @@
+extern crate proc_macro;
+
 pub trait UnwrapLit {
     fn float(&self) -> &syn::LitFloat;
 }
