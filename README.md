@@ -8,6 +8,8 @@ A super restrictive WIP beginnings of a library attempting to implement auto-dif
 
 ## Status
 
+**Becuase `typeof` (e.g. [`decltype`](https://en.cppreference.com/w/cpp/language/decltype))is currently not implemented this makes supporting different types and more complex operations a massive pain**
+
 - [x] Forward Auto-differentiation
 - [x] Reverse Auto-differentiation
 - [ ] `f64` support
