@@ -1,5 +1,28 @@
 extern crate proc_macro;
 
+pub trait UnwrapReturnType {
+    fn type_(&self) -> &syn::Type;
+}
+impl UnwrapReturnType for syn::ReturnType {
+    fn type_(&self) -> &syn::Type {
+        match self {
+            Self::Type(_, typed_) => &**typed_,
+            _ => panic!("called `ReturnType::type_()` on a non `Type` value"),
+        }
+    }
+}
+
+pub trait UnwrapType {
+    fn path(&self) -> &syn::TypePath;
+}
+impl UnwrapType for syn::Type {
+    fn path(&self) -> &syn::TypePath {
+        match self {
+            Self::Path(path) => path,
+            _ => panic!("called `Type::path()` on a non `Path` value"),
+        }
+    }
+}
 pub trait UnwrapLit {
     fn float(&self) -> &syn::LitFloat;
 }

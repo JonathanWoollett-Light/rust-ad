@@ -33,8 +33,16 @@ pub fn reverse_derivative(stmt: &syn::Stmt) -> Option<syn::Stmt> {
                     _ => panic!("Uncovered operation"),
                 });
             } else if let syn::Expr::Macro(macro_expr) = init_expr {
-                if macro_expr.mac.path.segments[0].ident.to_string() == "dup" {
-                    // eprintln!("else: {:#?}", macro_expr);
+                if macro_expr
+                    .mac
+                    .path
+                    .segments
+                    .last()
+                    .expect("reverse empty macro")
+                    .ident
+                    .to_string()
+                    == "dup"
+                {
                     let macro_token_stream =
                         proc_macro::TokenStream::from(macro_expr.mac.tokens.clone())
                             .into_iter()
@@ -202,7 +210,7 @@ pub fn reverse_update_and_validate_signature(
 ) -> Result<syn::Stmt, TokenStream> {
     // If there is return statement, return user code, this will leader to compile error about no return function.
     match &mut function.sig.output {
-        syn::ReturnType::Type(_, ref mut return_type_type) => {
+        syn::ReturnType::Type(_, return_type_box) => {
             // eprintln!("here 1");
             if let Some(mut last_stmt) = function.block.stmts.pop() {
                 // eprintln!("here 2: {:#?}",last_stmt);
@@ -220,10 +228,24 @@ pub fn reverse_update_and_validate_signature(
 
                                 // Updates function output signature.
                                 // ---------------------------------------
-                                let num_inputs = function.sig.inputs.len();
-                                let output = format!("(f32,{})", "f32,".repeat(num_inputs));
+                                let return_type = &mut **return_type_box;
+                                let return_type_ident_string =
+                                    &return_type.path().path.segments[0].ident.to_string();
+                                let function_input_types = function
+                                    .sig
+                                    .inputs
+                                    .iter()
+                                    .map(|fn_arg| {
+                                        fn_arg.typed().ty.path().path.segments[0].ident.to_string()
+                                    })
+                                    .intersperse(String::from(","))
+                                    .collect::<String>();
+                                let output = format!(
+                                    "({},{})",
+                                    return_type_ident_string, function_input_types
+                                );
                                 let new_rtn: syn::Type = syn::parse_str(&output).unwrap();
-                                *return_type_type = Box::new(new_rtn);
+                                *return_type = new_rtn;
                                 // Updates return statement.
                                 // ---------------------------------------
                                 let out = return_expr.path().path.segments[0].ident.to_string();
@@ -242,7 +264,8 @@ pub fn reverse_update_and_validate_signature(
                                 expr_return.expr = Some(Box::new(return_tuple));
                                 // Updates function input signature.
                                 // ---------------------------------------
-                                let new_fn_arg_str = format!("{}: f32", der!(out));
+                                let new_fn_arg_str =
+                                    format!("{}: {}", der!(out), return_type_ident_string);
                                 let new_fn_arg: syn::FnArg =
                                     syn::parse_str(&new_fn_arg_str).unwrap();
                                 function.sig.inputs.push(new_fn_arg);

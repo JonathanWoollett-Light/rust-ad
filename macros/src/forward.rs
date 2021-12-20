@@ -144,7 +144,7 @@ fn expr_string(expr: &syn::Expr) -> String {
 /// Derivative expression string
 fn derivative_expr_string(expr: &syn::Expr) -> String {
     match expr {
-        syn::Expr::Lit(_) => String::from("0f32"),
+        syn::Expr::Lit(_) => String::from("0."),
         syn::Expr::Path(expr_path) => der!(expr_path.path.segments[0].ident.to_string()),
         _ => panic!("Uncoverd expr for `derivative_expr`"),
     }

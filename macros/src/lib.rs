@@ -227,9 +227,13 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
         .inputs
         .iter()
         .map(|fn_arg| {
-            let ident = &fn_arg.typed().pat.ident().ident;
-            let string = format!("{}:f32", der!(ident));
-            let arg: syn::FnArg = syn::parse_str(&string).expect("failed pass str");
+            // eprintln!("fn_arg:\n{:#?}",fn_arg);
+            let typed = fn_arg.typed();
+            let val_type = &typed.ty.path().path.segments[0].ident;
+            let ident = &typed.pat.ident().ident;
+            let string = format!("{}:{}", der!(ident), val_type);
+            let arg: syn::FnArg =
+                syn::parse_str(&string).expect("`forward_autodiff` failed input parse");
             arg
         })
         .collect::<Vec<_>>();
@@ -237,7 +241,11 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
         function.sig.inputs.push(input);
     }
     // Outputs output signature
-    function.sig.output = syn::parse_str(&"->(f32,f32)").unwrap();
+    eprint!("function.sig.output: {:#?}", function.sig.output);
+    let return_type = &function.sig.output.type_().path().path.segments[0].ident;
+    let return_string = format!("->({},{})", return_type, return_type);
+    function.sig.output =
+        syn::parse_str(&return_string).expect("`forward_autodiff` failed output parse");
 
     // Forward autodiff
     // ---------------------------------------------------------------------------

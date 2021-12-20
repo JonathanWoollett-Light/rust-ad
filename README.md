@@ -10,9 +10,9 @@ A super restrictive WIP beginnings of a library attempting to implement auto-dif
 
 - [x] Forward Auto-differentiation
 - [x] Reverse Auto-differentiation
-- [ ] `f64` support *
-- [ ] [ndarray](https://github.com/rust-ndarray/ndarray) support *
-- [ ] [nalgebra](https://docs.rs/nalgebra/latest/nalgebra/) support *
+- [x] `f32` & `f64` support*
+- [ ] [ndarray](https://github.com/rust-ndarray/ndarray) support*
+- [ ] [nalgebra](https://docs.rs/nalgebra/latest/nalgebra/) support*
 - [ ] `if`, `if else` and `else` support
 - [ ] `for`, `while` and `loop` support
 

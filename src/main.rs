@@ -2,7 +2,7 @@ extern crate rust_ad;
 use rust_ad::*;
 
 #[reverse_autodiff]
-fn forward(x: f32, y: f32) -> f32 {
+fn forward(x: f64, y: f32) -> f64 {
     let a = 7. * x;
     let b = 3. * x;
     let c = x + b;
@@ -12,8 +12,8 @@ fn forward(x: f32, y: f32) -> f32 {
 
 fn main() {
     // dup!(x,2);
-    let out = reverse!(forward, 2., 4., 1.);
-    println!("out: {:?}", out);
+    // let out = reverse!(forward, 2., 4., 1.);
+    // println!("out: {:?}", out);
 }
 
 // fn forward2(x: f32, y: f32, der_d: f32) {
