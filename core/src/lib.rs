@@ -1,3 +1,5 @@
+//! **I do not recommend using this directly, please sea [rust-ad](https://crates.io/crates/rust-ad).**
+
 /// Some utility functions used for [syn].
 pub mod utils;
 

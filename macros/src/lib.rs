@@ -1,6 +1,8 @@
 #![feature(proc_macro_span)]
 #![feature(iter_intersperse)]
 
+//! **I do not recommend using this directly, please sea [rust-ad](https://crates.io/crates/rust-ad).**
+
 use rust_ad_core::utils::*;
 use rust_ad_core::*;
 
