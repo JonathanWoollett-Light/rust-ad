@@ -3,29 +3,27 @@ use rust_ad_core::*;
 
 pub fn update_forward_return(s: Option<&mut syn::Stmt>) {
     *s.unwrap() = match s {
-        Some(syn::Stmt::Semi(syn::Expr::Return(expr_return),_)) => {
+        Some(syn::Stmt::Semi(syn::Expr::Return(expr_return), _)) => {
             if let Some(b) = expr_return.expr.as_ref() {
                 if let syn::Expr::Path(expr_path) = &**b {
                     let ident = &expr_path.path.segments[0].ident;
-                    let return_str = format!("return ({},{});",ident,der!(ident.to_string()));
+                    let return_str = format!("return ({},{});", ident, der!(ident.to_string()));
                     syn::parse_str(&return_str).expect("update_forward_return malformed statement")
+                } else {
+                    panic!("No return path:\n{:#?}", b)
                 }
-                else {
-                    panic!("No return path:\n{:#?}",b)
-                }
-            }
-            else {
-                panic!("No return expression:\n{:#?}",expr_return)
+            } else {
+                panic!("No return expression:\n{:#?}", expr_return)
             }
         }
-        _ => panic!("No retun statement:\n{:#?}",s)
+        _ => panic!("No retun statement:\n{:#?}", s),
     }
 }
 
 /// Insperses values with respect to the preceding values.
 pub fn interspese_succedding<T>(x: Vec<T>, f: fn(&T) -> Option<T>) -> Vec<T> {
     let len = x.len();
-    let new_len = len*2-1;
+    let new_len = len * 2 - 1;
     let mut y = Vec::with_capacity(new_len);
     let mut x_iter = x.into_iter().rev();
     if let Some(last) = x_iter.next() {
@@ -42,8 +40,8 @@ pub fn interspese_succedding<T>(x: Vec<T>, f: fn(&T) -> Option<T>) -> Vec<T> {
 
 // http://h2.jaguarpaw.co.uk/posts/automatic-differentiation-worked-examples/
 pub fn forward_derivative(stmt: &syn::Stmt) -> Option<syn::Stmt> {
-    if let syn::Stmt::Local(ref local) = stmt {
-        if let Some(ref init) = local.init {
+    if let syn::Stmt::Local(local) = stmt {
+        if let Some(init) = &local.init {
             if let syn::Expr::Binary(bin_expr) = &*init.1 {
                 // eprintln!("bin_expr: {:#?}\n.\n", bin_expr);
                 // panic!("stopping here");
@@ -107,7 +105,7 @@ fn forward_mul(stmt: &syn::Stmt) -> syn::Stmt {
     let (l, r) = (&*bin_expr.left, &*bin_expr.right);
 
     let str = format!(
-        "let {} = ({r}*{dl}) + ({l}*{dr});",
+        "let {} = {r}*{dl} + {l}*{dr};",
         der!(local.pat.ident().ident.to_string()),
         dl = derivative_expr_string(l),
         dr = derivative_expr_string(r),
@@ -124,7 +122,7 @@ fn forward_div(stmt: &syn::Stmt) -> syn::Stmt {
     let (l, r) = (&*bin_expr.left, &*bin_expr.right);
 
     let str = format!(
-        "let {} = ({dl}/{r}) - ({dr}*{r}*{r}/{l});",
+        "let {} = {dl}/{r} - {dr}*{r}*{r}/{l};",
         der!(local.pat.ident().ident.to_string()),
         dl = derivative_expr_string(l),
         dr = derivative_expr_string(r),

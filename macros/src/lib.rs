@@ -252,7 +252,7 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     // block.stmts = statements;
 
     // Intersperses forward deriatives
-    block.stmts = interspese_succedding(statements,forward_derivative);
+    block.stmts = interspese_succedding(statements, forward_derivative);
     // Updates return statement
     update_forward_return(block.stmts.last_mut());
 
