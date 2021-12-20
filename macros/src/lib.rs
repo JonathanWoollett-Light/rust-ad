@@ -1,9 +1,3 @@
-//! A super restrictive WIP beginnings of a library attempting to implement auto-differentiation in Rust.
-//! ## Status
-//! This library is very much a WIP and thus extremely rough, temperamental and inconsistent.
-//!
-//! I would not recommend you use it at the moment, it is only public to allow the possibility of collaborative work on it.
-
 #![feature(proc_macro_span)]
 #![feature(iter_intersperse)]
 
@@ -34,7 +28,7 @@ use reverse::*;
 ///     println!("{:?}",rust_ad::forward!(function_name,2.,4.,1.,5.))
 /// }
 /// ```
-/// This is just a replacement for:
+/// This is just a procedural functional macro replacement for the declarative macro:
 /// ```
 /// #[macro_export]
 /// macro_rules! forward {
@@ -86,7 +80,7 @@ pub fn forward(_item: TokenStream) -> TokenStream {
 ///     println!("{:?}",rust_ad::reverse!(function_name,2.,4.,1.))
 /// }
 /// ```
-/// This is just a replacement for:
+/// This is just a procedural functional macro replacement for the declarative macro:
 /// ```
 /// #[macro_export]
 /// macro_rules! reverse {
@@ -168,10 +162,6 @@ pub fn unweave(_attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 /// Generates the forward auto-differentiation function for a given function.
-///
-/// Only works with:
-/// - `f32`s
-/// - Primitive operations `-`, `+`, `*`, and `/`
 ///
 /// E.g.
 /// ```
@@ -268,11 +258,14 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     TokenStream::from(new)
 }
 
-/// Clones a variable a given number of times.
+/// Returns a tuple of a given number of clones of a variable.
 ///
-/// Returns a tuple of clones of this variable. `dup!(x,3)` -> `(x.clone(),x.clone(),x.clone())`.
-///
-/// Useful internally.
+/// ```
+/// fn main() {
+///     let x = 2;
+///     assert_eq!(rust_ad::dup!(x,3),(x.clone(),x.clone(),x.clone()));
+/// }
+/// ```
 #[proc_macro]
 pub fn dup(_item: TokenStream) -> TokenStream {
     // eprintln!("what?: {:?}",_item);
@@ -294,10 +287,6 @@ pub fn dup(_item: TokenStream) -> TokenStream {
 }
 
 /// Generates the reverse auto-differentiation function for a given function.
-///
-/// Only works with:
-/// - `f32`s
-/// - Primitive operations `-`, `+`, `*`, and `/`
 ///
 /// E.g.
 /// ```

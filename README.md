@@ -16,9 +16,7 @@ A super restrictive WIP beginnings of a library attempting to implement auto-dif
 - [ ] `if`, `if else` and `else` support
 - [ ] `for`, `while` and `loop` support
 
-*Becuase `typeof` (e.g. [`decltype`](https://en.cppreference.com/w/cpp/language/decltype)) is currently not implemented in Rust this makes supporting different types and more complex operations a massive pain. E.g. to figure out what operation `a + b` is actually doing I need to figure out the types `a` and `b`.
-
-Currently I'm considering requiring the manual annotatation of all types, `let a: f32 = b + c;` instead of `let a = b + c;` etc.
+*Becuase `typeof` (e.g. [`decltype`](https://en.cppreference.com/w/cpp/language/decltype)) is currently not implemented in Rust this makes supporting different types and more complex operations a massive pain. E.g. to figure out what operation `a + b` is actually doing I need to figure out the types `a` and `b`. Currently I'm considering requiring the manual annotatation of all types, `let a: f32 = b + c;` instead of `let a = b + c;` etc.
 
 ## Application
 
