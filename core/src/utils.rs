@@ -1,87 +1,91 @@
 extern crate proc_macro;
+// TODO Make macro to minimise code duplication here.
+
+type UnwrapResult<'a, T> = Result<&'a T, &'static str>;
+type UnwrapResultMut<'a, T> = Result<&'a mut T, &'static str>;
 
 pub trait UnwrapReturnType {
-    fn type_(&self) -> &syn::Type;
+    fn type_(&self) -> UnwrapResult<syn::Type>;
 }
 impl UnwrapReturnType for syn::ReturnType {
-    fn type_(&self) -> &syn::Type {
+    fn type_(&self) -> UnwrapResult<syn::Type> {
         match self {
-            Self::Type(_, typed_) => &**typed_,
-            _ => panic!("called `ReturnType::type_()` on a non `Type` value"),
+            Self::Type(_, typed_) => Ok(&**typed_),
+            _ => Err("called `ReturnType::type_()` on a non `Type` value"),
         }
     }
 }
 
 pub trait UnwrapType {
-    fn path(&self) -> &syn::TypePath;
+    fn path(&self) -> UnwrapResult<syn::TypePath>;
 }
 impl UnwrapType for syn::Type {
-    fn path(&self) -> &syn::TypePath {
+    fn path(&self) -> UnwrapResult<syn::TypePath> {
         match self {
-            Self::Path(path) => path,
-            _ => panic!("called `Type::path()` on a non `Path` value"),
+            Self::Path(path) => Ok(path),
+            _ => Err("called `Type::path()` on a non `Path` value"),
         }
     }
 }
 pub trait UnwrapLit {
-    fn float(&self) -> &syn::LitFloat;
+    fn float(&self) -> UnwrapResult<syn::LitFloat>;
 }
 impl UnwrapLit for syn::Lit {
-    fn float(&self) -> &syn::LitFloat {
+    fn float(&self) -> UnwrapResult<syn::LitFloat> {
         match self {
-            Self::Float(float) => float,
-            _ => panic!("called `Lit::float()` on a non `Float` value"),
+            Self::Float(float) => Ok(float),
+            _ => Err("called `Lit::float()` on a non `Float` value"),
         }
     }
 }
 pub trait UnwrapTokenTree {
-    fn ident(&self) -> &proc_macro::Ident;
-    fn literal(&self) -> &proc_macro::Literal;
+    fn ident(&self) -> UnwrapResult<proc_macro::Ident>;
+    fn literal(&self) -> UnwrapResult<proc_macro::Literal>;
 }
 impl UnwrapTokenTree for proc_macro::TokenTree {
-    fn ident(&self) -> &proc_macro::Ident {
+    fn ident(&self) -> UnwrapResult<proc_macro::Ident> {
         match self {
-            Self::Ident(local) => local,
-            _ => panic!("called `TokenTree::ident()` on a non `Ident` value"),
+            Self::Ident(local) => Ok(local),
+            _ => Err("called `TokenTree::ident()` on a non `Ident` value"),
         }
     }
-    fn literal(&self) -> &proc_macro::Literal {
+    fn literal(&self) -> UnwrapResult<proc_macro::Literal> {
         match self {
-            Self::Literal(lit) => lit,
-            _ => panic!("called `TokenTree::literal()` on a non `Literal` value"),
+            Self::Literal(lit) => Ok(lit),
+            _ => Err("called `TokenTree::literal()` on a non `Literal` value"),
         }
     }
 }
 
 pub trait UnwrapStmt {
-    fn local(&self) -> &syn::Local;
-    fn local_mut(&mut self) -> &mut syn::Local;
-    fn semi(&self) -> &syn::Expr;
-    fn semi_mut(&mut self) -> &mut syn::Expr;
+    fn local(&self) -> UnwrapResult<syn::Local>;
+    fn local_mut(&mut self) -> UnwrapResultMut<syn::Local>;
+    fn semi(&self) -> UnwrapResult<syn::Expr>;
+    fn semi_mut(&mut self) -> UnwrapResultMut<syn::Expr>;
 }
 impl UnwrapStmt for syn::Stmt {
-    fn local(&self) -> &syn::Local {
+    fn local(&self) -> UnwrapResult<syn::Local> {
         match self {
-            Self::Local(local) => local,
-            _ => panic!("called `Stmt::local()` on a non `Local` value"),
+            Self::Local(local) => Ok(local),
+            _ => Err("called `Stmt::local()` on a non `Local` value"),
         }
     }
-    fn local_mut(&mut self) -> &mut syn::Local {
+    fn local_mut(&mut self) -> UnwrapResultMut<syn::Local> {
         match self {
-            Self::Local(local) => local,
-            _ => panic!("called `Stmt::local_mut()` on a non `Local` value"),
+            Self::Local(local) => Ok(local),
+            _ => Err("called `Stmt::local_mut()` on a non `Local` value"),
         }
     }
-    fn semi(&self) -> &syn::Expr {
+    fn semi(&self) -> UnwrapResult<syn::Expr> {
         match self {
-            Self::Semi(expr, _) => expr,
-            _ => panic!("called `Stmt::semi()` on a non `Semi` value"),
+            Self::Semi(expr, _) => Ok(expr),
+            _ => Err("called `Stmt::semi()` on a non `Semi` value"),
         }
     }
-    fn semi_mut(&mut self) -> &mut syn::Expr {
+    fn semi_mut(&mut self) -> UnwrapResultMut<syn::Expr> {
         match self {
-            Self::Semi(expr, _) => expr,
-            _ => panic!("called `Stmt::semi_mut()` on a non `Semi` value"),
+            Self::Semi(expr, _) => Ok(expr),
+            _ => Err("called `Stmt::semi_mut()` on a non `Semi` value"),
         }
     }
 }
@@ -98,34 +102,34 @@ impl IsStmt for syn::Stmt {
     }
 }
 pub trait UnwrapPat {
-    fn ident_mut(&mut self) -> &mut syn::PatIdent;
-    fn ident(&self) -> &syn::PatIdent;
-    fn tuple_mut(&mut self) -> &mut syn::PatTuple;
-    fn tuple(&self) -> &syn::PatTuple;
+    fn ident_mut(&mut self) -> UnwrapResultMut<syn::PatIdent>;
+    fn ident(&self) -> UnwrapResult<syn::PatIdent>;
+    fn tuple_mut(&mut self) -> UnwrapResultMut<syn::PatTuple>;
+    fn tuple(&self) -> UnwrapResult<syn::PatTuple>;
 }
 impl UnwrapPat for syn::Pat {
-    fn ident_mut(&mut self) -> &mut syn::PatIdent {
+    fn ident_mut(&mut self) -> UnwrapResultMut<syn::PatIdent> {
         match self {
-            Self::Ident(ident) => ident,
-            _ => panic!("called `Pat::ident()` on a non `Ident` value"),
+            Self::Ident(ident) => Ok(ident),
+            _ => Err("called `Pat::ident()` on a non `Ident` value"),
         }
     }
-    fn ident(&self) -> &syn::PatIdent {
+    fn ident(&self) -> UnwrapResult<syn::PatIdent> {
         match self {
-            Self::Ident(ident) => ident,
-            _ => panic!("called `Pat::ident()` on a non `Ident` value"),
+            Self::Ident(ident) => Ok(ident),
+            _ => Err("called `Pat::ident()` on a non `Ident` value"),
         }
     }
-    fn tuple_mut(&mut self) -> &mut syn::PatTuple {
+    fn tuple_mut(&mut self) -> UnwrapResultMut<syn::PatTuple> {
         match self {
-            Self::Tuple(tuple) => tuple,
-            _ => panic!("called `Pat::tuple_mut()` on a non `Tuple` value"),
+            Self::Tuple(tuple) => Ok(tuple),
+            _ => Err("called `Pat::tuple_mut()` on a non `Tuple` value"),
         }
     }
-    fn tuple(&self) -> &syn::PatTuple {
+    fn tuple(&self) -> UnwrapResult<syn::PatTuple> {
         match self {
-            Self::Tuple(tuple) => tuple,
-            _ => panic!("called `Pat::tuple()` on a non `Tuple` value"),
+            Self::Tuple(tuple) => Ok(tuple),
+            _ => Err("called `Pat::tuple()` on a non `Tuple` value"),
         }
     }
 }
@@ -146,77 +150,77 @@ impl IsExpr for syn::Expr {
     }
 }
 pub trait UnwrapExpr {
-    fn binary(&self) -> &syn::ExprBinary;
-    fn binary_mut(&mut self) -> &mut syn::ExprBinary;
-    fn block(&self) -> &syn::ExprBlock;
-    fn block_mut(&mut self) -> &mut syn::ExprBlock;
-    fn path(&self) -> &syn::ExprPath;
-    fn return_(&self) -> &syn::ExprReturn;
-    fn return_mut(&mut self) -> &mut syn::ExprReturn;
+    fn binary(&self) -> UnwrapResult<syn::ExprBinary>;
+    fn binary_mut(&mut self) -> UnwrapResultMut<syn::ExprBinary>;
+    fn block(&self) -> UnwrapResult<syn::ExprBlock>;
+    fn block_mut(&mut self) -> UnwrapResultMut<syn::ExprBlock>;
+    fn path(&self) -> UnwrapResult<syn::ExprPath>;
+    fn return_(&self) -> UnwrapResult<syn::ExprReturn>;
+    fn return_mut(&mut self) -> UnwrapResultMut<syn::ExprReturn>;
 }
 impl UnwrapExpr for syn::Expr {
-    fn binary(&self) -> &syn::ExprBinary {
+    fn binary(&self) -> UnwrapResult<syn::ExprBinary> {
         match self {
-            Self::Binary(b) => b,
-            _ => panic!("called `Expr::binary()` on a non `Binary` value"),
+            Self::Binary(b) => Ok(b),
+            _ => Err("called `Expr::binary()` on a non `Binary` value"),
         }
     }
-    fn binary_mut(&mut self) -> &mut syn::ExprBinary {
+    fn binary_mut(&mut self) -> UnwrapResultMut<syn::ExprBinary> {
         match self {
-            Self::Binary(b) => b,
-            _ => panic!("called `Expr::binary_mut()` on a non `Binary` value"),
+            Self::Binary(b) => Ok(b),
+            _ => Err("called `Expr::binary_mut()` on a non `Binary` value"),
         }
     }
-    fn block(&self) -> &syn::ExprBlock {
+    fn block(&self) -> UnwrapResult<syn::ExprBlock> {
         match self {
-            Self::Block(b) => b,
-            _ => panic!("called `Expr::block()` on a non `Block` value"),
+            Self::Block(b) => Ok(b),
+            _ => Err("called `Expr::block()` on a non `Block` value"),
         }
     }
-    fn block_mut(&mut self) -> &mut syn::ExprBlock {
+    fn block_mut(&mut self) -> UnwrapResultMut<syn::ExprBlock> {
         match self {
-            Self::Block(b) => b,
-            _ => panic!("called `Expr::block_mut()` on a non `Block` value"),
+            Self::Block(b) => Ok(b),
+            _ => Err("called `Expr::block_mut()` on a non `Block` value"),
         }
     }
-    fn path(&self) -> &syn::ExprPath {
+    fn path(&self) -> UnwrapResult<syn::ExprPath> {
         match self {
-            Self::Path(b) => b,
-            _ => panic!("called `Expr::path()` on a non `Path` value"),
+            Self::Path(b) => Ok(b),
+            _ => Err("called `Expr::path()` on a non `Path` value"),
         }
     }
-    fn return_(&self) -> &syn::ExprReturn {
+    fn return_(&self) -> UnwrapResult<syn::ExprReturn> {
         match self {
-            Self::Return(b) => b,
-            _ => panic!("called `Expr::return_()` on a non `Return` value"),
+            Self::Return(b) => Ok(b),
+            _ => Err("called `Expr::return_()` on a non `Return` value"),
         }
     }
-    fn return_mut(&mut self) -> &mut syn::ExprReturn {
+    fn return_mut(&mut self) -> UnwrapResultMut<syn::ExprReturn> {
         match self {
-            Self::Return(b) => b,
-            _ => panic!("called `Expr::return_mut()` on a non `Return` value"),
+            Self::Return(b) => Ok(b),
+            _ => Err("called `Expr::return_mut()` on a non `Return` value"),
         }
     }
 }
 pub trait UnwrapMember {
-    fn named(&self) -> &syn::Ident;
+    fn named(&self) -> UnwrapResult<syn::Ident>;
 }
 impl UnwrapMember for syn::Member {
-    fn named(&self) -> &syn::Ident {
+    fn named(&self) -> UnwrapResult<syn::Ident> {
         match self {
-            Self::Named(i) => i,
-            Self::Unnamed(_) => panic!("called `Member::named()` on a non `Named` value"),
+            Self::Named(i) => Ok(i),
+            Self::Unnamed(_) => Err("called `Member::named()` on a non `Named` value"),
         }
     }
 }
 pub trait UnwrapFnArg {
-    fn typed(&self) -> &syn::PatType;
+    fn typed(&self) -> UnwrapResult<syn::PatType>;
 }
 impl UnwrapFnArg for syn::FnArg {
-    fn typed(&self) -> &syn::PatType {
+    fn typed(&self) -> UnwrapResult<syn::PatType> {
         match self {
-            Self::Typed(i) => i,
-            Self::Receiver(_) => panic!("called `PatType::typed()` on a non `Typed` value"),
+            Self::Typed(i) => Ok(i),
+            Self::Receiver(_) => Err("called `PatType::typed()` on a non `Typed` value"),
         }
     }
 }

@@ -220,12 +220,21 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
         .iter()
         .map(|fn_arg| {
             // eprintln!("fn_arg:\n{:#?}",fn_arg);
-            let typed = fn_arg.typed();
-            let val_type = &typed.ty.path().path.segments[0].ident;
-            let ident = &typed.pat.ident().ident;
+            let typed = fn_arg.typed().expect("forward: signatre input not typed");
+            let val_type = &typed
+                .ty
+                .path()
+                .expect("forward: signature input not path")
+                .path
+                .segments[0]
+                .ident;
+            let ident = &typed
+                .pat
+                .ident()
+                .expect("forward: signature input not ident")
+                .ident;
             let string = format!("{}:{}", der!(ident), val_type);
-            let arg: syn::FnArg =
-                syn::parse_str(&string).expect("`forward_autodiff` failed input parse");
+            let arg: syn::FnArg = syn::parse_str(&string).expect("forward: failed input parse");
             arg
         })
         .collect::<Vec<_>>();
@@ -233,11 +242,19 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
         function.sig.inputs.push(input);
     }
     // Outputs output signature
-    eprint!("function.sig.output: {:#?}", function.sig.output);
-    let return_type = &function.sig.output.type_().path().path.segments[0].ident;
+    // eprint!("function.sig.output: {:#?}", function.sig.output);
+    let return_type = &function
+        .sig
+        .output
+        .type_()
+        .expect("forward: return not typed")
+        .path()
+        .expect("forward: return not path")
+        .path
+        .segments[0]
+        .ident;
     let return_string = format!("->({},{})", return_type, return_type);
-    function.sig.output =
-        syn::parse_str(&return_string).expect("`forward_autodiff` failed output parse");
+    function.sig.output = syn::parse_str(&return_string).expect("forward: failed output parse");
 
     // Forward autodiff
     // ---------------------------------------------------------------------------
@@ -341,7 +358,7 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Add input derivatives to output signature & validates output signature.
     // ---------------------------------------------------------------------------
-    let return_stmt = match reverse_update_and_validate_signature(&mut function) {
+    let return_stmt = match reverse_update_signature(&mut function) {
         Ok(rtn_stmt) => rtn_stmt,
         Err(rtn) => return rtn,
     };
@@ -476,7 +493,11 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
 
     // If the statement is local variable declaration (e.g. `let ...`).
     if let syn::Stmt::Local(local) = stmt {
-        let local_ident = &local.pat.ident().ident;
+        let local_ident = &local
+            .pat
+            .ident()
+            .expect("unwrap: statement not ident")
+            .ident;
         // If our statement has some initialization (e.g. `let a = 3;`).
         if let Some(init) = local.init.as_ref() {
             // If initialization is a binary expression (e.g. `let a = b + c;`).
@@ -485,10 +506,15 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
                 if let syn::Expr::Binary(left_bin_expr) = bin_expr.left.as_ref() {
                     // Creates new left statement.
                     let mut left_stmt = stmt.clone();
-                    let left_local = left_stmt.local_mut();
+                    let left_local = left_stmt
+                        .local_mut()
+                        .expect("unwrap: left statement not local");
                     let left_ident = format!("_{}", local_ident.to_string());
-                    left_local.pat.ident_mut().ident =
-                        syn::Ident::new(&left_ident, local_ident.span());
+                    left_local
+                        .pat
+                        .ident_mut()
+                        .expect("unwrap: left not ident")
+                        .ident = syn::Ident::new(&left_ident, local_ident.span());
                     *left_local.init.as_mut().unwrap().1 = syn::Expr::Binary(left_bin_expr.clone());
                     // Recurse
                     statements.append(&mut unwrap_statement(&left_stmt));
@@ -501,11 +527,13 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
                     });
                     *base_statement
                         .local_mut()
+                        .expect("unwrap: 1a")
                         .init
                         .as_mut()
                         .unwrap()
                         .1
                         .binary_mut()
+                        .expect("unwrap: 1b")
                         .left = syn::Expr::Path(syn::ExprPath {
                         attrs: Vec::new(),
                         qself: None,
@@ -519,10 +547,15 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
                 if let syn::Expr::Binary(right_bin_expr) = bin_expr.right.as_ref() {
                     // Creates new left statement.
                     let mut right_stmt = stmt.clone();
-                    let right_local = right_stmt.local_mut();
+                    let right_local = right_stmt
+                        .local_mut()
+                        .expect("unwrap: right statement not local");
                     let right_ident = format!("{}_", local_ident.to_string());
-                    right_local.pat.ident_mut().ident =
-                        syn::Ident::new(&right_ident, local_ident.span());
+                    right_local
+                        .pat
+                        .ident_mut()
+                        .expect("unwrap: right not ident")
+                        .ident = syn::Ident::new(&right_ident, local_ident.span());
                     *right_local.init.as_mut().unwrap().1 =
                         syn::Expr::Binary(right_bin_expr.clone());
                     // Recurse
@@ -536,11 +569,13 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
                     });
                     *base_statement
                         .local_mut()
+                        .expect("unwrap: 2a")
                         .init
                         .as_mut()
                         .unwrap()
                         .1
                         .binary_mut()
+                        .expect("unwrap: 2b")
                         .right = syn::Expr::Path(syn::ExprPath {
                         attrs: Vec::new(),
                         qself: None,

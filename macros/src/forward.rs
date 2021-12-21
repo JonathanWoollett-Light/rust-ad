@@ -66,12 +66,22 @@ pub fn forward_derivative(stmt: &syn::Stmt) -> Option<syn::Stmt> {
 }
 
 fn forward_add(stmt: &syn::Stmt) -> syn::Stmt {
-    let local = stmt.local();
+    let local = stmt.local().expect("forward_add: not local");
     let init = &local.init;
-    let bin_expr = init.as_ref().unwrap().1.binary();
+    let bin_expr = init
+        .as_ref()
+        .unwrap()
+        .1
+        .binary()
+        .expect("forward_add: not binary");
 
     let (l, r) = (&*bin_expr.left, &*bin_expr.right);
-    let d = der!(local.pat.ident().ident.to_string());
+    let d = der!(local
+        .pat
+        .ident()
+        .expect("forward_add: not ident")
+        .ident
+        .to_string());
 
     let str = format!(
         "let {} = {} + {};",
@@ -79,15 +89,25 @@ fn forward_add(stmt: &syn::Stmt) -> syn::Stmt {
         derivative_expr_string(l),
         derivative_expr_string(r)
     );
-    syn::parse_str(&str).unwrap()
+    syn::parse_str(&str).expect("forward_add: parse fail")
 }
 fn forward_sub(stmt: &syn::Stmt) -> syn::Stmt {
-    let local = stmt.local();
+    let local = stmt.local().expect("forward_sub: not local");
     let init = &local.init;
-    let bin_expr = init.as_ref().unwrap().1.binary();
+    let bin_expr = init
+        .as_ref()
+        .unwrap()
+        .1
+        .binary()
+        .expect("forward_sub: not binary");
 
     let (l, r) = (&*bin_expr.left, &*bin_expr.right);
-    let d = der!(local.pat.ident().ident.to_string());
+    let d = der!(local
+        .pat
+        .ident()
+        .expect("forward_sub: not ident")
+        .ident
+        .to_string());
 
     let str = format!(
         "let {} = {} - {};",
@@ -95,41 +115,63 @@ fn forward_sub(stmt: &syn::Stmt) -> syn::Stmt {
         derivative_expr_string(l),
         derivative_expr_string(r)
     );
-    syn::parse_str(&str).unwrap()
+    syn::parse_str(&str).expect("forward_sub: parse fail")
 }
 fn forward_mul(stmt: &syn::Stmt) -> syn::Stmt {
-    let local = stmt.local();
+    let local = stmt.local().expect("forward_mul: not local");
     let init = &local.init;
-    let bin_expr = init.as_ref().unwrap().1.binary();
+    let bin_expr = init
+        .as_ref()
+        .unwrap()
+        .1
+        .binary()
+        .expect("forward_mul: not binary");
 
     let (l, r) = (&*bin_expr.left, &*bin_expr.right);
+    let d = der!(local
+        .pat
+        .ident()
+        .expect("forward_mul: not ident")
+        .ident
+        .to_string());
 
     let str = format!(
         "let {} = {r}*{dl} + {l}*{dr};",
-        der!(local.pat.ident().ident.to_string()),
+        d,
         dl = derivative_expr_string(l),
         dr = derivative_expr_string(r),
         l = expr_string(l),
         r = expr_string(r),
     );
-    syn::parse_str(&str).unwrap()
+    syn::parse_str(&str).expect("forward_mul: parse fail")
 }
 fn forward_div(stmt: &syn::Stmt) -> syn::Stmt {
-    let local = stmt.local();
+    let local = stmt.local().expect("forward_div: not local");
     let init = &local.init;
-    let bin_expr = init.as_ref().unwrap().1.binary();
+    let bin_expr = init
+        .as_ref()
+        .unwrap()
+        .1
+        .binary()
+        .expect("forward_div: not binary");
 
     let (l, r) = (&*bin_expr.left, &*bin_expr.right);
+    let d = der!(local
+        .pat
+        .ident()
+        .expect("forward_div: not ident")
+        .ident
+        .to_string());
 
     let str = format!(
         "let {} = {dl}/{r} - {dr}*{r}*{r}/{l};",
-        der!(local.pat.ident().ident.to_string()),
+        d,
         dl = derivative_expr_string(l),
         dr = derivative_expr_string(r),
         l = expr_string(l),
         r = expr_string(r),
     );
-    syn::parse_str(&str).unwrap()
+    syn::parse_str(&str).expect("forward_div: parse fail")
 }
 fn expr_string(expr: &syn::Expr) -> String {
     match expr {
