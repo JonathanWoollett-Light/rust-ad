@@ -28,7 +28,7 @@ Auto-differentiation is implemented via 2 attribute procedural macros:
 
 ```rust
 #[rust_ad::forward_autodiff]
-fn function_name(x:f32, y:f32) -> f32 {
+fn function_name(x: f32, y: f32) -> f32 {
     let p = 7. * x;
     let r = 10. - y;
     let q = p * x * 5.;
