@@ -258,20 +258,21 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Forward autodiff
     // ---------------------------------------------------------------------------
-    let block = &mut function.block;
     // eprintln!("\n\nblock:\n{:?}\n\n", block);
 
-    let statements = block
+    let statements = function
+        .block
         .stmts
         .iter()
         .flat_map(|statement| unwrap_statement(statement))
         .collect::<Vec<_>>();
-    // block.stmts = statements;
+    function.block.stmts = statements;
+    propagate_types(&function);
 
     // Intersperses forward deriatives
-    block.stmts = interspese_succedding(statements, forward_derivative);
-    // Updates return statement
-    update_forward_return(block.stmts.last_mut());
+    // function.block.stmts = interspese_succedding(statements, forward_derivative);
+    // // Updates return statement
+    // update_forward_return(function.block.stmts.last_mut());
 
     let new = quote::quote! { #function_holder #function };
     TokenStream::from(new)
@@ -485,6 +486,29 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     rtn
 }
 
+/// Unwraps nested expressions into seperate variable assignments.
+///
+/// E.g.
+/// ```ignore
+/// let a = b*c + d/e;
+/// ```
+/// Becomes:
+/// ```ignore
+/// let _a = b*c;
+/// let a_ = d/c;
+/// let a = _a + a_;
+/// ```
+///
+/// E.g.
+/// ```ignore
+/// let a = function_one(function_two(b)+c);
+/// ```
+/// Becomes:
+/// ```ignore
+/// let __a = function_two(b);
+/// let _a = __a + c;
+/// let a = function_one(_a);
+/// ```
 fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
     let mut statements = Vec::new();
 
@@ -500,6 +524,7 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
             .ident;
         // If our statement has some initialization (e.g. `let a = 3;`).
         if let Some(init) = local.init.as_ref() {
+            // eprintln!("init: {:#?}",init);
             // If initialization is a binary expression (e.g. `let a = b + c;`).
             if let syn::Expr::Binary(bin_expr) = init.1.as_ref() {
                 // If left side of expression is binary expression.
@@ -520,11 +545,8 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
                     statements.append(&mut unwrap_statement(&left_stmt));
 
                     // Updates statement to contain variable referencing new statement.
-                    let mut p = syn::punctuated::Punctuated::new();
-                    p.push(syn::PathSegment {
-                        ident: syn::Ident::new(&left_ident, local_ident.span()),
-                        arguments: syn::PathArguments::None,
-                    });
+                    let left_expr: syn::Expr =
+                        syn::parse_str(&left_ident.to_string()).expect("unwrap: left parse fail");
                     *base_statement
                         .local_mut()
                         .expect("unwrap: 1a")
@@ -534,14 +556,7 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
                         .1
                         .binary_mut()
                         .expect("unwrap: 1b")
-                        .left = syn::Expr::Path(syn::ExprPath {
-                        attrs: Vec::new(),
-                        qself: None,
-                        path: syn::Path {
-                            leading_colon: None,
-                            segments: p,
-                        },
-                    });
+                        .left = left_expr;
                 }
                 // If right side of expression is binary expression.
                 if let syn::Expr::Binary(right_bin_expr) = bin_expr.right.as_ref() {
@@ -562,11 +577,8 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
                     statements.append(&mut unwrap_statement(&right_stmt));
 
                     // Updates statement to contain variable referencing new statement.
-                    let mut p = syn::punctuated::Punctuated::new();
-                    p.push(syn::PathSegment {
-                        ident: syn::Ident::new(&right_ident, local_ident.span()),
-                        arguments: syn::PathArguments::None,
-                    });
+                    let right_expr: syn::Expr =
+                        syn::parse_str(&right_ident.to_string()).expect("unwrap: rightparse fail");
                     *base_statement
                         .local_mut()
                         .expect("unwrap: 2a")
@@ -576,18 +588,171 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
                         .1
                         .binary_mut()
                         .expect("unwrap: 2b")
-                        .right = syn::Expr::Path(syn::ExprPath {
-                        attrs: Vec::new(),
-                        qself: None,
-                        path: syn::Path {
-                            leading_colon: None,
-                            segments: p,
-                        },
-                    });
+                        .right = right_expr;
+                }
+            }
+            // If initialization is function call (e.g. `let a = my_function(b,c);`).
+            else if let syn::Expr::Call(call_expr) = init.1.as_ref() {
+                // eprintln!("call_expr: {:#?}",call_expr);
+
+                // For each function argument.
+                for (i, arg) in call_expr.args.iter().enumerate() {
+                    // eprintln!("i: {:#?}, arg: {:#?}",i,arg);
+
+                    // If function argument is binary expression
+                    if let syn::Expr::Binary(arg_bin_expr) = arg {
+                        // eprintln!("arg_bin_expr: {:#?}",arg_bin_expr);
+
+                        // Creates new function argument statement.
+                        let mut func_stmt = stmt.clone();
+                        let func_local = func_stmt
+                            .local_mut()
+                            .expect("unwrap: function statement not local");
+                        let func_ident =
+                            format!("{}_{}", FUNCTION_PREFFIX.repeat(i + 1), local_ident);
+                        func_local
+                            .pat
+                            .ident_mut()
+                            .expect("unwrap: function not ident")
+                            .ident = syn::Ident::new(&func_ident, local_ident.span());
+                        *func_local.init.as_mut().unwrap().1 =
+                            syn::Expr::Binary(arg_bin_expr.clone());
+                        // Recurse
+                        statements.append(&mut unwrap_statement(&func_stmt));
+
+                        // Updates statement to contain reference to new variables
+                        let arg_expr: syn::Expr =
+                            syn::parse_str(&func_ident).expect("unwrap: funtion parse fail");
+                        base_statement
+                            .local_mut()
+                            .expect("unwrap: function local")
+                            .init
+                            .as_mut()
+                            .unwrap()
+                            .1
+                            .call_mut()
+                            .expect("unwrap: function call")
+                            .args[i] = arg_expr;
+                    }
                 }
             }
         }
     }
     statements.push(base_statement);
+    // eprintln!("statements.len(): {}", statements.len());
     statements
+}
+
+/// Gets the types of all variables in a function.
+///
+/// Propagates types through variables in a function from the input types.
+///
+/// Returns a hashmap of identifier->type.
+fn propagate_types(func: &syn::ItemFn) -> HashMap<String, String> {
+    let mut map = HashMap::new();
+
+    for arg in func.sig.inputs.iter() {
+        let typed = arg.typed().expect("propagate_types: not typed");
+        // eprintln!("typed: {:#?}",typed);
+        let ident = &typed.pat.ident().expect("propagate_types: not ident").ident;
+        let type_ident = &typed
+            .ty
+            .path()
+            .expect("propagate_types: not path")
+            .path
+            .segments[0]
+            .ident;
+        map.insert(ident.to_string(), type_ident.to_string());
+    }
+
+    for stmt in func.block.stmts.iter() {
+        // eprintln!("map: {:?}", map);
+        if let syn::Stmt::Local(local) = stmt {
+            // eprintln!("local:\n{:#?}\n",local);
+            let var_ident = match &local.pat {
+                syn::Pat::Ident(pat_ident) => &pat_ident.ident,
+                _ => panic!("propagate_types: var type"),
+            };
+            if let Some(init) = &local.init {
+                if let syn::Expr::Binary(bin_expr) = &*init.1 {
+                    // eprintln!("bin_expr: {:#?}",bin_expr);
+
+                    // Gets left var
+                    let left_type = if let syn::Expr::Path(left_path) = &*bin_expr.left {
+                        let left_ident = &left_path.path.segments[0].ident;
+                        let l_type = map
+                            .get(&left_ident.to_string())
+                            .expect("propagate_types: left no type")
+                            .clone();
+                        Some(l_type)
+                    } else {
+                        None
+                    };
+                    // Gets right var
+                    let right_type = if let syn::Expr::Path(right_path) = &*bin_expr.right {
+                        let right_ident = &right_path.path.segments[0].ident;
+                        let r_type = map
+                            .get(&right_ident.to_string())
+                            .expect("propagate_types: right no type")
+                            .clone();
+                        Some(r_type)
+                    } else {
+                        None
+                    };
+                    // If both are variables with types, check these types are equal
+                    if left_type.is_some() && right_type.is_some() {
+                        assert_eq!(
+                            left_type.as_ref().unwrap(),
+                            right_type.as_ref().unwrap(),
+                            "non-matching types"
+                        );
+                    }
+                    // Sets result type
+                    if let Some(out_type) = left_type.or(right_type) {
+                        map.insert(var_ident.to_string(), out_type.clone());
+                    }
+                } else if let syn::Expr::Call(call_expr) = &*init.1 {
+                    // eprintln!("call_expr: {:#?}",call_expr);
+
+                    // Gets function identifier
+                    let func_ident = &call_expr
+                        .func
+                        .path()
+                        .expect("propagate_types: func not path")
+                        .path
+                        .segments[0]
+                        .ident;
+                    let func_str = func_ident.to_string();
+                    // Gets type of each argument
+                    let arg_types = call_expr
+                        .args
+                        .iter()
+                        .map(|p| {
+                            let ident = &p
+                                .path()
+                                .expect("propagate_types: func input not path")
+                                .path
+                                .segments[0]
+                                .ident;
+                            let ident_str = ident.to_string();
+                            // eprintln!("ident_str: {}",ident_str);
+                            map.get(&ident_str)
+                                .expect("propagate_types: unfound var")
+                                .clone()
+                        })
+                        .collect::<Vec<_>>();
+                    // Searches for supported function signature by function identifier and argument types.
+                    eprintln!("func_str: {}", func_str);
+                    eprintln!("arg_types: {:?}", arg_types);
+                    let func_out_type = SUPPORTED_FUNCTIONS
+                        .get(&func_str, &arg_types)
+                        .expect("propagate_types: unsupported function");
+                    // Sets result type
+                    map.insert(var_ident.to_string(), func_out_type);
+                }
+            }
+        }
+    }
+    eprintln!("final map: {:?}", map);
+    map
 }

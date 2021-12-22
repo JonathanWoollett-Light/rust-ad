@@ -12,3 +12,5 @@ documentation = "https://docs.rs/rust-ad/"
 
 [dependencies]
 syn = { version="1.0.82", features=["full","extra-traits"] }
+lazy_static = "1.4.0"
+phf = { version = "0.10", features = ["macros"] }

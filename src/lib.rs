@@ -16,6 +16,6 @@
 //! *Becuase `typeof` (e.g. [`decltype`](https://en.cppreference.com/w/cpp/language/decltype)) is currently not implemented in Rust this makes supporting different types and more complex operations a massive pain. E.g. to figure out what operation `a + b` is actually doing I need to figure out the types `a` and `b`. Currently I'm considering requiring the manual annotatation of all types, `let a: f32 = b + c;` instead of `let a = b + c;` etc.
 //!
 //! ## Notes on internals
-//! `.expect()` is used extensively in internals, this is since when using `cargo expand` when an `.unwrap()` would panic it gives no line reference thus it can be difficult to locate errors. Thus by using unique `.expect()` messages this makes locating errors easier.
+//! `.expect()` is used extensively in internals, this is since when using `cargo expand` when an `.unwrap()` would panic it gives no line reference making it difficult to locate errors. By using unique panic messages with `.expect()` this makes locating errors easier.
 
 pub use rust_ad_macros::*;

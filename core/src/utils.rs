@@ -137,6 +137,7 @@ pub trait IsExpr {
     fn is_binary(&self) -> bool;
     fn is_path(&self) -> bool;
     fn is_return(&self) -> bool;
+    fn is_call(&self) -> bool;
 }
 impl IsExpr for syn::Expr {
     fn is_binary(&self) -> bool {
@@ -148,6 +149,9 @@ impl IsExpr for syn::Expr {
     fn is_return(&self) -> bool {
         matches!(self, Self::Return(_))
     }
+    fn is_call(&self) -> bool {
+        matches!(self, Self::Call(_))
+    }
 }
 pub trait UnwrapExpr {
     fn binary(&self) -> UnwrapResult<syn::ExprBinary>;
@@ -157,6 +161,8 @@ pub trait UnwrapExpr {
     fn path(&self) -> UnwrapResult<syn::ExprPath>;
     fn return_(&self) -> UnwrapResult<syn::ExprReturn>;
     fn return_mut(&mut self) -> UnwrapResultMut<syn::ExprReturn>;
+    fn call(&self) -> UnwrapResult<syn::ExprCall>;
+    fn call_mut(&mut self) -> UnwrapResultMut<syn::ExprCall>;
 }
 impl UnwrapExpr for syn::Expr {
     fn binary(&self) -> UnwrapResult<syn::ExprBinary> {
@@ -199,6 +205,18 @@ impl UnwrapExpr for syn::Expr {
         match self {
             Self::Return(b) => Ok(b),
             _ => Err("called `Expr::return_mut()` on a non `Return` value"),
+        }
+    }
+    fn call(&self) -> UnwrapResult<syn::ExprCall> {
+        match self {
+            Self::Call(b) => Ok(b),
+            _ => Err("called `Expr::call()` on a non `Call` value"),
+        }
+    }
+    fn call_mut(&mut self) -> UnwrapResultMut<syn::ExprCall> {
+        match self {
+            Self::Call(b) => Ok(b),
+            _ => Err("called `Expr::call_mut()` on a non `Call` value"),
         }
     }
 }

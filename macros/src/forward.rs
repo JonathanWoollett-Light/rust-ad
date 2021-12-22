@@ -59,6 +59,17 @@ pub fn forward_derivative(stmt: &syn::Stmt) -> Option<syn::Stmt> {
                     _ => panic!("Uncovered operation"),
                 };
                 return Some(new_stmt);
+            } else if let syn::Expr::Call(_call_expr) = &*init.1 {
+                let local = stmt.local().expect("forward_derivative: not local");
+                let d = der!(local
+                    .pat
+                    .ident()
+                    .expect("forward_derivative: not ident")
+                    .ident
+                    .to_string());
+                let str = format!("let {} = placeholder();", d,);
+                let expr = syn::parse_str(&str).expect("forward_add: parse fail");
+                return Some(expr);
             }
         }
     }
