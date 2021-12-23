@@ -163,6 +163,8 @@ pub trait UnwrapExpr {
     fn return_mut(&mut self) -> UnwrapResultMut<syn::ExprReturn>;
     fn call(&self) -> UnwrapResult<syn::ExprCall>;
     fn call_mut(&mut self) -> UnwrapResultMut<syn::ExprCall>;
+    fn method_call(&self) -> UnwrapResult<syn::ExprMethodCall>;
+    fn method_call_mut(&mut self) -> UnwrapResultMut<syn::ExprMethodCall>;
 }
 impl UnwrapExpr for syn::Expr {
     fn binary(&self) -> UnwrapResult<syn::ExprBinary> {
@@ -217,6 +219,18 @@ impl UnwrapExpr for syn::Expr {
         match self {
             Self::Call(b) => Ok(b),
             _ => Err("called `Expr::call_mut()` on a non `Call` value"),
+        }
+    }
+    fn method_call(&self) -> UnwrapResult<syn::ExprMethodCall> {
+        match self {
+            Self::MethodCall(b) => Ok(b),
+            _ => Err("called `Expr::method_call()` on a non `MethodCall` value"),
+        }
+    }
+    fn method_call_mut(&mut self) -> UnwrapResultMut<syn::ExprMethodCall> {
+        match self {
+            Self::MethodCall(b) => Ok(b),
+            _ => Err("called `Expr::method_call_mut()` on a non `MethodCall` value"),
         }
     }
 }

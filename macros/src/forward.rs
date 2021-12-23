@@ -202,3 +202,26 @@ fn derivative_expr_string(expr: &syn::Expr) -> String {
         _ => panic!("Uncoverd expr for `derivative_expr`"),
     }
 }
+/// Deriative of f32::powi(i32) operation.
+/// Given:
+/// ```ignore
+/// x = a * b
+/// dx = a*db+b*da
+/// ```
+/// We can for x^2, x^3 and x^4, say:
+/// ```ignore
+/// x2 = a*a
+/// dx2 = 2*a*da
+/// x3 = x2*a
+/// dx3 = x2*da+a*dx2 = (a*a)*da+a*(2*a*da) = da*a^2 + 2*da*a^2 = 3*da*a^2
+/// x4 = x3*a
+/// dx4 = x3*da+a*dx3 = (x2*a)*da+a*(3*da*a^2) = da*a^3 + 3*da*a^3 = 4*da*a^3
+/// ```
+/// Therefore:
+/// ```ignore
+/// xn = a^n
+/// dxn = n*dx*a^(n-1)
+/// ```
+pub fn deriative_powi(exponent: i32, x: f32, dx: f32) -> f32 {
+    exponent as f32 * dx * x.powi(exponent)
+}

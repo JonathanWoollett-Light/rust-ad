@@ -12,6 +12,7 @@ pub const FORWARD_MODE_PREFIX: &'static str = "__for_";
 /// Prefix used to for the reverse differentiation function.
 pub const REVERSE_MODE_PREFIX: &'static str = "__rev_";
 pub const FUNCTION_PREFFIX: &'static str = "f";
+pub const RECEIVER_PREFIX: &'static str = "r";
 
 /// Given identifier string (e.g. `x`) appends `DERIVATIVE_PREFIX` (e.g. `der_a`).
 #[macro_export]
@@ -20,7 +21,6 @@ macro_rules! der {
         format!("{}{}", rust_ad_core::DERIVATIVE_PREFIX, $a)
     }};
 }
-
 pub struct FunctonSignature {
     /// Input types
     inputs: Vec<String>,
@@ -54,11 +54,57 @@ impl FunctionMap {
     }
 }
 
+pub struct MethodSignature {
+    /// Type of `self`
+    on: String,
+    /// Input types
+    inputs: Vec<String>,
+    /// Output type
+    output: String,
+}
+impl MethodSignature {
+    fn new(on: &'static str, inputs: &[&'static str], output: &'static str) -> Self {
+        Self {
+            on: String::from(on),
+            inputs: inputs.iter().map(|input| String::from(*input)).collect(),
+            output: String::from(output),
+        }
+    }
+}
+pub struct MethodMap(HashMap<String, Vec<MethodSignature>>);
+impl MethodMap {
+    pub fn new() -> Self {
+        Self(HashMap::new())
+    }
+    pub fn get(&self, name: &str, on: &str, input_types: &[String]) -> Option<String> {
+        eprintln!("get: {}, {}, {:?}",name,on,input_types);
+        match self.0.get(name) {
+            Some(signatures) => signatures
+                .iter()
+                .find(|sig| sig.inputs == input_types && sig.on == on)
+                .map(|s| s.output.clone()),
+            None => None,
+        }
+    }
+    pub fn insert(&mut self, name: &str, signatures: Vec<MethodSignature>) {
+        self.0.insert(String::from(name), signatures);
+    }
+}
+
 lazy_static::lazy_static! {
     /// Internal map of currently supported functions.
     pub static ref SUPPORTED_FUNCTIONS: FunctionMap = {
         let mut map = FunctionMap::new();
         map.insert("some_function",vec![FunctonSignature::new(&["f64","f64"],"f32")]);
+        map
+    };
+    /// Internal map of currently supported methods.
+    pub static ref SUPPORTED_METHODS: MethodMap = {
+        let mut map = MethodMap::new();
+        map.insert("powi",vec![
+            MethodSignature::new("f32",&["i32"],"f32"),
+            MethodSignature::new("f64",&["i32"],"f64")
+        ]);
         map
     };
 }

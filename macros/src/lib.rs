@@ -260,17 +260,17 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     // ---------------------------------------------------------------------------
     // eprintln!("\n\nblock:\n{:?}\n\n", block);
 
-    let statements = function
+    function.block.stmts = function
         .block
         .stmts
         .iter()
         .flat_map(|statement| unwrap_statement(statement))
         .collect::<Vec<_>>();
-    function.block.stmts = statements;
+    // function.block.stmts = statements;
     propagate_types(&function);
 
-    // Intersperses forward deriatives
-    // function.block.stmts = interspese_succedding(statements, forward_derivative);
+    // // Intersperses forward deriatives
+    // function.block.stmts = interspese_succedding(function.block.stmts, forward_derivative);
     // // Updates return statement
     // update_forward_return(function.block.stmts.last_mut());
 
@@ -524,7 +524,8 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
             .ident;
         // If our statement has some initialization (e.g. `let a = 3;`).
         if let Some(init) = local.init.as_ref() {
-            // eprintln!("init: {:#?}",init);
+            // eprintln!("init: {:#?}", init);
+            
             // If initialization is a binary expression (e.g. `let a = b + c;`).
             if let syn::Expr::Binary(bin_expr) = init.1.as_ref() {
                 // If left side of expression is binary expression.
@@ -546,7 +547,7 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
 
                     // Updates statement to contain variable referencing new statement.
                     let left_expr: syn::Expr =
-                        syn::parse_str(&left_ident.to_string()).expect("unwrap: left parse fail");
+                        syn::parse_str(&left_ident).expect("unwrap: left parse fail");
                     *base_statement
                         .local_mut()
                         .expect("unwrap: 1a")
@@ -578,7 +579,7 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
 
                     // Updates statement to contain variable referencing new statement.
                     let right_expr: syn::Expr =
-                        syn::parse_str(&right_ident.to_string()).expect("unwrap: rightparse fail");
+                        syn::parse_str(&right_ident).expect("unwrap: rightparse fail");
                     *base_statement
                         .local_mut()
                         .expect("unwrap: 2a")
@@ -636,10 +637,88 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
                     }
                 }
             }
+            // If initialization is method call (e.g. `let a = b.my_function(c);`).
+            else if let syn::Expr::MethodCall(method_expr) = init.1.as_ref() {
+                // If method is call on value in parenthesis (e.g. `(x).method()`).
+                if let syn::Expr::Paren(parenthesis) = &*method_expr.receiver {
+                    // If method is called on value which is binary expression (e.g. `(x+y).method()`).
+                    if let syn::Expr::Binary(bin_expr) = &*parenthesis.expr {
+                        // Creates new statement.
+                        let mut reciver_stmt = stmt.clone();
+                        let reciver_local = reciver_stmt
+                            .local_mut()
+                            .expect("unwrap: reciver statement not local");
+                        let reciver_ident =
+                            format!("{}_{}", RECEIVER_PREFIX, local_ident.to_string());
+                        reciver_local
+                            .pat
+                            .ident_mut()
+                            .expect("unwrap: reciver not ident")
+                            .ident = syn::Ident::new(&reciver_ident, local_ident.span());
+                        *reciver_local.init.as_mut().unwrap().1 =
+                            syn::Expr::Binary(bin_expr.clone());
+                        // Recurse
+                        statements.append(&mut unwrap_statement(&reciver_stmt));
+
+                        // Updates statement to contain variable referencing new statement.
+                        let receiver_expr: syn::Expr =
+                            syn::parse_str(&reciver_ident).expect("unwrap: reciver parse fail");
+                        *base_statement
+                            .local_mut()
+                            .expect("unwrap: 3a")
+                            .init
+                            .as_mut()
+                            .unwrap()
+                            .1
+                            .method_call_mut()
+                            .expect("unwrap: 3b")
+                            .receiver = receiver_expr;
+                    }
+                }
+                for (i, arg) in method_expr.args.iter().enumerate() {
+                    // eprintln!("i: {:#?}, arg: {:#?}",i,arg);
+
+                    // If function argument is binary expression
+                    if let syn::Expr::Binary(arg_bin_expr) = arg {
+                        // eprintln!("arg_bin_expr: {:#?}",arg_bin_expr);
+
+                        // Creates new function argument statement.
+                        let mut func_stmt = stmt.clone();
+                        let func_local = func_stmt
+                            .local_mut()
+                            .expect("unwrap: method statement not local");
+                        let func_ident =
+                            format!("{}_{}", FUNCTION_PREFFIX.repeat(i + 1), local_ident);
+                        func_local
+                            .pat
+                            .ident_mut()
+                            .expect("unwrap: method not ident")
+                            .ident = syn::Ident::new(&func_ident, local_ident.span());
+                        *func_local.init.as_mut().unwrap().1 =
+                            syn::Expr::Binary(arg_bin_expr.clone());
+                        // Recurse
+                        statements.append(&mut unwrap_statement(&func_stmt));
+
+                        // Updates statement to contain reference to new variables
+                        let arg_expr: syn::Expr =
+                            syn::parse_str(&func_ident).expect("unwrap: method parse fail");
+                        base_statement
+                            .local_mut()
+                            .expect("unwrap: method local")
+                            .init
+                            .as_mut()
+                            .unwrap()
+                            .1
+                            .method_call_mut()
+                            .expect("unwrap: method call")
+                            .args[i] = arg_expr;
+                    }
+                }
+            }
         }
     }
     statements.push(base_statement);
-    // eprintln!("statements.len(): {}", statements.len());
+    eprintln!("statements.len(): {}", statements.len());
     statements
 }
 
@@ -651,6 +730,7 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
 fn propagate_types(func: &syn::ItemFn) -> HashMap<String, String> {
     let mut map = HashMap::new();
 
+    // Add input types
     for arg in func.sig.inputs.iter() {
         let typed = arg.typed().expect("propagate_types: not typed");
         // eprintln!("typed: {:#?}",typed);
@@ -665,6 +745,7 @@ fn propagate_types(func: &syn::ItemFn) -> HashMap<String, String> {
         map.insert(ident.to_string(), type_ident.to_string());
     }
 
+    // Propagates types through statements
     for stmt in func.block.stmts.iter() {
         // eprintln!("map: {:?}", map);
         if let syn::Stmt::Local(local) = stmt {
@@ -711,7 +792,8 @@ fn propagate_types(func: &syn::ItemFn) -> HashMap<String, String> {
                     if let Some(out_type) = left_type.or(right_type) {
                         map.insert(var_ident.to_string(), out_type.clone());
                     }
-                } else if let syn::Expr::Call(call_expr) = &*init.1 {
+                } 
+                else if let syn::Expr::Call(call_expr) = &*init.1 {
                     // eprintln!("call_expr: {:#?}",call_expr);
 
                     // Gets function identifier
@@ -749,6 +831,40 @@ fn propagate_types(func: &syn::ItemFn) -> HashMap<String, String> {
                         .expect("propagate_types: unsupported function");
                     // Sets result type
                     map.insert(var_ident.to_string(), func_out_type);
+                }
+                else if let syn::Expr::MethodCall(method_expr) = &*init.1 {
+                    let method_ident = &method_expr.method;
+                    let method_str = method_ident.to_string();
+
+                    let receiver_str = &method_expr.receiver.path().expect("propagate_types: method receiver not path").path.segments[0].ident.to_string();
+                    let receiver_type_str = map.get(receiver_str).expect("propagate_types: unfound receiver");
+                    // Gets type of each argument
+                    let arg_types = method_expr
+                        .args
+                        .iter()
+                        .map(|p| {
+                            let ident = &p
+                                .path()
+                                .expect("propagate_types: method input not path")
+                                .path
+                                .segments[0]
+                                .ident;
+                            let ident_str = ident.to_string();
+                            // eprintln!("ident_str: {}",ident_str);
+                            map.get(&ident_str)
+                                .expect("propagate_types: unfound var")
+                                .clone()
+                        })
+                        .collect::<Vec<_>>();
+                    // eprintln!("func_str: {}", method_str);
+                    // eprintln!("arg_types: {:?}", arg_types);
+
+                    // Searches for supported function signature by function identifier and argument types.
+                    let method_out_type = SUPPORTED_METHODS
+                        .get(&method_str, receiver_type_str,&arg_types)
+                        .expect("propagate_types: unsupported method");
+                    // Sets result type
+                    map.insert(var_ident.to_string(), method_out_type);
                 }
             }
         }
