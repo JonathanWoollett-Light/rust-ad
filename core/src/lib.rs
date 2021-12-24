@@ -7,13 +7,15 @@ use std::convert::TryFrom;
 pub mod utils;
 use utils::*;
 
-/// The prefix used for the derivatives of a variable (e.g. The derivative of `x` would be `der_x`).
+/// Prefix used for the derivatives of a variable (e.g. The derivative of `x` would be `der_x`).
 pub const DERIVATIVE_PREFIX: &'static str = "__der_";
 /// Prefix used to for the forward differentiation function.
 pub const FORWARD_MODE_PREFIX: &'static str = "__for_";
 /// Prefix used to for the reverse differentiation function.
 pub const REVERSE_MODE_PREFIX: &'static str = "__rev_";
+/// Prefix used for flattening binary expressions in function arguments.
 pub const FUNCTION_PREFFIX: &'static str = "f";
+/// Prefix used for flattening binary expressions as a reciever for a method.
 pub const RECEIVER_PREFIX: &'static str = "r";
 
 /// Given identifier string (e.g. `x`) appends `DERIVATIVE_PREFIX` (e.g. `der_a`).
@@ -24,6 +26,7 @@ macro_rules! der {
     }};
 }
 
+/// Signature infomation to refer to specific method.
 #[derive(Hash, PartialEq, Eq, Debug)]
 pub struct MethodSignature {
     name: String,
@@ -56,9 +59,9 @@ impl<const N: usize> From<(&'static str, &'static str, &'static [&'static str; N
         }
     }
 }
-/// Given a method signature returns the method output type.
+/// A map of method signatures to useful data (output type, etc.).
 type MethodMap = HashMap<MethodSignature, ProcedureOutputs>;
-/// (function name, function input types)
+/// Signature infomation to refer to specific function.
 #[derive(Hash, PartialEq, Eq, Debug)]
 pub struct FunctionSignature {
     name: String,
@@ -77,9 +80,10 @@ impl<const N: usize> From<(&'static str, &'static [&'static str; N])> for Functi
         }
     }
 }
-/// Given a function signature returns the function output type.
+/// A map of function signatures to useful data (output type, etc.).
 type FunctionMap = HashMap<FunctionSignature, ProcedureOutputs>;
 
+/// Infomation to relating to specific procedure, output type, etc. (including functions for transforming statements into deriatives).
 pub struct ProcedureOutputs {
     /// Output type of procedure
     pub output_type: String,
@@ -133,6 +137,7 @@ impl
     }
 }
 
+/// Currently supported binary operations.
 #[derive(Hash, PartialEq, Eq, Debug)]
 pub enum BinOp {
     Add,
@@ -165,6 +170,7 @@ impl TryFrom<syn::BinOp> for BinOp {
     }
 }
 
+/// Signature infomation to refer to specific binary operation.
 #[derive(Hash, PartialEq, Eq, Debug)]
 pub struct OperationSignature {
     /// Left-hand-side type
@@ -192,6 +198,7 @@ impl From<(String, syn::BinOp, String)> for OperationSignature {
         }
     }
 }
+/// A map of binary operation signatures to useful data (output type, etc.).
 type OperationMap = HashMap<OperationSignature, ProcedureOutputs>;
 
 // Supported methods, functions and operations.
@@ -366,6 +373,14 @@ fn expr_str(expr: &syn::Expr) -> String {
         _ => panic!("expr_str: unsupported expr"),
     }
 }
+/// Gets given literal expression as string (only supports float and integers)
+fn lit_str(lit: &syn::ExprLit) -> String {
+    match &lit.lit {
+        syn::Lit::Int(int_lit) => int_lit.to_string(),
+        syn::Lit::Float(float_lit) => float_lit.to_string(),
+        _ => panic!("lit_str: unsupported lit"),
+    }
+}
 
 /// Gets method signature for internal use
 pub fn method_signature(
@@ -531,7 +546,8 @@ fn expr_string(expr: &syn::Expr) -> String {
     match expr {
         syn::Expr::Lit(expr_lit) => match &expr_lit.lit {
             syn::Lit::Float(lit_float) => lit_float.to_string(),
-            _ => panic!("Uncovere literaly in `expr_string`"),
+            syn::Lit::Int(lit_int) => lit_int.to_string(),
+            _ => panic!("Uncovered lit in `expr_string`"),
         },
         syn::Expr::Path(expr_path) => expr_path.path.segments[0].ident.to_string(),
         _ => panic!("Uncoverd expr for `derivative_expr`"),
@@ -540,9 +556,9 @@ fn expr_string(expr: &syn::Expr) -> String {
 /// Derivative expression string
 fn derivative_expr_string(expr: &syn::Expr) -> String {
     match expr {
-        syn::Expr::Lit(_) => String::from("0."),
+        syn::Expr::Lit(expr_lit) => format!("0{}",literal_type(expr_lit)),
         syn::Expr::Path(expr_path) => der!(expr_path.path.segments[0].ident.to_string()),
-        _ => panic!("Uncoverd expr for `derivative_expr`"),
+        _ => panic!("Uncovered expr for `derivative_expr`\n{:#?}",expr),
     }
 }
 
@@ -750,21 +766,13 @@ fn reverse_mul(stmt: &syn::Stmt) -> syn::Stmt {
         (syn::Expr::Path(expr_path_l), syn::Expr::Lit(expr_lit_r)) => {
             let (l, r) = (
                 expr_path_l.path.segments[0].ident.to_string(),
-                expr_lit_r
-                    .lit
-                    .float()
-                    .expect("reverse_mul: right not literal")
-                    .to_string(),
+                lit_str(expr_lit_r)
             );
             format!("let {} = {}*{};", der!(l), r, lis)
         }
         (syn::Expr::Lit(expr_lit_l), syn::Expr::Path(expr_path_r)) => {
             let (l, r) = (
-                expr_lit_l
-                    .lit
-                    .float()
-                    .expect("reverse_mul: left not literal")
-                    .to_string(),
+                lit_str(expr_lit_l),
                 expr_path_r.path.segments[0].ident.to_string(),
             );
             format!("let {} = {}*{};", der!(r), l, lis)

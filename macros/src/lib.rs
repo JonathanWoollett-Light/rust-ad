@@ -18,12 +18,12 @@ use reverse::*;
 
 /// Calls forward auto-differentiation function corresponding to a given function.
 ///
-/// E.g.:
+/// E.g.
 /// ```
 /// #[rust_ad::forward_autodiff]
 /// fn function_name(x: f32, y: f32) -> f32 {
-///     let a = 7. * x;
-///     let b = 3. * y;
+///     let a = 7f32 * x;
+///     let b = 3f32 * y;
 ///     return b;
 /// }
 /// fn main() {
@@ -70,12 +70,12 @@ pub fn forward(_item: TokenStream) -> TokenStream {
 }
 /// Calls reverse auto-differentiation function corresponding to a given function.
 ///
-/// E.g.:
+/// E.g.
 /// ```
 /// #[rust_ad::reverse_autodiff]
 /// fn function_name(x: f32, y: f32) -> f32 {
-///     let a = 7. * x;
-///     let b = 3. * y;
+///     let a = 7f32 * x;
+///     let b = 3f32 * y;
 ///     return b;
 /// }
 /// fn main() {
@@ -127,15 +127,15 @@ pub fn reverse(_item: TokenStream) -> TokenStream {
 /// ```
 /// #[rust_ad::unweave]
 /// fn function_name(x: f32, y: f32) -> f32 {
-///     let v = 2. * x + y / 3.;
+///     let v = 2f32 * x + y / 3.0f32;
 ///     return v;
 /// }
 /// ```
 /// Expands to:
 /// ```
 /// fn function_name(x: f32, y: f32) -> f32 {
-///     let _v = 2. * x;
-///     let v_ = y / 3.;
+///     let _v = 2f32 * x;
+///     let v_ = y / 3.0f32;
 ///     let v = _v + v_;
 ///     return v;
 /// }
@@ -178,18 +178,24 @@ pub fn unweave(_attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```
 /// Expands to:
 /// ```
-/// fn __for_function_name(x: f32, y: f32, der_x: f32, der_y: f32) -> (f32, f32) {
-///     let a = 7. * x;
-///     let der_a = x * 0f32 + 7.0f32 * der_x;
-///     let b = 3. * x;
-///     let der_b = x * 0f32 + 3f32 * der_x;
-///     let c = x + b;
-///     let der_c = der_x + der_b;
-///     let _d = y + b;
-///     let der__d = der_y + der_b;
-///     let d = _d + c;
-///     let der_d = der__d + der_c;
-///     return (d, der_d);
+/// fn __for_function_name(x: f32, y: f32, __der_x: f32, __der_y: f32) -> (f32, f32) {
+///     let p = 7.0f32 * x;
+///     let __der_p = x * 0f32 + 7.0f32 * __der_x;
+///     let r = 10f32 - y;
+///     let __der_r = 0f32 - __der_y;
+///     let _q = p * x;
+///     let __der__q = x * __der_p + p * __der_x;
+///     let q = _q * 5f32;
+///     let __der_q = 5f32 * __der__q + _q * 0f32;
+///     let __v = 2f32 * p;
+///     let __der___v = p * 0f32 + 2f32 * __der_p;
+///     let _v = __v * q;
+///     let __der__v = q * __der___v + __v * __der_q;
+///     let v_ = 3.0f32 * r;
+///     let __der_v_ = r * 0f32 + 3.0f32 * __der_r;
+///     let v = _v + v_;
+///     let __der_v = __der__v + __der_v_;
+///     return (v, __der_v);
 /// }
 /// ```
 /// Much like a derive macro, this is appended to your code, the original `function_name` function remains unedited.
@@ -280,7 +286,6 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 /// Returns a tuple of a given number of clones of a variable.
-///
 /// ```
 /// fn main() {
 ///     let x = 2;
@@ -322,7 +327,7 @@ pub fn dup(_item: TokenStream) -> TokenStream {
 /// ```
 /// Expands to:
 /// ```
-/// fn __rev_function_name(x: f32, y: f32, der_d: f32) -> (f32, f32, f32) {
+/// fn __rev_function_name(x: f32, y: f32, __der_d: f32) -> (f32, f32, f32) {
 ///     let (x0, x1, x2) = (x.clone(), x.clone(), x.clone());
 ///     let (y0,) = (y.clone(),);
 ///     let a = 7.0f32 * x0;
@@ -333,17 +338,17 @@ pub fn dup(_item: TokenStream) -> TokenStream {
 ///     let _d = y0 + b1;
 ///     let (_d0,) = (_d.clone(),);
 ///     let d = _d0 + c0;
-///     let (der__d0, der_c0) = (d.clone(), d.clone());
-///     let der__d = der__d0;
-///     let (der_y0, der_b1) = (_d.clone(), _d.clone());
-///     let der_c = der_c0;
-///     let (der_x2, der_b0) = (c.clone(), c.clone());
-///     let der_b = der_b0 + der_b1;
-///     let der_x1 = 3f32 * b;
-///     let der_x0 = 7.0f32 * a;
-///     let der_y = der_y0;
-///     let der_x = der_x0 + der_x1 + der_x2;
-///     return (d, der_x, der_y);
+///     let (__der__d0, __der_c0) = (__der_d.clone(), __der_d.clone());
+///     let __der__d = __der__d0;
+///     let (__der_y0, __der_b1) = (__der__d.clone(), __der__d.clone());
+///     let __der_c = __der_c0;
+///     let (__der_x2, __der_b0) = (__der_c.clone(), __der_c.clone());
+///     let __der_b = __der_b0 + __der_b1;
+///     let __der_x1 = 3f32 * b;
+///     let __der_x0 = 7.0f32 * a;
+///     let __der_y = __der_y0;
+///     let __der_x = __der_x0 + __der_x1 + __der_x2;
+///     return (d, __der_x, __der_y);
 /// }
 /// ```
 /// Much like a derive macro, this is appended to your code, the original `function_name` function remains unedited.
