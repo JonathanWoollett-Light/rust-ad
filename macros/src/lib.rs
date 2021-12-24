@@ -169,10 +169,10 @@ pub fn unweave(_attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```
 /// #[rust_ad::forward_autodiff]
 /// fn function_name(x: f32, y: f32) -> f32 {
-///     let p = 7. * x;
-///     let r = 10. - y;
-///     let q = p * x * 5.;
-///     let v = 2. * p * q + 3. * r;
+///     let p = 7.0f32 * x;
+///     let r = 10f32 - y;
+///     let q = p * x * 5f32;
+///     let v = 2f32 * p * q + 3.0f32 * r;
 ///     return v;
 /// }
 /// ```
@@ -180,9 +180,9 @@ pub fn unweave(_attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```
 /// fn __for_function_name(x: f32, y: f32, der_x: f32, der_y: f32) -> (f32, f32) {
 ///     let a = 7. * x;
-///     let der_a = x * 0f32 + 7. * der_x;
+///     let der_a = x * 0f32 + 7.0f32 * der_x;
 ///     let b = 3. * x;
-///     let der_b = x * 0f32 + 3. * der_x;
+///     let der_b = x * 0f32 + 3f32 * der_x;
 ///     let c = x + b;
 ///     let der_c = der_x + der_b;
 ///     let _d = y + b;
@@ -313,8 +313,8 @@ pub fn dup(_item: TokenStream) -> TokenStream {
 /// ```
 /// #[rust_ad::reverse_autodiff]
 /// fn function_name(x: f32, y: f32) -> f32 {
-///     let a = 7. * x;
-///     let b = 3. * x;
+///     let a = 7.0f32 * x;
+///     let b = 3f32 * x;
 ///     let c = x + b;
 ///     let d = y + b + c;
 ///     return d;
@@ -325,8 +325,8 @@ pub fn dup(_item: TokenStream) -> TokenStream {
 /// fn __rev_function_name(x: f32, y: f32, der_d: f32) -> (f32, f32, f32) {
 ///     let (x0, x1, x2) = (x.clone(), x.clone(), x.clone());
 ///     let (y0,) = (y.clone(),);
-///     let a = 7. * x0;
-///     let b = 3. * x1;
+///     let a = 7.0f32 * x0;
+///     let b = 3f32 * x1;
 ///     let (b0, b1) = (b.clone(), b.clone());
 ///     let c = x2 + b0;
 ///     let (c0,) = (c.clone(),);
@@ -339,8 +339,8 @@ pub fn dup(_item: TokenStream) -> TokenStream {
 ///     let der_c = der_c0;
 ///     let (der_x2, der_b0) = (c.clone(), c.clone());
 ///     let der_b = der_b0 + der_b1;
-///     let der_x1 = 3. * b;
-///     let der_x0 = 7. * a;
+///     let der_x1 = 3f32 * b;
+///     let der_x0 = 7.0f32 * a;
 ///     let der_y = der_y0;
 ///     let der_x = der_x0 + der_x1 + der_x2;
 ///     return (d, der_x, der_y);
@@ -460,6 +460,9 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     dup_inputs.append(&mut dup_stmts);
     function.block.stmts = dup_inputs;
 
+    // Gets types
+    let type_map = propagate_types(&function);
+
     // Generates reverse mode code
     // ---------------------------------------------------------------------------
     let mut reverse_stmts = function
@@ -467,7 +470,7 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
         .stmts
         .iter()
         .rev()
-        .filter_map(|s| reverse_derivative(s))
+        .filter_map(|s| reverse_derivative(s, &type_map))
         .collect::<Vec<_>>();
 
     function.block.stmts.append(&mut reverse_stmts);
@@ -719,7 +722,7 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
         }
     }
     statements.push(base_statement);
-    eprintln!("statements.len(): {}", statements.len());
+    // eprintln!("statements.len(): {}", statements.len());
     statements
 }
 
@@ -728,6 +731,8 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
 /// Propagates types through variables in a function from the input types.
 ///
 /// Returns a hashmap of identifier->type.
+///
+/// CURRENTLY DOES NOT SUPPORT PROCEDURES WHICH RETURN MULTIPLE DIFFERENT TYPES
 fn propagate_types(func: &syn::ItemFn) -> HashMap<String, String> {
     let mut map = HashMap::new();
 
@@ -750,13 +755,23 @@ fn propagate_types(func: &syn::ItemFn) -> HashMap<String, String> {
     for stmt in func.block.stmts.iter() {
         // eprintln!("map: {:?}", map);
         if let syn::Stmt::Local(local) = stmt {
-            // eprintln!("local:\n{:#?}\n",local);
-            let var_ident = match &local.pat {
-                syn::Pat::Ident(pat_ident) => &pat_ident.ident,
-                _ => panic!("propagate_types: var type"),
+            // Gets identifier/s of variable/s being defined
+            let var_idents = match &local.pat {
+                syn::Pat::Ident(pat_ident) => vec![pat_ident.ident.to_string()],
+                syn::Pat::Tuple(pat_tuple) => pat_tuple
+                    .elems
+                    .iter()
+                    .map(|e| {
+                        e.ident()
+                            .expect("propagate_types: tuple not ident")
+                            .ident
+                            .to_string()
+                    })
+                    .collect(),
+                _ => panic!("propagate_types: local pat not ident:\n{:#?}", local.pat),
             };
             if let Some(init) = &local.init {
-                if let syn::Expr::Binary(bin_expr) = &*init.1 {
+                let output_type_opt = if let syn::Expr::Binary(bin_expr) = &*init.1 {
                     // Sets result type
                     let operation_sig = operation_signature(bin_expr, &map);
                     // I think this is cleaner than embedding a `format!` within an `.expect`
@@ -767,14 +782,14 @@ fn propagate_types(func: &syn::ItemFn) -> HashMap<String, String> {
                             operation_sig
                         ),
                     };
-                    map.insert(var_ident.to_string(), out_sig.output_type.clone());
+                    Some(out_sig.output_type.clone())
                 } else if let syn::Expr::Call(call_expr) = &*init.1 {
                     let function_sig = function_signature(call_expr, &map);
                     let func_out_type = SUPPORTED_FUNCTIONS
                         .get(&function_sig)
                         .expect("propagate_types: unsupported function");
                     // Sets result type
-                    map.insert(var_ident.to_string(), func_out_type.output_type.clone());
+                    Some(func_out_type.output_type.clone())
                 } else if let syn::Expr::MethodCall(method_expr) = &*init.1 {
                     let method_sig = method_signature(method_expr, &map);
                     // Searches for supported function signature by function identifier and argument types.
@@ -782,7 +797,36 @@ fn propagate_types(func: &syn::ItemFn) -> HashMap<String, String> {
                         .get(&method_sig)
                         .expect("propagate_types: unsupported method");
                     // Sets result type
-                    map.insert(var_ident.to_string(), method_out_type.output_type.clone());
+                    Some(method_out_type.output_type.clone())
+                } else if let syn::Expr::Macro(macro_expr) = &*init.1 {
+                    assert_eq!(
+                        macro_expr.mac.path.segments[1].ident.to_string(),
+                        "dup",
+                        "Only rust_ad::dup! macro currently supported:\n{:#?}",
+                        macro_expr
+                    );
+                    // eprintln!("macro_expr: {:#?}", macro_expr);
+                    let macro_token_stream =
+                        proc_macro::TokenStream::from(macro_expr.mac.tokens.clone())
+                            .into_iter()
+                            .collect::<Vec<_>>();
+                    let dup_var = macro_token_stream[0]
+                        .ident()
+                        .expect("propagate_types: macro not ident")
+                        .to_string();
+                    let output_type = map
+                        .get(&dup_var)
+                        .expect("propagate_types: missing macro var")
+                        .clone();
+                    Some(output_type)
+                } else {
+                    None
+                };
+                // If found output type, then assign this type to all output values
+                if let Some(output_type) = output_type_opt {
+                    for var_ident in var_idents.into_iter() {
+                        map.insert(var_ident, output_type.clone());
+                    }
                 }
             }
         }

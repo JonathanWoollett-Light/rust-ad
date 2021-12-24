@@ -18,20 +18,53 @@ pub fn add_insert(map: &mut HashMap<String, usize>, string: String) -> usize {
     }
 }
 
-pub fn reverse_derivative(stmt: &syn::Stmt) -> Option<syn::Stmt> {
+// TODO Reduce code duplication between `reverse_derivative` and `forward_derivative`
+pub fn reverse_derivative(
+    stmt: &syn::Stmt,
+    type_map: &HashMap<String, String>,
+) -> Option<syn::Stmt> {
     if let syn::Stmt::Local(local) = stmt {
         // eprintln!("local: {:#?}",local);
         // panic!("just stop here");
         if let Some(init) = &local.init {
             let init_expr = &*init.1;
             if let syn::Expr::Binary(bin_expr) = init_expr {
-                return Some(match bin_expr.op {
-                    syn::BinOp::Add(_) => reverse_add(&stmt),
-                    syn::BinOp::Sub(_) => reverse_sub(&stmt),
-                    syn::BinOp::Mul(_) => reverse_mul(&stmt),
-                    syn::BinOp::Div(_) => reverse_div(&stmt),
-                    _ => panic!("Uncovered operation"),
-                });
+                // Creates operation signature struct
+                let operation_sig = operation_signature(bin_expr, type_map);
+                // Looks up operation with the given lhs type and rhs type and BinOp.
+                let operation_out_signature = SUPPORTED_OPERATIONS
+                    .get(&operation_sig)
+                    .expect("reverse_derivative: unsupported operation");
+                // Applies the forward deriative function for the found operation.
+                let new_stmt = operation_out_signature.reverse_derivative.expect(
+                    "reverse_derivative: binary expression unimplemented forward deriative",
+                )(&stmt);
+                return Some(new_stmt);
+            } else if let syn::Expr::Call(call_expr) = &*init.1 {
+                // Create function in signature
+                let function_in_signature = function_signature(call_expr, type_map);
+                // Gets function out signature
+                let function_out_signature = SUPPORTED_FUNCTIONS
+                    .get(&function_in_signature)
+                    .expect("reverse_derivative: unsupported function");
+                // Gets new stmt
+                let new_stmt = function_out_signature
+                    .reverse_derivative
+                    .expect("reverse_derivative: binary unimplemented forward")(
+                    &stmt
+                );
+                return Some(new_stmt);
+            } else if let syn::Expr::MethodCall(method_expr) = &*init.1 {
+                let method_sig = method_signature(method_expr, type_map);
+                let method_out = SUPPORTED_METHODS
+                    .get(&method_sig)
+                    .expect("reverse_derivative: unsupported method");
+                let new_stmt = method_out
+                    .reverse_derivative
+                    .expect("reverse_derivative: method unimplemented forward")(
+                    &stmt
+                );
+                return Some(new_stmt);
             } else if let syn::Expr::Macro(macro_expr) = init_expr {
                 if macro_expr
                     .mac
@@ -75,179 +108,6 @@ pub fn reverse_derivative(stmt: &syn::Stmt) -> Option<syn::Stmt> {
     }
     None
 }
-fn reverse_add(stmt: &syn::Stmt) -> syn::Stmt {
-    let local = stmt.local().expect("reverse_add: not local");
-    let init = local.init.as_ref().unwrap();
-    let init_expr = &*init.1;
-    let bin_expr = init_expr.binary().expect("reverse_add: not binary");
-    let lis = local
-        .pat
-        .ident()
-        .expect("reverse_add: not ident")
-        .ident
-        .to_string();
-
-    let (a, b): (String, String) = match (&*bin_expr.left, &*bin_expr.right) {
-        (syn::Expr::Path(expr_path_l), syn::Expr::Path(expr_path_r)) => (
-            der!(expr_path_l.path.segments[0].ident.to_string()),
-            der!(expr_path_r.path.segments[0].ident.to_string()),
-        ),
-        (syn::Expr::Path(expr_path_l), syn::Expr::Lit(_)) => (
-            der!(expr_path_l.path.segments[0].ident.to_string()),
-            String::from("_"),
-        ),
-        (syn::Expr::Lit(_), syn::Expr::Path(expr_path_r)) => (
-            String::from("_"),
-            der!(expr_path_r.path.segments[0].ident.to_string()),
-        ),
-        _ => panic!("reverse_add: Uncovered `syn::BinOp::Add(_)` binary expression combination"),
-    };
-    let stmt_str = format!("let ({},{}) = rust_ad::dup!({},2);", a, b, lis);
-    let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_add: parse fail");
-    new_stmt
-}
-fn reverse_sub(stmt: &syn::Stmt) -> syn::Stmt {
-    let local = stmt.local().expect("reverse_sub: not local");
-    let init = local.init.as_ref().unwrap();
-    let init_expr = &*init.1;
-    let bin_expr = init_expr.binary().expect("reverse_sub: not binary");
-    let lis = local
-        .pat
-        .ident()
-        .expect("reverse_sub: not ident")
-        .ident
-        .to_string();
-
-    let (a, b): (String, String) = match (&*bin_expr.left, &*bin_expr.right) {
-        (syn::Expr::Path(expr_path_l), syn::Expr::Path(expr_path_r)) => (
-            der!(expr_path_l.path.segments[0].ident.to_string()),
-            format!("-{}", der!(expr_path_r.path.segments[0].ident.to_string())),
-        ),
-        (syn::Expr::Path(expr_path_l), syn::Expr::Lit(_)) => (
-            der!(expr_path_l.path.segments[0].ident.to_string()),
-            String::from("_"),
-        ),
-        (syn::Expr::Lit(_), syn::Expr::Path(expr_path_r)) => (
-            String::from("_"),
-            format!("-{}", der!(expr_path_r.path.segments[0].ident.to_string())),
-        ),
-        _ => panic!("reverse_sub: Uncovered `syn::BinOp::Sub(_)` binary expression combination"),
-    };
-    let stmt_str = format!("let ({},{}) = rust_ad::dup!({},2);", a, b, lis);
-    let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_sub: parse fail");
-    new_stmt
-}
-fn reverse_mul(stmt: &syn::Stmt) -> syn::Stmt {
-    let local = stmt.local().expect("reverse_mul: not local");
-    let init = local.init.as_ref().unwrap();
-    let init_expr = &*init.1;
-    let bin_expr = init_expr.binary().expect("reverse_mul: not binary");
-    let lis = local
-        .pat
-        .ident()
-        .expect("reverse_mul: not ident")
-        .ident
-        .to_string();
-
-    let stmt_str = match (&*bin_expr.left, &*bin_expr.right) {
-        (syn::Expr::Path(expr_path_l), syn::Expr::Path(expr_path_r)) => {
-            let (l, r) = (
-                expr_path_l.path.segments[0].ident.to_string(),
-                expr_path_r.path.segments[0].ident.to_string(),
-            );
-            format!(
-                "let ({},{}) = ({}*{},{}*{});",
-                der!(l),
-                der!(r),
-                r,
-                lis,
-                l,
-                lis
-            )
-        }
-        (syn::Expr::Path(expr_path_l), syn::Expr::Lit(expr_lit_r)) => {
-            let (l, r) = (
-                expr_path_l.path.segments[0].ident.to_string(),
-                expr_lit_r
-                    .lit
-                    .float()
-                    .expect("reverse_mul: right not literal")
-                    .to_string(),
-            );
-            format!("let {} = {}*{};", der!(l), r, lis)
-        }
-        (syn::Expr::Lit(expr_lit_l), syn::Expr::Path(expr_path_r)) => {
-            let (l, r) = (
-                expr_lit_l
-                    .lit
-                    .float()
-                    .expect("reverse_mul: left not literal")
-                    .to_string(),
-                expr_path_r.path.segments[0].ident.to_string(),
-            );
-            format!("let {} = {}*{};", der!(r), l, lis)
-        }
-        _ => panic!("reverse_mul: Uncovered `syn::BinOp::Mul(_)` binary expression combination"),
-    };
-    let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_mul: parse fail");
-    new_stmt
-}
-fn reverse_div(stmt: &syn::Stmt) -> syn::Stmt {
-    let local = stmt.local().expect("reverse_div: not local");
-    let init = local.init.as_ref().unwrap();
-    let init_expr = &*init.1;
-    let bin_expr = init_expr.binary().expect("reverse_div: not binary");
-    let lis = local
-        .pat
-        .ident()
-        .expect("reverse_div: not ident")
-        .ident
-        .to_string();
-
-    let stmt_str = match (&*bin_expr.left, &*bin_expr.right) {
-        (syn::Expr::Path(expr_path_l), syn::Expr::Path(expr_path_r)) => {
-            let (l, r) = (
-                expr_path_l.path.segments[0].ident.to_string(),
-                expr_path_r.path.segments[0].ident.to_string(),
-            );
-            format!(
-                "let ({},{}) = ({}/{},{}*{});",
-                der!(l),
-                der!(r),
-                lis,
-                r,
-                l,
-                lis
-            )
-        }
-        (syn::Expr::Path(expr_path_l), syn::Expr::Lit(expr_lit_r)) => {
-            let (l, r) = (
-                expr_path_l.path.segments[0].ident.to_string(),
-                expr_lit_r
-                    .lit
-                    .float()
-                    .expect("reverse_div: right not literal")
-                    .to_string(),
-            );
-            format!("let {} = {}/{};", der!(l), lis, r)
-        }
-        (syn::Expr::Lit(expr_lit_l), syn::Expr::Path(expr_path_r)) => {
-            let (l, r) = (
-                expr_lit_l
-                    .lit
-                    .float()
-                    .expect("reverse_div: left not literal")
-                    .to_string(),
-                expr_path_r.path.segments[0].ident.to_string(),
-            );
-            format!("let {} = {}*{};", der!(r), l, lis)
-        }
-        _ => panic!("Uncovered `syn::BinOp::Mul(_)` binary expression combination"),
-    };
-    let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_div: parse fail");
-    new_stmt
-}
-
 /// Validates and updates function signature.
 pub fn reverse_update_signature(function: &mut syn::ItemFn) -> Result<syn::Stmt, TokenStream> {
     // If there is return statement, return user code, this will leader to compile error about no return function.

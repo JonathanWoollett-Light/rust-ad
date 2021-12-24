@@ -205,28 +205,73 @@ lazy_static::lazy_static! {
     /// Internal map of currently supported methods.
     pub static ref SUPPORTED_METHODS: MethodMap = {
         let mut map = MethodMap::new();
-        map.insert(("powi","f32",&["i32"]).into(),"f32".into());
-        map.insert(("powi","f64",&["i32"]).into(),"f64".into());
+        map.insert(("powi","f32",&["i32"]).into(),ProcedureOutputs::new("f32",Some(forward_powi_f32),Some(reverse_powi_f32)));
+        map.insert(("powi","f64",&["i32"]).into(),ProcedureOutputs::new("f64",Some(forward_powi_f64),Some(reverse_powi_f64)));
         map
     };
     /// Internal map of currently supported operations.
     pub static ref SUPPORTED_OPERATIONS: OperationMap = {
         let mut map = OperationMap::new();
         // f32 arithmetics
-        map.insert(("f32","+","f32").into(),ProcedureOutputs::new("f32",Some(forward_add),None));
-        map.insert(("f32","*","f32").into(),ProcedureOutputs::new("f32",Some(forward_mul),None));
-        map.insert(("f32","/","f32").into(),ProcedureOutputs::new("f32",Some(forward_div),None));
-        map.insert(("f32","-","f32").into(),ProcedureOutputs::new("f32",Some(forward_sub),None));
+        map.insert(("f32","+","f32").into(),ProcedureOutputs::new("f32",Some(forward_add),Some(reverse_add)));
+        map.insert(("f32","*","f32").into(),ProcedureOutputs::new("f32",Some(forward_mul),Some(reverse_mul)));
+        map.insert(("f32","/","f32").into(),ProcedureOutputs::new("f32",Some(forward_div),Some(reverse_div)));
+        map.insert(("f32","-","f32").into(),ProcedureOutputs::new("f32",Some(forward_sub),Some(reverse_sub)));
         // f64 arithmetics
-        map.insert(("f64","+","f64").into(),ProcedureOutputs::new("f64",Some(forward_add),None));
-        map.insert(("f64","*","f64").into(),ProcedureOutputs::new("f64",Some(forward_mul),None));
-        map.insert(("f64","/","f64").into(),ProcedureOutputs::new("f64",Some(forward_div),None));
-        map.insert(("f64","-","f64").into(),ProcedureOutputs::new("f64",Some(forward_sub),None));
+        map.insert(("f64","+","f64").into(),ProcedureOutputs::new("f64",Some(forward_add),Some(reverse_add)));
+        map.insert(("f64","*","f64").into(),ProcedureOutputs::new("f64",Some(forward_mul),Some(reverse_mul)));
+        map.insert(("f64","/","f64").into(),ProcedureOutputs::new("f64",Some(forward_div),Some(reverse_div)));
+        map.insert(("f64","-","f64").into(),ProcedureOutputs::new("f64",Some(forward_sub),Some(reverse_sub)));
+        // i8 arithmetics
+        map.insert(("i8","+","i8").into(),ProcedureOutputs::new("i8",Some(forward_add),Some(reverse_add)));
+        map.insert(("i8","*","i8").into(),ProcedureOutputs::new("i8",Some(forward_mul),Some(reverse_mul)));
+        map.insert(("i8","/","i8").into(),ProcedureOutputs::new("i8",Some(forward_div),Some(reverse_div)));
+        map.insert(("i8","-","i8").into(),ProcedureOutputs::new("i8",Some(forward_sub),Some(reverse_sub)));
+        // i16 arithmetics
+        map.insert(("i16","+","i16").into(),ProcedureOutputs::new("i16",Some(forward_add),Some(reverse_add)));
+        map.insert(("i16","*","i16").into(),ProcedureOutputs::new("i16",Some(forward_mul),Some(reverse_mul)));
+        map.insert(("i16","/","i16").into(),ProcedureOutputs::new("i16",Some(forward_div),Some(reverse_div)));
+        map.insert(("i16","-","i16").into(),ProcedureOutputs::new("i16",Some(forward_sub),Some(reverse_sub)));
         // i32 arithmetics
-        map.insert(("i32","+","i32").into(),ProcedureOutputs::new("i32",Some(forward_add),None));
-        map.insert(("i32","*","i32").into(),ProcedureOutputs::new("i32",Some(forward_mul),None));
-        map.insert(("i32","/","i32").into(),ProcedureOutputs::new("i32",Some(forward_div),None));
-        map.insert(("i32","-","i32").into(),ProcedureOutputs::new("i32",Some(forward_sub),None));
+        map.insert(("i32","+","i32").into(),ProcedureOutputs::new("i32",Some(forward_add),Some(reverse_add)));
+        map.insert(("i32","*","i32").into(),ProcedureOutputs::new("i32",Some(forward_mul),Some(reverse_mul)));
+        map.insert(("i32","/","i32").into(),ProcedureOutputs::new("i32",Some(forward_div),Some(reverse_div)));
+        map.insert(("i32","-","i32").into(),ProcedureOutputs::new("i32",Some(forward_sub),Some(reverse_sub)));
+        // i64 arithmetics
+        map.insert(("i64","+","i64").into(),ProcedureOutputs::new("i64",Some(forward_add),Some(reverse_add)));
+        map.insert(("i64","*","i64").into(),ProcedureOutputs::new("i64",Some(forward_mul),Some(reverse_mul)));
+        map.insert(("i64","/","i64").into(),ProcedureOutputs::new("i64",Some(forward_div),Some(reverse_div)));
+        map.insert(("i64","-","i64").into(),ProcedureOutputs::new("i64",Some(forward_sub),Some(reverse_sub)));
+        // i128 arithmetics
+        map.insert(("i128","+","i128").into(),ProcedureOutputs::new("i128",Some(forward_add),Some(reverse_add)));
+        map.insert(("i128","*","i128").into(),ProcedureOutputs::new("i128",Some(forward_mul),Some(reverse_mul)));
+        map.insert(("i128","/","i128").into(),ProcedureOutputs::new("i128",Some(forward_div),Some(reverse_div)));
+        map.insert(("i128","-","i128").into(),ProcedureOutputs::new("i128",Some(forward_sub),Some(reverse_sub)));
+        // u8 arithmetics
+        map.insert(("u8","+","u8").into(),ProcedureOutputs::new("u8",Some(forward_add),Some(reverse_add)));
+        map.insert(("u8","*","u8").into(),ProcedureOutputs::new("u8",Some(forward_mul),Some(reverse_mul)));
+        map.insert(("u8","/","u8").into(),ProcedureOutputs::new("u8",Some(forward_div),Some(reverse_div)));
+        map.insert(("u8","-","u8").into(),ProcedureOutputs::new("u8",Some(forward_sub),Some(reverse_sub)));
+        // u16 arithmetics
+        map.insert(("u16","+","u16").into(),ProcedureOutputs::new("u16",Some(forward_add),Some(reverse_add)));
+        map.insert(("u16","*","u16").into(),ProcedureOutputs::new("u16",Some(forward_mul),Some(reverse_mul)));
+        map.insert(("u16","/","u16").into(),ProcedureOutputs::new("u16",Some(forward_div),Some(reverse_div)));
+        map.insert(("u16","-","u16").into(),ProcedureOutputs::new("u16",Some(forward_sub),Some(reverse_sub)));
+        // u32 arithmetics
+        map.insert(("u32","+","u32").into(),ProcedureOutputs::new("u32",Some(forward_add),Some(reverse_add)));
+        map.insert(("u32","*","u32").into(),ProcedureOutputs::new("u32",Some(forward_mul),Some(reverse_mul)));
+        map.insert(("u32","/","u32").into(),ProcedureOutputs::new("u32",Some(forward_div),Some(reverse_div)));
+        map.insert(("u32","-","u32").into(),ProcedureOutputs::new("u32",Some(forward_sub),Some(reverse_sub)));
+        // u64 arithmetics
+        map.insert(("u64","+","u64").into(),ProcedureOutputs::new("u64",Some(forward_add),Some(reverse_add)));
+        map.insert(("u64","*","u64").into(),ProcedureOutputs::new("u64",Some(forward_mul),Some(reverse_mul)));
+        map.insert(("u64","/","u64").into(),ProcedureOutputs::new("u64",Some(forward_div),Some(reverse_div)));
+        map.insert(("u64","-","u64").into(),ProcedureOutputs::new("u64",Some(forward_sub),Some(reverse_sub)));
+        // u128 arithmetics
+        map.insert(("u128","+","u128").into(),ProcedureOutputs::new("u128",Some(forward_add),Some(reverse_add)));
+        map.insert(("u128","*","u128").into(),ProcedureOutputs::new("u128",Some(forward_mul),Some(reverse_mul)));
+        map.insert(("u128","/","u128").into(),ProcedureOutputs::new("u128",Some(forward_div),Some(reverse_div)));
+        map.insert(("u128","-","u128").into(),ProcedureOutputs::new("u128",Some(forward_sub),Some(reverse_sub)));
         map
     };
 }
@@ -242,28 +287,29 @@ pub fn expr_type(expr: &syn::Expr, type_map: &HashMap<String, String>) -> String
         _ => panic!("forward_derivative: unsupported binary left expr type"),
     }
 }
+
+/// Literal prefix error
+const LPR: &'static str = "All literals need a type suffix e.g. `10.2f32` -- ";
 /// Gets type of literal (only supproted numerical types)
 pub fn literal_type(expr_lit: &syn::ExprLit) -> String {
-    eprintln!("expr_lit:\n{:#?}", expr_lit);
     match &expr_lit.lit {
         syn::Lit::Float(float_lit) => {
             // Float literal is either f32 or f64
             let float_str = float_lit.to_string();
-            eprintln!("float_str: {}", float_str);
 
             let n = float_str.len();
-            assert!(n > 3, "Bad float literal (len)");
+            assert!(n > 3, "{}Bad float literal (len)", LPR);
             let float_type_str = &float_str[n - 3..n];
             assert!(
                 float_type_str == "f32" || float_type_str == "f64",
-                "Bad float literal"
+                "{}Bad float literal",
+                LPR
             );
             String::from(float_type_str)
         }
         syn::Lit::Int(int_lit) => {
             // Integer literall could be any of the numbers, `4f32`, `16u32` etc.
             let int_str = int_lit.to_string();
-            eprintln!("int_str: {}", int_str);
             let n = int_str.len();
 
             // Checking if `i128` or `u128` (the 4 character length type annotations)
@@ -301,11 +347,23 @@ pub fn literal_type(expr_lit: &syn::ExprLit) -> String {
 
             let int_lit_str = match large_type.or(standard_type).or(short_type) {
                 Some(int_lit_some) => int_lit_some,
-                None => panic!("Bad integer literal (should be in form `58u128`, remember type annotation is required)")
+                None => panic!("{}Bad integer literal", LPR),
             };
             int_lit_str
         }
-        _ => panic!("unsupported literal (only integer and float literals are supported)"),
+        _ => panic!("Unsupported literal (only integer and float literals are supported)"),
+    }
+}
+/// Gets given expression as string (only supports literals and paths)
+fn expr_str(expr: &syn::Expr) -> String {
+    match expr {
+        syn::Expr::Lit(lit_expr) => match &lit_expr.lit {
+            syn::Lit::Int(int_lit) => int_lit.to_string(),
+            syn::Lit::Float(float_lit) => float_lit.to_string(),
+            _ => panic!("expr_str: unsupported lit"),
+        },
+        syn::Expr::Path(path_expr) => path_expr.path.segments[0].ident.to_string(),
+        _ => panic!("expr_str: unsupported expr"),
     }
 }
 
@@ -488,7 +546,13 @@ fn derivative_expr_string(expr: &syn::Expr) -> String {
     }
 }
 
-// TODO Rewrite this to output stmt given stmt.
+fn forward_powi_f32(stmt: &syn::Stmt) -> syn::Stmt {
+    forward_powi(stmt, "f32")
+}
+fn forward_powi_f64(stmt: &syn::Stmt) -> syn::Stmt {
+    forward_powi(stmt, "f64")
+}
+// TODO Can we reduce/Remove code duplication between `forward_powi_f64` and `forward_powi_f32`?
 /// Deriative of f32::powi(i32) operation.
 /// Given:
 /// ```ignore
@@ -509,6 +573,259 @@ fn derivative_expr_string(expr: &syn::Expr) -> String {
 /// xn = a^n
 /// dxn = n*dx*a^(n-1)
 /// ```
-pub fn deriative_powi(exponent: i32, x: f32, dx: f32) -> f32 {
-    exponent as f32 * dx * x.powi(exponent)
+fn forward_powi(stmt: &syn::Stmt, float: &'static str) -> syn::Stmt {
+    assert!(float == "f32" || float == "f64");
+    let local = stmt.local().expect("forward_powi: not local");
+    let init = &local.init;
+    let method_expr = init
+        .as_ref()
+        .unwrap()
+        .1
+        .method_call()
+        .expect("forward_powi: not method");
+
+    let d = der!(local
+        .pat
+        .ident()
+        .expect("forward_powi: not ident")
+        .ident
+        .to_string());
+
+    let receiver_ident = method_expr
+        .receiver
+        .path()
+        .expect("forward_powi: not path")
+        .path
+        .segments[0]
+        .ident
+        .to_string();
+    let exponent = expr_str(&method_expr.args[0]);
+    let new_str = format!(
+        "let {} = {} as {} * {} * {}.powi({}-1i32);",
+        d,
+        exponent,
+        float,
+        der!(receiver_ident),
+        receiver_ident,
+        exponent
+    );
+    let new_stmt = syn::parse_str(&new_str).expect("forward_powi: parse fail");
+    new_stmt
+}
+
+fn reverse_powi_f32(stmt: &syn::Stmt) -> syn::Stmt {
+    reverse_powi(stmt, "f32")
+}
+fn reverse_powi_f64(stmt: &syn::Stmt) -> syn::Stmt {
+    reverse_powi(stmt, "f64")
+}
+// TODO Is this wrong? (I feel like it is)
+/// ```ignore
+/// a = x^y
+/// dx, dy = y*x^(y-1), x^y*ln(x)
+/// ```
+fn reverse_powi(stmt: &syn::Stmt, float: &'static str) -> syn::Stmt {
+    assert!(float == "f32" || float == "f64");
+    let local = stmt.local().expect("reverse_powi: not local");
+    let init = &local.init;
+    let method_expr = init
+        .as_ref()
+        .unwrap()
+        .1
+        .method_call()
+        .expect("reverse_powi: not method");
+
+    let receiver_ident = method_expr
+        .receiver
+        .path()
+        .expect("reverse_powi: not path")
+        .path
+        .segments[0]
+        .ident
+        .to_string();
+    let exponent = expr_str(&method_expr.args[0]);
+
+    let new_str = format!(
+        "let ({},{}) = ({exponent} as {float}*{base}.powi({exponent}-1i32),{base}.powi({exponent})*{base}.ln());",
+        der!(receiver_ident),
+        der!(exponent),
+        float = float,
+        base=receiver_ident,
+        exponent=exponent,
+    );
+    let new_stmt = syn::parse_str(&new_str).expect("reverse_powi: parse fail");
+    new_stmt
+}
+
+fn reverse_add(stmt: &syn::Stmt) -> syn::Stmt {
+    let local = stmt.local().expect("reverse_add: not local");
+    let init = local.init.as_ref().unwrap();
+    let init_expr = &*init.1;
+    let bin_expr = init_expr.binary().expect("reverse_add: not binary");
+    let lis = local
+        .pat
+        .ident()
+        .expect("reverse_add: not ident")
+        .ident
+        .to_string();
+
+    let (a, b): (String, String) = match (&*bin_expr.left, &*bin_expr.right) {
+        (syn::Expr::Path(expr_path_l), syn::Expr::Path(expr_path_r)) => (
+            der!(expr_path_l.path.segments[0].ident.to_string()),
+            der!(expr_path_r.path.segments[0].ident.to_string()),
+        ),
+        (syn::Expr::Path(expr_path_l), syn::Expr::Lit(_)) => (
+            der!(expr_path_l.path.segments[0].ident.to_string()),
+            String::from("_"),
+        ),
+        (syn::Expr::Lit(_), syn::Expr::Path(expr_path_r)) => (
+            String::from("_"),
+            der!(expr_path_r.path.segments[0].ident.to_string()),
+        ),
+        _ => panic!("reverse_add: Uncovered `syn::BinOp::Add(_)` binary expression combination"),
+    };
+    let stmt_str = format!("let ({},{}) = rust_ad::dup!({},2);", a, b, der!(lis));
+    let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_add: parse fail");
+    new_stmt
+}
+fn reverse_sub(stmt: &syn::Stmt) -> syn::Stmt {
+    let local = stmt.local().expect("reverse_sub: not local");
+    let init = local.init.as_ref().unwrap();
+    let init_expr = &*init.1;
+    let bin_expr = init_expr.binary().expect("reverse_sub: not binary");
+    let lis = local
+        .pat
+        .ident()
+        .expect("reverse_sub: not ident")
+        .ident
+        .to_string();
+
+    let (a, b): (String, String) = match (&*bin_expr.left, &*bin_expr.right) {
+        (syn::Expr::Path(expr_path_l), syn::Expr::Path(expr_path_r)) => (
+            der!(expr_path_l.path.segments[0].ident.to_string()),
+            format!("-{}", der!(expr_path_r.path.segments[0].ident.to_string())),
+        ),
+        (syn::Expr::Path(expr_path_l), syn::Expr::Lit(_)) => (
+            der!(expr_path_l.path.segments[0].ident.to_string()),
+            String::from("_"),
+        ),
+        (syn::Expr::Lit(_), syn::Expr::Path(expr_path_r)) => (
+            String::from("_"),
+            format!("-{}", der!(expr_path_r.path.segments[0].ident.to_string())),
+        ),
+        _ => panic!("reverse_sub: Uncovered `syn::BinOp::Sub(_)` binary expression combination"),
+    };
+    let stmt_str = format!("let ({},{}) = rust_ad::dup!({},2);", a, b, lis);
+    let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_sub: parse fail");
+    new_stmt
+}
+fn reverse_mul(stmt: &syn::Stmt) -> syn::Stmt {
+    let local = stmt.local().expect("reverse_mul: not local");
+    let init = local.init.as_ref().unwrap();
+    let init_expr = &*init.1;
+    let bin_expr = init_expr.binary().expect("reverse_mul: not binary");
+    let lis = local
+        .pat
+        .ident()
+        .expect("reverse_mul: not ident")
+        .ident
+        .to_string();
+
+    let stmt_str = match (&*bin_expr.left, &*bin_expr.right) {
+        (syn::Expr::Path(expr_path_l), syn::Expr::Path(expr_path_r)) => {
+            let (l, r) = (
+                expr_path_l.path.segments[0].ident.to_string(),
+                expr_path_r.path.segments[0].ident.to_string(),
+            );
+            format!(
+                "let ({},{}) = ({}*{},{}*{});",
+                der!(l),
+                der!(r),
+                r,
+                lis,
+                l,
+                lis
+            )
+        }
+        (syn::Expr::Path(expr_path_l), syn::Expr::Lit(expr_lit_r)) => {
+            let (l, r) = (
+                expr_path_l.path.segments[0].ident.to_string(),
+                expr_lit_r
+                    .lit
+                    .float()
+                    .expect("reverse_mul: right not literal")
+                    .to_string(),
+            );
+            format!("let {} = {}*{};", der!(l), r, lis)
+        }
+        (syn::Expr::Lit(expr_lit_l), syn::Expr::Path(expr_path_r)) => {
+            let (l, r) = (
+                expr_lit_l
+                    .lit
+                    .float()
+                    .expect("reverse_mul: left not literal")
+                    .to_string(),
+                expr_path_r.path.segments[0].ident.to_string(),
+            );
+            format!("let {} = {}*{};", der!(r), l, lis)
+        }
+        _ => panic!("reverse_mul: Uncovered `syn::BinOp::Mul(_)` binary expression combination"),
+    };
+    let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_mul: parse fail");
+    new_stmt
+}
+fn reverse_div(stmt: &syn::Stmt) -> syn::Stmt {
+    let local = stmt.local().expect("reverse_div: not local");
+    let init = local.init.as_ref().unwrap();
+    let init_expr = &*init.1;
+    let bin_expr = init_expr.binary().expect("reverse_div: not binary");
+    let lis = local
+        .pat
+        .ident()
+        .expect("reverse_div: not ident")
+        .ident
+        .to_string();
+
+    let stmt_str = match (&*bin_expr.left, &*bin_expr.right) {
+        (syn::Expr::Path(expr_path_l), syn::Expr::Path(expr_path_r)) => {
+            let (l, r) = (
+                expr_path_l.path.segments[0].ident.to_string(),
+                expr_path_r.path.segments[0].ident.to_string(),
+            );
+            format!(
+                "let ({},{}) = ({}/{},{}*{});",
+                der!(l),
+                der!(r),
+                lis,
+                r,
+                l,
+                lis
+            )
+        }
+        (syn::Expr::Path(expr_path_l), syn::Expr::Lit(expr_lit_r)) => {
+            let (l, r) = (
+                expr_path_l.path.segments[0].ident.to_string(),
+                expr_lit_r
+                    .lit
+                    .float()
+                    .expect("reverse_div: right not literal")
+                    .to_string(),
+            );
+            format!("let {} = {}/{};", der!(l), lis, r)
+        }
+        (syn::Expr::Lit(expr_lit_l), syn::Expr::Path(expr_path_r)) => {
+            let (l, r) = (
+                expr_lit_l
+                    .lit
+                    .float()
+                    .expect("reverse_div: left not literal")
+                    .to_string(),
+                expr_path_r.path.segments[0].ident.to_string(),
+            );
+            format!("let {} = {}*{};", der!(r), l, lis)
+        }
+        _ => panic!("Uncovered `syn::BinOp::Mul(_)` binary expression combination"),
+    };
+    let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_div: parse fail");
+    new_stmt
 }

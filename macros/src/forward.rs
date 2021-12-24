@@ -38,7 +38,7 @@ pub fn interspese_succedding<T, K>(x: Vec<T>, extra: &K, f: fn(&T, &K) -> Option
     y.into_iter().rev().collect()
 }
 
-// http://h2.jaguarpaw.co.uk/posts/automatic-differentiation-worked-examples/
+// TODO Reduce code duplication between `reverse_derivative` and `forward_derivative`
 pub fn forward_derivative(
     stmt: &syn::Stmt,
     type_map: &HashMap<String, String>,

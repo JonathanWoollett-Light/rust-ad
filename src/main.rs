@@ -8,7 +8,7 @@ extern crate rust_ad;
 //     return a;
 // }
 
-#[rust_ad::forward_autodiff]
+#[rust_ad::reverse_autodiff]
 fn forward(x: f32, y: i32) -> f32 {
     let a = (x + 4.2f32).powi(y + 4i32);
     return a;
