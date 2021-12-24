@@ -267,12 +267,13 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
         .flat_map(|statement| unwrap_statement(statement))
         .collect::<Vec<_>>();
     // function.block.stmts = statements;
-    propagate_types(&function);
+    let type_map = propagate_types(&function);
 
-    // // Intersperses forward deriatives
-    // function.block.stmts = interspese_succedding(function.block.stmts, forward_derivative);
-    // // Updates return statement
-    // update_forward_return(function.block.stmts.last_mut());
+    // Intersperses forward deriatives
+    function.block.stmts =
+        interspese_succedding(function.block.stmts, &type_map, forward_derivative);
+    // Updates return statement
+    update_forward_return(function.block.stmts.last_mut());
 
     let new = quote::quote! { #function_holder #function };
     TokenStream::from(new)
@@ -525,7 +526,7 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
         // If our statement has some initialization (e.g. `let a = 3;`).
         if let Some(init) = local.init.as_ref() {
             // eprintln!("init: {:#?}", init);
-            
+
             // If initialization is a binary expression (e.g. `let a = b + c;`).
             if let syn::Expr::Binary(bin_expr) = init.1.as_ref() {
                 // If left side of expression is binary expression.
@@ -756,115 +757,32 @@ fn propagate_types(func: &syn::ItemFn) -> HashMap<String, String> {
             };
             if let Some(init) = &local.init {
                 if let syn::Expr::Binary(bin_expr) = &*init.1 {
-                    // eprintln!("bin_expr: {:#?}",bin_expr);
-
-                    // Gets left var
-                    let left_type = if let syn::Expr::Path(left_path) = &*bin_expr.left {
-                        let left_ident = &left_path.path.segments[0].ident;
-                        let l_type = map
-                            .get(&left_ident.to_string())
-                            .expect("propagate_types: left no type")
-                            .clone();
-                        Some(l_type)
-                    } else {
-                        None
-                    };
-                    // Gets right var
-                    let right_type = if let syn::Expr::Path(right_path) = &*bin_expr.right {
-                        let right_ident = &right_path.path.segments[0].ident;
-                        let r_type = map
-                            .get(&right_ident.to_string())
-                            .expect("propagate_types: right no type")
-                            .clone();
-                        Some(r_type)
-                    } else {
-                        None
-                    };
-                    // If both are variables with types, check these types are equal
-                    if left_type.is_some() && right_type.is_some() {
-                        assert_eq!(
-                            left_type.as_ref().unwrap(),
-                            right_type.as_ref().unwrap(),
-                            "non-matching types"
-                        );
-                    }
                     // Sets result type
-                    if let Some(out_type) = left_type.or(right_type) {
-                        map.insert(var_ident.to_string(), out_type.clone());
-                    }
-                } 
-                else if let syn::Expr::Call(call_expr) = &*init.1 {
-                    // eprintln!("call_expr: {:#?}",call_expr);
-
-                    // Gets function identifier
-                    let func_ident = &call_expr
-                        .func
-                        .path()
-                        .expect("propagate_types: func not path")
-                        .path
-                        .segments[0]
-                        .ident;
-                    let func_str = func_ident.to_string();
-                    // Gets type of each argument
-                    let arg_types = call_expr
-                        .args
-                        .iter()
-                        .map(|p| {
-                            let ident = &p
-                                .path()
-                                .expect("propagate_types: func input not path")
-                                .path
-                                .segments[0]
-                                .ident;
-                            let ident_str = ident.to_string();
-                            // eprintln!("ident_str: {}",ident_str);
-                            map.get(&ident_str)
-                                .expect("propagate_types: unfound var")
-                                .clone()
-                        })
-                        .collect::<Vec<_>>();
-                    // Searches for supported function signature by function identifier and argument types.
-                    eprintln!("func_str: {}", func_str);
-                    eprintln!("arg_types: {:?}", arg_types);
+                    let operation_sig = operation_signature(bin_expr, &map);
+                    // I think this is cleaner than embedding a `format!` within an `.expect`
+                    let out_sig = match SUPPORTED_OPERATIONS.get(&operation_sig) {
+                        Some(out_sig) => out_sig,
+                        None => panic!(
+                            "propagate_types: unsupported operation ({:?})",
+                            operation_sig
+                        ),
+                    };
+                    map.insert(var_ident.to_string(), out_sig.output_type.clone());
+                } else if let syn::Expr::Call(call_expr) = &*init.1 {
+                    let function_sig = function_signature(call_expr, &map);
                     let func_out_type = SUPPORTED_FUNCTIONS
-                        .get(&func_str, &arg_types)
+                        .get(&function_sig)
                         .expect("propagate_types: unsupported function");
                     // Sets result type
-                    map.insert(var_ident.to_string(), func_out_type);
-                }
-                else if let syn::Expr::MethodCall(method_expr) = &*init.1 {
-                    let method_ident = &method_expr.method;
-                    let method_str = method_ident.to_string();
-
-                    let receiver_str = &method_expr.receiver.path().expect("propagate_types: method receiver not path").path.segments[0].ident.to_string();
-                    let receiver_type_str = map.get(receiver_str).expect("propagate_types: unfound receiver");
-                    // Gets type of each argument
-                    let arg_types = method_expr
-                        .args
-                        .iter()
-                        .map(|p| {
-                            let ident = &p
-                                .path()
-                                .expect("propagate_types: method input not path")
-                                .path
-                                .segments[0]
-                                .ident;
-                            let ident_str = ident.to_string();
-                            // eprintln!("ident_str: {}",ident_str);
-                            map.get(&ident_str)
-                                .expect("propagate_types: unfound var")
-                                .clone()
-                        })
-                        .collect::<Vec<_>>();
-                    // eprintln!("func_str: {}", method_str);
-                    // eprintln!("arg_types: {:?}", arg_types);
-
+                    map.insert(var_ident.to_string(), func_out_type.output_type.clone());
+                } else if let syn::Expr::MethodCall(method_expr) = &*init.1 {
+                    let method_sig = method_signature(method_expr, &map);
                     // Searches for supported function signature by function identifier and argument types.
                     let method_out_type = SUPPORTED_METHODS
-                        .get(&method_str, receiver_type_str,&arg_types)
+                        .get(&method_sig)
                         .expect("propagate_types: unsupported method");
                     // Sets result type
-                    map.insert(var_ident.to_string(), method_out_type);
+                    map.insert(var_ident.to_string(), method_out_type.output_type.clone());
                 }
             }
         }

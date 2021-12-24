@@ -1,5 +1,5 @@
-use rust_ad_core::utils::*;
 use rust_ad_core::*;
+use std::collections::HashMap;
 
 pub fn update_forward_return(s: Option<&mut syn::Stmt>) {
     *s.unwrap() = match s {
@@ -21,7 +21,7 @@ pub fn update_forward_return(s: Option<&mut syn::Stmt>) {
 }
 
 /// Insperses values with respect to the preceding values.
-pub fn interspese_succedding<T>(x: Vec<T>, f: fn(&T) -> Option<T>) -> Vec<T> {
+pub fn interspese_succedding<T, K>(x: Vec<T>, extra: &K, f: fn(&T, &K) -> Option<T>) -> Vec<T> {
     let len = x.len();
     let new_len = len * 2 - 1;
     let mut y = Vec::with_capacity(new_len);
@@ -30,7 +30,7 @@ pub fn interspese_succedding<T>(x: Vec<T>, f: fn(&T) -> Option<T>) -> Vec<T> {
         y.push(last);
     }
     for a in x_iter {
-        if let Some(b) = f(&a) {
+        if let Some(b) = f(&a, extra) {
             y.push(b);
         }
         y.push(a);
@@ -39,189 +39,52 @@ pub fn interspese_succedding<T>(x: Vec<T>, f: fn(&T) -> Option<T>) -> Vec<T> {
 }
 
 // http://h2.jaguarpaw.co.uk/posts/automatic-differentiation-worked-examples/
-pub fn forward_derivative(stmt: &syn::Stmt) -> Option<syn::Stmt> {
+pub fn forward_derivative(
+    stmt: &syn::Stmt,
+    type_map: &HashMap<String, String>,
+) -> Option<syn::Stmt> {
     if let syn::Stmt::Local(local) = stmt {
         if let Some(init) = &local.init {
             if let syn::Expr::Binary(bin_expr) = &*init.1 {
-                // eprintln!("bin_expr: {:#?}\n.\n", bin_expr);
-                // panic!("stopping here");
-
-                // TODO Do the rest of the operations.
-                let new_stmt = match bin_expr.op {
-                    // y = x1+x2 => dy = dx1 + dx2
-                    syn::BinOp::Add(_) => forward_add(&stmt),
-                    // y = x1-x2 => dy = dx1 - dx2
-                    syn::BinOp::Sub(_) => forward_sub(&stmt),
-                    // y = x1*x2 => dy = (x2*dx1)+(x1*dx2)
-                    syn::BinOp::Mul(_) => forward_mul(&stmt),
-                    // y = x1 / x2 => dy = dx1/x2 - (x1/(x2*x2))*dx2
-                    syn::BinOp::Div(_) => forward_div(&stmt),
-                    _ => panic!("Uncovered operation"),
-                };
+                // Creates operation signature struct
+                let operation_sig = operation_signature(bin_expr, type_map);
+                // Looks up operation with the given lhs type and rhs type and BinOp.
+                let operation_out_signature = SUPPORTED_OPERATIONS
+                    .get(&operation_sig)
+                    .expect("forward_derivative: unsupported operation");
+                // Applies the forward deriative function for the found operation.
+                let new_stmt = operation_out_signature.forward_derivative.expect(
+                    "forward_derivative: binary expression unimplemented forward deriative",
+                )(&stmt);
                 return Some(new_stmt);
-            } else if let syn::Expr::Call(_call_expr) = &*init.1 {
-                let local = stmt.local().expect("forward_derivative: not local");
-                let d = der!(local
-                    .pat
-                    .ident()
-                    .expect("forward_derivative: not ident")
-                    .ident
-                    .to_string());
-                let str = format!("let {} = placeholder();", d,);
-                let expr = syn::parse_str(&str).expect("forward_add: parse fail");
-                return Some(expr);
+            } else if let syn::Expr::Call(call_expr) = &*init.1 {
+                // Create function in signature
+                let function_in_signature = function_signature(call_expr, type_map);
+                // Gets function out signature
+                let function_out_signature = SUPPORTED_FUNCTIONS
+                    .get(&function_in_signature)
+                    .expect("forward_derivative: unsupported function");
+                // Gets new stmt
+                let new_stmt = function_out_signature
+                    .forward_derivative
+                    .expect("forward_derivative: binary unimplemented forward")(
+                    &stmt
+                );
+
+                return Some(new_stmt);
+            } else if let syn::Expr::MethodCall(method_expr) = &*init.1 {
+                let method_sig = method_signature(method_expr, type_map);
+                let method_out = SUPPORTED_METHODS
+                    .get(&method_sig)
+                    .expect("forward_derivative: unsupported method");
+                let new_stmt = method_out
+                    .forward_derivative
+                    .expect("forward_derivative: method unimplemented forward")(
+                    &stmt
+                );
+                return Some(new_stmt);
             }
         }
     }
     None
-}
-
-fn forward_add(stmt: &syn::Stmt) -> syn::Stmt {
-    let local = stmt.local().expect("forward_add: not local");
-    let init = &local.init;
-    let bin_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .binary()
-        .expect("forward_add: not binary");
-
-    let (l, r) = (&*bin_expr.left, &*bin_expr.right);
-    let d = der!(local
-        .pat
-        .ident()
-        .expect("forward_add: not ident")
-        .ident
-        .to_string());
-
-    let str = format!(
-        "let {} = {} + {};",
-        d,
-        derivative_expr_string(l),
-        derivative_expr_string(r)
-    );
-    syn::parse_str(&str).expect("forward_add: parse fail")
-}
-fn forward_sub(stmt: &syn::Stmt) -> syn::Stmt {
-    let local = stmt.local().expect("forward_sub: not local");
-    let init = &local.init;
-    let bin_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .binary()
-        .expect("forward_sub: not binary");
-
-    let (l, r) = (&*bin_expr.left, &*bin_expr.right);
-    let d = der!(local
-        .pat
-        .ident()
-        .expect("forward_sub: not ident")
-        .ident
-        .to_string());
-
-    let str = format!(
-        "let {} = {} - {};",
-        d,
-        derivative_expr_string(l),
-        derivative_expr_string(r)
-    );
-    syn::parse_str(&str).expect("forward_sub: parse fail")
-}
-fn forward_mul(stmt: &syn::Stmt) -> syn::Stmt {
-    let local = stmt.local().expect("forward_mul: not local");
-    let init = &local.init;
-    let bin_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .binary()
-        .expect("forward_mul: not binary");
-
-    let (l, r) = (&*bin_expr.left, &*bin_expr.right);
-    let d = der!(local
-        .pat
-        .ident()
-        .expect("forward_mul: not ident")
-        .ident
-        .to_string());
-
-    let str = format!(
-        "let {} = {r}*{dl} + {l}*{dr};",
-        d,
-        dl = derivative_expr_string(l),
-        dr = derivative_expr_string(r),
-        l = expr_string(l),
-        r = expr_string(r),
-    );
-    syn::parse_str(&str).expect("forward_mul: parse fail")
-}
-fn forward_div(stmt: &syn::Stmt) -> syn::Stmt {
-    let local = stmt.local().expect("forward_div: not local");
-    let init = &local.init;
-    let bin_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .binary()
-        .expect("forward_div: not binary");
-
-    let (l, r) = (&*bin_expr.left, &*bin_expr.right);
-    let d = der!(local
-        .pat
-        .ident()
-        .expect("forward_div: not ident")
-        .ident
-        .to_string());
-
-    let str = format!(
-        "let {} = {dl}/{r} - {dr}*{r}*{r}/{l};",
-        d,
-        dl = derivative_expr_string(l),
-        dr = derivative_expr_string(r),
-        l = expr_string(l),
-        r = expr_string(r),
-    );
-    syn::parse_str(&str).expect("forward_div: parse fail")
-}
-fn expr_string(expr: &syn::Expr) -> String {
-    match expr {
-        syn::Expr::Lit(expr_lit) => match &expr_lit.lit {
-            syn::Lit::Float(lit_float) => lit_float.to_string(),
-            _ => panic!("Uncovere literaly in `expr_string`"),
-        },
-        syn::Expr::Path(expr_path) => expr_path.path.segments[0].ident.to_string(),
-        _ => panic!("Uncoverd expr for `derivative_expr`"),
-    }
-}
-/// Derivative expression string
-fn derivative_expr_string(expr: &syn::Expr) -> String {
-    match expr {
-        syn::Expr::Lit(_) => String::from("0."),
-        syn::Expr::Path(expr_path) => der!(expr_path.path.segments[0].ident.to_string()),
-        _ => panic!("Uncoverd expr for `derivative_expr`"),
-    }
-}
-/// Deriative of f32::powi(i32) operation.
-/// Given:
-/// ```ignore
-/// x = a * b
-/// dx = a*db+b*da
-/// ```
-/// We can for x^2, x^3 and x^4, say:
-/// ```ignore
-/// x2 = a*a
-/// dx2 = 2*a*da
-/// x3 = x2*a
-/// dx3 = x2*da+a*dx2 = (a*a)*da+a*(2*a*da) = da*a^2 + 2*da*a^2 = 3*da*a^2
-/// x4 = x3*a
-/// dx4 = x3*da+a*dx3 = (x2*a)*da+a*(3*da*a^2) = da*a^3 + 3*da*a^3 = 4*da*a^3
-/// ```
-/// Therefore:
-/// ```ignore
-/// xn = a^n
-/// dxn = n*dx*a^(n-1)
-/// ```
-pub fn deriative_powi(exponent: i32, x: f32, dx: f32) -> f32 {
-    exponent as f32 * dx * x.powi(exponent)
 }
