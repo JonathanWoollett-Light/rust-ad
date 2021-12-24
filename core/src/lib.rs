@@ -570,25 +570,6 @@ fn forward_powi_f64(stmt: &syn::Stmt) -> syn::Stmt {
 }
 // TODO Can we reduce/Remove code duplication between `forward_powi_f64` and `forward_powi_f32`?
 /// Deriative of f32::powi(i32) operation.
-/// Given:
-/// ```ignore
-/// x = a * b
-/// dx = a*db+b*da
-/// ```
-/// We can for x^2, x^3 and x^4, say:
-/// ```ignore
-/// x2 = a*a
-/// dx2 = 2*a*da
-/// x3 = x2*a
-/// dx3 = x2*da+a*dx2 = (a*a)*da+a*(2*a*da) = da*a^2 + 2*da*a^2 = 3*da*a^2
-/// x4 = x3*a
-/// dx4 = x3*da+a*dx3 = (x2*a)*da+a*(3*da*a^2) = da*a^3 + 3*da*a^3 = 4*da*a^3
-/// ```
-/// Therefore:
-/// ```ignore
-/// xn = a^n
-/// dxn = n*dx*a^(n-1)
-/// ```
 fn forward_powi(stmt: &syn::Stmt, float: &'static str) -> syn::Stmt {
     assert!(float == "f32" || float == "f64");
     let local = stmt.local().expect("forward_powi: not local");
@@ -607,23 +588,16 @@ fn forward_powi(stmt: &syn::Stmt, float: &'static str) -> syn::Stmt {
         .ident
         .to_string());
 
-    let receiver_ident = method_expr
-        .receiver
-        .path()
-        .expect("forward_powi: not path")
-        .path
-        .segments[0]
-        .ident
-        .to_string();
+    let receiver_ident = expr_str(&*method_expr.receiver);
     let exponent = expr_str(&method_expr.args[0]);
     let new_str = format!(
-        "let {} = {} as {} * {} * {}.powi({}-1i32);",
+        "let {} = {exponent} as {float} * {base}.powi({exponent}-1i32) * {der_base} + {base}.powi({exponent})*{base}.ln()*{der_exponent}",
         d,
-        exponent,
-        float,
-        der!(receiver_ident),
-        receiver_ident,
-        exponent
+        float = float,
+        der_base = derivative_expr_string(&*method_expr.receiver),
+        der_exponent = derivative_expr_string(&method_expr.args[0]),
+        exponent=exponent,
+        base=receiver_ident,
     );
     let new_stmt = syn::parse_str(&new_str).expect("forward_powi: parse fail");
     new_stmt

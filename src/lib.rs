@@ -18,6 +18,7 @@
 //! - **Primitive support:** `+`, `-`, `*` and `/` operations are supported.
 //! - **Extended support:** All operations from [std::ops] are supproted.
 //! - **Near-full support:** Almost* all native operations (operations implemented by the library which defines the type) are supported.
+//! 
 //! Please note these just specify a minimum set of operations, full details of other specific supported operations are given below.
 //!
 //! *The 'almost' exception is here since some operations may simply not be worth supporting given extremely limited usage, possible deprecation, etc.
