@@ -556,9 +556,9 @@ fn expr_string(expr: &syn::Expr) -> String {
 /// Derivative expression string
 fn derivative_expr_string(expr: &syn::Expr) -> String {
     match expr {
-        syn::Expr::Lit(expr_lit) => format!("0{}",literal_type(expr_lit)),
+        syn::Expr::Lit(expr_lit) => format!("0{}", literal_type(expr_lit)),
         syn::Expr::Path(expr_path) => der!(expr_path.path.segments[0].ident.to_string()),
-        _ => panic!("Uncovered expr for `derivative_expr`\n{:#?}",expr),
+        _ => panic!("Uncovered expr for `derivative_expr`\n{:#?}", expr),
     }
 }
 
@@ -766,7 +766,7 @@ fn reverse_mul(stmt: &syn::Stmt) -> syn::Stmt {
         (syn::Expr::Path(expr_path_l), syn::Expr::Lit(expr_lit_r)) => {
             let (l, r) = (
                 expr_path_l.path.segments[0].ident.to_string(),
-                lit_str(expr_lit_r)
+                lit_str(expr_lit_r),
             );
             format!("let {} = {}*{};", der!(l), r, lis)
         }
