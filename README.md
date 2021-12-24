@@ -6,6 +6,8 @@
 
 A restrictive WIP beginnings of a library attempting to implement auto-differentiation in Rust.
 
+**Why would I use this over \<insert library\>?** You wouldn't, not yet anyway. I'd say wait until support for ndarray is more comprehensive, then this becomes probably the most convenient Rust AutoDiff library.
+
 ## Status
 
 - [x] Forward Auto-differentiation
@@ -22,7 +24,7 @@ A restrictive WIP beginnings of a library attempting to implement auto-different
 
 ## Application
 
-Auto-differentiation is implemented via 2 attribute procedural macros, e.g.:
+Auto-differentiation is implemented via 2 attribute procedural macros, e.g.
 
 ```rust
 #[rust_ad::forward_autodiff]
