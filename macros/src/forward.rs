@@ -1,13 +1,22 @@
 use rust_ad_core::*;
 use std::collections::HashMap;
 
-pub fn update_forward_return(s: Option<&mut syn::Stmt>) {
+pub fn update_forward_return(s: Option<&mut syn::Stmt>, function_inputs: &[String]) {
     *s.unwrap() = match s {
         Some(syn::Stmt::Semi(syn::Expr::Return(expr_return), _)) => {
+            // TODO Replace these 2 if's with a match
             if let Some(b) = expr_return.expr.as_ref() {
                 if let syn::Expr::Path(expr_path) = &**b {
                     let ident = &expr_path.path.segments[0].ident;
-                    let return_str = format!("return ({},{});", ident, der!(ident.to_string()));
+                    let return_str = format!(
+                        "return ({},{});",
+                        ident,
+                        function_inputs
+                            .iter()
+                            .map(|input| wrt!(ident, input))
+                            .intersperse(String::from(","))
+                            .collect::<String>()
+                    );
                     syn::parse_str(&return_str).expect("update_forward_return malformed statement")
                 } else {
                     panic!("No return path:\n{:#?}", b)
@@ -21,7 +30,11 @@ pub fn update_forward_return(s: Option<&mut syn::Stmt>) {
 }
 
 /// Insperses values with respect to the preceding values.
-pub fn interspese_succedding<T, K>(x: Vec<T>, extra: &K, f: fn(&T, &K) -> Option<T>) -> Vec<T> {
+pub fn interspese_succedding_stmts<K>(
+    x: Vec<syn::Stmt>,
+    extra: K,
+    f: fn(&syn::Stmt, &K) -> Option<syn::Stmt>,
+) -> Vec<syn::Stmt> {
     let len = x.len();
     let new_len = len * 2 - 1;
     let mut y = Vec::with_capacity(new_len);
@@ -30,8 +43,10 @@ pub fn interspese_succedding<T, K>(x: Vec<T>, extra: &K, f: fn(&T, &K) -> Option
         y.push(last);
     }
     for a in x_iter {
-        if let Some(b) = f(&a, extra) {
-            y.push(b);
+        if let Some(b) = f(&a, &extra) {
+            for c in crate::unwrap_statement(&b).into_iter() {
+                y.push(c);
+            }
         }
         y.push(a);
     }
@@ -41,7 +56,7 @@ pub fn interspese_succedding<T, K>(x: Vec<T>, extra: &K, f: fn(&T, &K) -> Option
 // TODO Reduce code duplication between `reverse_derivative` and `forward_derivative`
 pub fn forward_derivative(
     stmt: &syn::Stmt,
-    type_map: &HashMap<String, String>,
+    (type_map, function_inputs): &(&HashMap<String, String>, &[String]),
 ) -> Option<syn::Stmt> {
     if let syn::Stmt::Local(local) = stmt {
         if let Some(init) = &local.init {
@@ -55,7 +70,7 @@ pub fn forward_derivative(
                 // Applies the forward deriative function for the found operation.
                 let new_stmt = operation_out_signature.forward_derivative.expect(
                     "forward_derivative: binary expression unimplemented forward deriative",
-                )(&stmt);
+                )(&stmt, function_inputs);
                 return Some(new_stmt);
             } else if let syn::Expr::Call(call_expr) = &*init.1 {
                 // Create function in signature
@@ -68,7 +83,8 @@ pub fn forward_derivative(
                 let new_stmt = function_out_signature
                     .forward_derivative
                     .expect("forward_derivative: binary unimplemented forward")(
-                    &stmt
+                    &stmt,
+                    function_inputs,
                 );
 
                 return Some(new_stmt);
@@ -80,7 +96,8 @@ pub fn forward_derivative(
                 let new_stmt = method_out
                     .forward_derivative
                     .expect("forward_derivative: method unimplemented forward")(
-                    &stmt
+                    &stmt,
+                    function_inputs,
                 );
                 return Some(new_stmt);
             }

@@ -3,7 +3,7 @@
 
 //! **I do not recommend using this directly, please sea [rust-ad](https://crates.io/crates/rust-ad).**
 
-use rust_ad_core::utils::*;
+use rust_ad_core::traits::*;
 use rust_ad_core::*;
 
 extern crate proc_macro;
@@ -220,34 +220,39 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
         function.sig.ident.span(),
     );
     // Appends derivative inputs to function signature, `f(x,y)` -> `f(x,y,dx,dy)`
-    let sig_inputs = function
+    let (sig_inputs, joined) = function
         .sig
         .inputs
         .iter()
         .map(|fn_arg| {
             // eprintln!("fn_arg:\n{:#?}",fn_arg);
             let typed = fn_arg.typed().expect("forward: signatre input not typed");
-            let val_type = &typed
+            let val_type = typed
                 .ty
                 .path()
                 .expect("forward: signature input not path")
                 .path
                 .segments[0]
-                .ident;
-            let ident = &typed
+                .ident
+                .to_string();
+            let ident_str = typed
                 .pat
                 .ident()
                 .expect("forward: signature input not ident")
-                .ident;
-            let string = format!("{}:{}", der!(ident), val_type);
+                .ident
+                .to_string();
+            let string = format!("{}:{}", der!(&ident_str), val_type);
             let arg: syn::FnArg = syn::parse_str(&string).expect("forward: failed input parse");
-            arg
+
+            (arg, (ident_str, val_type))
         })
-        .collect::<Vec<_>>();
+        .unzip::<_, _, Vec<_>, Vec<_>>();
+    let (function_inputs, function_input_types) =
+        joined.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
     for input in sig_inputs.into_iter() {
         function.sig.inputs.push(input);
     }
-    // Outputs output signature
+    // Updates output signature
     // eprint!("function.sig.output: {:#?}", function.sig.output);
     let return_type = &function
         .sig
@@ -259,12 +264,18 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
         .path
         .segments[0]
         .ident;
-    let return_string = format!("->({},{})", return_type, return_type);
+    let return_string = format!(
+        "->({},{})",
+        return_type,
+        function_input_types
+            .into_iter()
+            .intersperse(String::from(","))
+            .collect::<String>()
+    );
     function.sig.output = syn::parse_str(&return_string).expect("forward: failed output parse");
 
     // Forward autodiff
     // ---------------------------------------------------------------------------
-    // eprintln!("\n\nblock:\n{:?}\n\n", block);
 
     function.block.stmts = function
         .block
@@ -276,10 +287,13 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let type_map = propagate_types(&function);
 
     // Intersperses forward deriatives
-    function.block.stmts =
-        interspese_succedding(function.block.stmts, &type_map, forward_derivative);
+    function.block.stmts = interspese_succedding_stmts(
+        function.block.stmts,
+        (&type_map, function_inputs.as_slice()),
+        forward_derivative,
+    );
     // Updates return statement
-    update_forward_return(function.block.stmts.last_mut());
+    update_forward_return(function.block.stmts.last_mut(), function_inputs.as_slice());
 
     let new = quote::quote! { #function_holder #function };
     TokenStream::from(new)

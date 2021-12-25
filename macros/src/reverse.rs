@@ -1,7 +1,7 @@
 extern crate proc_macro;
 use proc_macro::TokenStream;
 
-use rust_ad_core::utils::*;
+use rust_ad_core::traits::*;
 use rust_ad_core::*;
 use syn::spanned::Spanned;
 
