@@ -25,7 +25,6 @@ macro_rules! der {
         format!("{}{}", DERIVATIVE_PREFIX, $a)
     }};
 }
-
 /// Signature infomation to refer to specific method.
 #[derive(Hash, PartialEq, Eq, Debug)]
 pub struct MethodSignature {
