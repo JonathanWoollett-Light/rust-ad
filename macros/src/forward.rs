@@ -1,31 +1,27 @@
 use rust_ad_core::*;
+use rust_ad_core::traits::*;
 use std::collections::HashMap;
 
 pub fn update_forward_return(s: Option<&mut syn::Stmt>, function_inputs: &[String]) {
     *s.unwrap() = match s {
         Some(syn::Stmt::Semi(syn::Expr::Return(expr_return), _)) => {
-            // TODO Replace these 2 if's with a match
-            if let Some(b) = expr_return.expr.as_ref() {
-                if let syn::Expr::Path(expr_path) = &**b {
-                    let ident = &expr_path.path.segments[0].ident;
-                    let return_str = format!(
-                        "return ({},{});",
-                        ident,
-                        function_inputs
-                            .iter()
-                            .map(|input| wrt!(ident, input))
-                            .intersperse(String::from(","))
-                            .collect::<String>()
-                    );
-                    syn::parse_str(&return_str).expect("update_forward_return malformed statement")
-                } else {
-                    panic!("No return path:\n{:#?}", b)
-                }
-            } else {
-                panic!("No return expression:\n{:#?}", expr_return)
-            }
+            let b = expr_return.expr.as_ref().expect("update_forward_return: No return expression");
+            let expr = &**b;
+            let expr_path = expr.path().expect("update_forward_return: No return path");
+
+            let ident = &expr_path.path.segments[0].ident;
+            let return_str = format!(
+                "return ({},{});",
+                ident,
+                function_inputs
+                    .iter()
+                    .map(|input| wrt!(ident, input))
+                    .intersperse(String::from(","))
+                    .collect::<String>()
+            );
+            syn::parse_str(&return_str).expect("update_forward_return: parse fail")
         }
-        _ => panic!("No retun statement:\n{:#?}", s),
+        _ => panic!("update_forward_return: No retun statement:\n{:#?}", s),
     }
 }
 
