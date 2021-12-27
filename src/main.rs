@@ -1,7 +1,5 @@
 extern crate rust_ad;
 
-use num::Zero;
-
 // File for testing.
 
 // #[rust_ad::forward_autodiff]

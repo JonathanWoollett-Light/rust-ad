@@ -114,10 +114,34 @@ pub fn forward_derivative(
                     .ident
                     .to_string();
                 let in_ident = expr_path.path.segments[0].ident.to_string();
+                let out_type = type_map.get(&in_ident).expect("forward_derivative: return unfound type");
+                let return_type = rust_ad_core::Type::try_from(out_type.as_str()).expect("unsupported return type");
+                let return_derivative = match &*init.1 {
+                    // Result 1
+                    syn::Expr::Lit(_) => return_type.zero(),
+                    syn::Expr::Path(path_expr) => {
+                        // x typically is the left or right of binary expression, regardless we are doing d/dx(expr) so at this we got
+                        let x = path_expr.path.segments[0].ident.to_string();
+            
+                        // Result 3
+                        if x == in_ident {
+                            der!(in_ident)
+                        }
+                        // Result 4
+                        else if function_inputs.contains(&x) {
+                            return_type.zero()
+                        }
+                        // Result 2
+                        else {
+                            wrt!(x, in_ident)
+                        }
+                    }
+                    _ => panic!("cumulative_derivative_wrt: unsupported expr"),
+                };
                 let new_stmt_str = format!(
                     "let {} = {};",
                     wrt!(out_ident, in_ident),
-                    cumulative_derivative_wrt(&*init.1, &in_ident, function_inputs)
+                    return_derivative
                 );
                 let new_stmt: syn::Stmt =
                     syn::parse_str(&new_stmt_str).expect("forward_derivative: parse fail");

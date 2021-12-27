@@ -1,3 +1,5 @@
+
+
 use crate::{traits::*, utils::*};
 
 use crate::*;
@@ -23,14 +25,14 @@ use crate::*;
 /// 4. Where the component is an input, but we are not looking at the cumulative derivative for this
 ///     input, it is `0.` since we don't have cumulative deriatives for inputs with respect to each
 ///     other with `1. * x_wrt_y`, `x_wrt_y` doens't exist and we presume inputs independant.
-pub fn cumulative_derivative_wrt(
+fn cumulative_derivative_wrt<const OUT_TYPE:Type>(
     expr: &syn::Expr,
     input_var: &str,
     function_inputs: &[String],
 ) -> String {
     match expr {
         // Result 1
-        syn::Expr::Lit(_) => String::from("Zero::zero()"),
+        syn::Expr::Lit(_) => OUT_TYPE.zero(),
         syn::Expr::Path(path_expr) => {
             // x typically is the left or right of binary expression, regardless we are doing d/dx(expr) so at this we got
             let x = path_expr.path.segments[0].ident.to_string();
@@ -41,7 +43,7 @@ pub fn cumulative_derivative_wrt(
             }
             // Result 4
             else if function_inputs.contains(&x) {
-                String::from("Zero::zero()")
+                OUT_TYPE.zero()
             }
             // Result 2
             else {
@@ -51,11 +53,58 @@ pub fn cumulative_derivative_wrt(
         _ => panic!("cumulative_derivative_wrt: unsupported expr"),
     }
 }
+#[derive(PartialEq, Eq)]
+pub enum Type {
+    F32,F64,U8,U16,U32,U64,U128,I8,I16,I32,I64,I128
+}
+impl Type {
+    pub fn zero(&self) -> String {
+        format!("0{}",self.to_string())
+    }
+}
+impl ToString for Type {
+    fn to_string(&self) -> String {
+        match self {
+            Self::F32 => "f32",
+            Self::F64 => "f64",
+            Self::U8 => "u8",
+            Self::U16 => "u16",
+            Self::U32 => "u32",
+            Self::U64 => "u64",
+            Self::U128 => "u128",
+            Self::I8 => "i8",
+            Self::I16 => "i16",
+            Self::I32 => "i32",
+            Self::I64 => "i64",
+            Self::I128 => "i128"
+        }.into()
+    }
+}
+impl TryFrom<&str> for Type {
+    type Error = &'static str;
+    fn try_from(string:&str) -> Result<Self,Self::Error> {
+        match string {
+            "f32" => Ok(Self::F32),
+            "f64" => Ok(Self::F64),
+            "u8" => Ok(Self::U8),
+            "u16" => Ok(Self::U16),
+            "u32" => Ok(Self::U32),
+            "u64" => Ok(Self::U64),
+            "u128" => Ok(Self::U128),
+            "i8" => Ok(Self::I8),
+            "i16" => Ok(Self::I16),
+            "i32" => Ok(Self::I32),
+            "i64" => Ok(Self::I64),
+            "i128" => Ok(Self::I128),
+            _ => Err("Type::try_from unsupported type")
+        }
+    }
+}
 /// ```ignore
 /// y = add (x1, x2)
 /// dy = add (dx1, dx2)
 /// ```
-pub fn forward_add(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
+pub fn forward_add<const OUT:Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     let local = stmt.local().expect("forward_add: not local");
     let bin_expr = &local
         .init
@@ -81,8 +130,8 @@ pub fn forward_add(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
         .map(|input| {
             format!(
                 "{dx1}+{dx2}",
-                dx1 = cumulative_derivative_wrt(&*bin_expr.left, input, function_inputs),
-                dx2 = cumulative_derivative_wrt(&*bin_expr.right, input, function_inputs)
+                dx1 = cumulative_derivative_wrt::<OUT>(&*bin_expr.left, input, function_inputs),
+                dx2 = cumulative_derivative_wrt::<OUT>(&*bin_expr.right, input, function_inputs)
             )
         })
         .intersperse(String::from(","))
@@ -94,7 +143,7 @@ pub fn forward_add(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
 /// y = sub (x1, x2)
 /// dy = sub (dx1, dx2)
 /// ```
-pub fn forward_sub(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
+pub fn forward_sub<const OUT:Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     let local = stmt.local().expect("forward_sub: not local");
     let bin_expr = &local
         .init
@@ -120,8 +169,8 @@ pub fn forward_sub(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
         .map(|input| {
             format!(
                 "{dx1}-{dx2}",
-                dx1 = cumulative_derivative_wrt(&*bin_expr.left, input, function_inputs),
-                dx2 = cumulative_derivative_wrt(&*bin_expr.right, input, function_inputs)
+                dx1 = cumulative_derivative_wrt::<OUT>(&*bin_expr.left, input, function_inputs),
+                dx2 = cumulative_derivative_wrt::<OUT>(&*bin_expr.right, input, function_inputs)
             )
         })
         .intersperse(String::from(","))
@@ -133,7 +182,7 @@ pub fn forward_sub(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
 /// y = mul (x1, x2)
 /// dy = add (mul (x2, dx1), mul (x1, dx2))
 /// ```
-pub fn forward_mul(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
+pub fn forward_mul<const OUT:Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     let local = stmt.local().expect("forward_mul: not local");
     let bin_expr = &local
         .init
@@ -163,8 +212,8 @@ pub fn forward_mul(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
                 "{x2}*{dx1}+{x1}*{dx2}",
                 x1 = expr_str(l),
                 x2 = expr_str(r),
-                dx1 = cumulative_derivative_wrt(l, input, function_inputs),
-                dx2 = cumulative_derivative_wrt(r, input, function_inputs)
+                dx1 = cumulative_derivative_wrt::<OUT>(l, input, function_inputs),
+                dx2 = cumulative_derivative_wrt::<OUT>(r, input, function_inputs)
             )
         })
         .intersperse(String::from(","))
@@ -180,7 +229,7 @@ pub fn forward_mul(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
 /// ```ignore
 /// dy = dx1*x2 - dx2*x2*x2/x1
 /// ```
-pub fn forward_div(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
+pub fn forward_div<const OUT:Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     let local = stmt.local().expect("forward_div: not local");
     let bin_expr = &local
         .init
@@ -210,8 +259,8 @@ pub fn forward_div(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
                 "{dx1}*{x2} - {dx2}*{x2}*{x2}/{x1}",
                 x1 = expr_str(l),
                 x2 = expr_str(r),
-                dx1 = cumulative_derivative_wrt(l, input, function_inputs),
-                dx2 = cumulative_derivative_wrt(r, input, function_inputs)
+                dx1 = cumulative_derivative_wrt::<OUT>(l, input, function_inputs),
+                dx2 = cumulative_derivative_wrt::<OUT>(r, input, function_inputs)
             )
         })
         .intersperse(String::from(","))
@@ -219,17 +268,10 @@ pub fn forward_div(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     let stmt_str = format!("let ({}) = ({});", idents, deriatives);
     syn::parse_str(&stmt_str).expect("forward_div: parse fail")
 }
-
-pub fn forward_powi_f32(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
-    forward_powi(stmt, function_inputs, "f32")
-}
-pub fn forward_powi_f64(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
-    forward_powi(stmt, function_inputs, "f64")
-}
 // TODO Can we reduce/Remove code duplication between `forward_powi_f64` and `forward_powi_f32`?
 /// Deriative of f32::powi(i32) operation.
-fn forward_powi(stmt: &syn::Stmt, function_inputs: &[String], float: &'static str) -> syn::Stmt {
-    assert!(float == "f32" || float == "f64");
+pub fn forward_powi<const OUT:Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
+    assert!(OUT == Type::F32 || OUT == Type::F64);
     let local = stmt.local().expect("forward_powi: not local");
     let init = &local.init;
     let method_expr = init
@@ -264,7 +306,7 @@ fn forward_powi(stmt: &syn::Stmt, function_inputs: &[String], float: &'static st
                     "{exponent} as {type_str} * {base}.powi({exponent} - 1i32)",
                     exponent = exponent,
                     base = base,
-                    type_str = float
+                    type_str = OUT.to_string()
                 )
             } else if *input == exponent {
                 format!(
@@ -273,7 +315,7 @@ fn forward_powi(stmt: &syn::Stmt, function_inputs: &[String], float: &'static st
                     base = base
                 )
             } else {
-                String::from("Zero::zero()")
+                OUT.zero()
             }
         })
         .intersperse(String::from(","))

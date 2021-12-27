@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 
 use crate::{forward, forward_autodiff};
-use num::Zero;
 
 #[forward_autodiff]
 fn empty(x: f32) -> f32 {

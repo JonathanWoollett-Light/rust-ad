@@ -1,11 +1,12 @@
 #![feature(iter_intersperse)]
+#![feature(adt_const_params)]
 
 //! **I do not recommend using this directly, please sea [rust-ad](https://crates.io/crates/rust-ad).**
 
 use std::collections::HashMap;
 
 mod derivatives;
-pub use derivatives::cumulative_derivative_wrt;
+pub use derivatives::Type;
 
 mod dict;
 pub use dict::*;
