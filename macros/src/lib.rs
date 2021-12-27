@@ -295,7 +295,11 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     // Updates return statement
     update_forward_return(function.block.stmts.last_mut(), function_inputs.as_slice());
 
-    let new = quote::quote! { #function_holder #function };
+    let new = quote::quote! { 
+        #function_holder 
+        use num::Zero;
+        #function 
+    };
     TokenStream::from(new)
 }
 
@@ -543,7 +547,7 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
         let local_ident = &local
             .pat
             .ident()
-            .expect("unwrap: statement not ident")
+            .expect(&format!("unwrap_statement: non-ident local pattern (must be `let x =...;`, cannot be a tuple etc.): {{\n{:#?}\n}}",local))
             .ident;
         // If our statement has some initialization (e.g. `let a = 3;`).
         if let Some(init) = local.init.as_ref() {

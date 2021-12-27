@@ -14,6 +14,7 @@ documentation = "https://docs.rs/rust-ad/"
 syn = { version="1.0.82", features=["full","extra-traits"] }
 quote = "1.0.10"
 rust-ad-core = { version = "0.2.0", path = "../core" }
+num = "0.4.0" # This crate doesn't require this, but the code it produces does.
 
 [lib]
 proc-macro = true

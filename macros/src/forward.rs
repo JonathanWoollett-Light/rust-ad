@@ -40,9 +40,10 @@ pub fn interspese_succedding_stmts<K>(
     }
     for a in x_iter {
         if let Some(b) = f(&a, &extra) {
-            for c in crate::unwrap_statement(&b).into_iter() {
-                y.push(c);
-            }
+            // for c in crate::unwrap_statement(&b).into_iter() {
+            //     y.push(c);
+            // }
+            y.push(b);
         }
         y.push(a);
     }

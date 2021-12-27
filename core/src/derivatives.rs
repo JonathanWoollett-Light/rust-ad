@@ -3,22 +3,27 @@ use crate::{traits::*, utils::*};
 use crate::*;
 
 /// Derivative of given expression with respect to given variable (only supports literals and paths).
-fn der_wrt(expr: &syn::Expr, wrt: &str) -> String {
+fn der_wrt(expr: &syn::Expr, wrt: &str, function_inputs: &[String]) -> String {
     match expr {
         syn::Expr::Lit(_) => String::from("Zero::zero()"),
         syn::Expr::Path(path_expr) => {
             // x is the left or right of binary expression typically, its the component, so if its ident
             let x = path_expr.path.segments[0].ident.to_string();
+
             // δa/δa = a_ (input value)
             if x == wrt {
                 der!(wrt)
             }
-            // δa/δb = a_b (not input, so needs to be relative to some function e.g. `b`)
+            // If `x` is an input, then it with respect to another input is `Zero::zero()` since the inputs don't are presumed to be independant.
+            else if function_inputs.contains(&x) {
+                String::from("Zero::zero()")
+            }
+            // δy/δa = a_wrt_y (not input, so needs to be relative to some function e.g. `b`)
             else {
                 wrt!(x, wrt)
             }
         }
-        _ => panic!("expr_der_str: unsupported expr"),
+        _ => panic!("der_wrt: unsupported expr"),
     }
 }
 /// ```ignore
@@ -50,9 +55,9 @@ pub fn forward_add(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
         .iter()
         .map(|input| {
             format!(
-                "{dx1}-{dx2}",
-                dx1 = der_wrt(&*bin_expr.left, input),
-                dx2 = der_wrt(&*bin_expr.right, input)
+                "{dx1}+{dx2}",
+                dx1 = der_wrt(&*bin_expr.left, input,function_inputs),
+                dx2 = der_wrt(&*bin_expr.right, input,function_inputs)
             )
         })
         .intersperse(String::from(","))
@@ -90,8 +95,8 @@ pub fn forward_sub(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
         .map(|input| {
             format!(
                 "{dx1}-{dx2}",
-                dx1 = der_wrt(&*bin_expr.left, input),
-                dx2 = der_wrt(&*bin_expr.right, input)
+                dx1 = der_wrt(&*bin_expr.left, input,function_inputs),
+                dx2 = der_wrt(&*bin_expr.right, input,function_inputs)
             )
         })
         .intersperse(String::from(","))
@@ -133,8 +138,8 @@ pub fn forward_mul(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
                 "{x2}*{dx1}+{x1}*{dx2}",
                 x1 = expr_str(l),
                 x2 = expr_str(r),
-                dx1 = der_wrt(l, input),
-                dx2 = der_wrt(r, input)
+                dx1 = der_wrt(l, input,function_inputs),
+                dx2 = der_wrt(r, input,function_inputs)
             )
         })
         .intersperse(String::from(","))
@@ -180,8 +185,8 @@ pub fn forward_div(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
                 "{dx1}*{x2} - {dx2}*{x2}*{x2}/{x1}",
                 x1 = expr_str(l),
                 x2 = expr_str(r),
-                dx1 = der_wrt(l, input),
-                dx2 = der_wrt(r, input)
+                dx1 = der_wrt(l, input,function_inputs),
+                dx2 = der_wrt(r, input,function_inputs)
             )
         })
         .intersperse(String::from(","))

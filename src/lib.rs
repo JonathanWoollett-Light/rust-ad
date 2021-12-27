@@ -46,5 +46,6 @@
 //! With `cargo expand` when an `.unwrap()` panics it doesn't give a line reference. Using unique panic messages makes locating errors easier. These should help debuging quite specifically (ctrl+f).
 //!
 //! ### Resources
+//! - [Automatic Differentation in Rust](https://github.com/JonathanWoollett-Light/autodiff-book)
 //! - [automatic-differentiation-worked-examples](http://h2.jaguarpaw.co.uk/posts/automatic-differentiation-worked-examples/)
 pub use rust_ad_macros::*;
