@@ -7,25 +7,55 @@ use syn::spanned::Spanned;
 
 use std::collections::HashMap;
 
-pub fn add_insert(map: &mut HashMap<String, usize>, string: String) -> usize {
-    if let Some(val) = map.get_mut(&string) {
-        let c = *val;
-        *val += 1;
-        c
-    } else {
-        map.insert(string, 1);
-        0
-    }
+pub fn reverse_accumulate_inputs(function_inputs: &[String], component_map: &HashMap<String, Vec<String>>, type_map: &HashMap<String, String>) -> syn::Stmt {
+    let stmt_str  = format!(
+        "let ({}) = ({});",
+        function_inputs.iter().map(|input|der!(input)).intersperse(String::from(",")).collect::<String>(),
+        function_inputs.iter().map(|input| {
+            if let Some(components) = component_map.get(input) {
+                components.iter().map(|c|wrt!(input,c)).intersperse(String::from("+")).collect::<String>()
+            } else { 
+                format!("1{}",type_map.get(input).expect("reverse_accumulate_inputs: no input type")) 
+            }
+        }).intersperse(String::from(",")).collect::<String>()
+    );
+    syn::parse_str(&stmt_str).expect("reverse_accumulate_inputs: parse fail")
 }
-
-// TODO Reduce code duplication between `reverse_derivative` and `forward_derivative`
-pub fn reverse_derivative(
+pub fn reverse_accumulate_derivative(
     stmt: &syn::Stmt,
-    type_map: &HashMap<String, String>,
+    component_map: &HashMap<String, Vec<String>>,
 ) -> Option<syn::Stmt> {
     if let syn::Stmt::Local(local) = stmt {
         // eprintln!("local: {:#?}",local);
         // panic!("just stop here");
+        let local_ident = local
+                    .pat
+                    .ident()
+                    .expect("reverse_derivative: not ident")
+                    .ident
+                    .to_string();
+        let acc_der_stmt_str = format!(
+            "let {} = {};",
+            der!(local_ident),
+            component_map
+                .get(&local_ident)
+                .expect("reverse_derivative: ident not in map")
+                .iter()
+                .map(|d|wrt!(local_ident,d))
+                .intersperse(String::from("+"))
+                .collect::<String>()
+        );
+        let acc_der_stmt = syn::parse_str(&acc_der_stmt_str).expect("reverse_derivative: acc parse fail");
+        Some(acc_der_stmt)
+    }
+    else { None }
+}
+pub fn reverse_derivative(
+    stmt: &syn::Stmt,
+    type_map: &HashMap<String, String>,
+    component_map: &mut HashMap<String, Vec<String>>,
+) -> Option<syn::Stmt> {
+    if let syn::Stmt::Local(local) = stmt {
         if let Some(init) = &local.init {
             let init_expr = &*init.1;
             if let syn::Expr::Binary(bin_expr) = init_expr {
@@ -38,7 +68,7 @@ pub fn reverse_derivative(
                 // Applies the forward deriative function for the found operation.
                 let new_stmt = operation_out_signature.reverse_derivative.expect(
                     "reverse_derivative: binary expression unimplemented forward deriative",
-                )(&stmt);
+                )(&stmt, component_map);
                 return Some(new_stmt);
             } else if let syn::Expr::Call(call_expr) = &*init.1 {
                 // Create function in signature
@@ -51,7 +81,8 @@ pub fn reverse_derivative(
                 let new_stmt = function_out_signature
                     .reverse_derivative
                     .expect("reverse_derivative: binary unimplemented forward")(
-                    &stmt
+                    &stmt,
+                    component_map,
                 );
                 return Some(new_stmt);
             } else if let syn::Expr::MethodCall(method_expr) = &*init.1 {
@@ -62,47 +93,41 @@ pub fn reverse_derivative(
                 let new_stmt = method_out
                     .reverse_derivative
                     .expect("reverse_derivative: method unimplemented forward")(
-                    &stmt
+                    &stmt,
+                    component_map,
                 );
                 return Some(new_stmt);
-            } else if let syn::Expr::Macro(macro_expr) = init_expr {
-                if macro_expr
-                    .mac
-                    .path
-                    .segments
-                    .last()
-                    .expect("reverse empty macro")
+            } else if let syn::Expr::Path(expr_path) = &*init.1 {
+                // Variable identifier
+                let out_ident = local
+                    .pat
+                    .ident()
+                    .expect("reverse_derivative: not ident")
                     .ident
-                    .to_string()
-                    == "dup"
-                {
-                    let macro_token_stream =
-                        proc_macro::TokenStream::from(macro_expr.mac.tokens.clone())
-                            .into_iter()
-                            .collect::<Vec<_>>();
-                    let ident = macro_token_stream[0]
-                        .ident()
-                        .expect("reverse: not ident")
-                        .to_string();
-                    let num: usize = macro_token_stream[2]
-                        .literal()
-                        .expect("reverse: not literal")
-                        .to_string()
-                        .parse()
-                        .unwrap();
-                    let token_str = format!(
-                        "let {} = {};",
-                        der!(ident),
-                        (0..num)
-                            .map(|c| format!("{}{}", der!(ident), c))
-                            .intersperse(String::from("+"))
-                            .collect::<String>()
-                    );
-                    let der_dup_stmt: syn::Stmt =
-                        syn::parse_str(&token_str).expect("reverse: failed to parse dup");
-                    // eprintln!("der_dup_stmt: {:?}", der_dup_stmt);
-                    return Some(der_dup_stmt);
-                }
+                    .to_string();
+                // Variable being assigned to `out_ident`
+                let in_ident = expr_path.path.segments[0].ident.to_string();
+                
+                append_insert(&in_ident,out_ident.clone(),component_map);
+                let stmt_str = format!("let {} = {};", wrt!(in_ident,out_ident), der!(out_ident));
+                let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_derivative: parse fail");
+
+                return Some(new_stmt);
+            } else if let syn::Expr::Lit(expr_lit) = &*init.1 {
+                let out_type = literal_type(expr_lit).expect("reverse_derivative: bad lit type");
+                let return_type = rust_ad_core::Type::try_from(out_type.as_str())
+                    .expect("reverse_derivative: unsupported return type");
+                let out_ident = local
+                    .pat
+                    .ident()
+                    .expect("reverse_derivative: not ident")
+                    .ident
+                    .to_string();
+                
+                let stmt_str = format!("let {} = 0{};", der!(out_ident),return_type.to_string());
+                let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_derivative: parse fail");
+
+                return Some(new_stmt);
             }
         }
     }

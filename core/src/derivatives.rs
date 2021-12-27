@@ -1,6 +1,7 @@
 use crate::{traits::*, utils::*};
 
 use crate::*;
+use crate::append_insert;
 
 /// Gets cumulative derivative for given expression for a given input variable (only supports literals and paths).
 ///
@@ -350,51 +351,10 @@ pub fn forward_powi<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String
     syn::parse_str(&stmt_str).expect("forward_powi: parse fail")
 }
 
-pub fn reverse_powi_f32(stmt: &syn::Stmt) -> syn::Stmt {
-    reverse_powi(stmt, "f32")
-}
-pub fn reverse_powi_f64(stmt: &syn::Stmt) -> syn::Stmt {
-    reverse_powi(stmt, "f64")
-}
-// TODO Is this wrong? (I feel like it is)
-/// ```ignore
-/// a = x^y
-/// dx, dy = y*x^(y-1), x^y*ln(x)
-/// ```
-fn reverse_powi(stmt: &syn::Stmt, float: &'static str) -> syn::Stmt {
-    assert!(float == "f32" || float == "f64");
-    let local = stmt.local().expect("reverse_powi: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("reverse_powi: not method");
-
-    let receiver_ident = method_expr
-        .receiver
-        .path()
-        .expect("reverse_powi: not path")
-        .path
-        .segments[0]
-        .ident
-        .to_string();
-    let exponent = expr_str(&method_expr.args[0]);
-
-    let new_str = format!(
-        "let ({},{}) = ({exponent} as {float}*{base}.powi({exponent}-1i32),{base}.powi({exponent})*{base}.ln());",
-        der!(receiver_ident),
-        der!(exponent),
-        float = float,
-        base=receiver_ident,
-        exponent=exponent,
-    );
-    let new_stmt = syn::parse_str(&new_str).expect("reverse_powi: parse fail");
-    new_stmt
-}
-
-pub fn reverse_add(stmt: &syn::Stmt) -> syn::Stmt {
+pub fn reverse_add<const OUT: Type>(
+    stmt: &syn::Stmt,
+    component_map: &mut HashMap<String, Vec<String>>,
+) -> syn::Stmt {
     let local = stmt.local().expect("reverse_add: not local");
     let init = local.init.as_ref().unwrap();
     let init_expr = &*init.1;
@@ -407,25 +367,35 @@ pub fn reverse_add(stmt: &syn::Stmt) -> syn::Stmt {
         .to_string();
 
     let (a, b): (String, String) = match (&*bin_expr.left, &*bin_expr.right) {
-        (syn::Expr::Path(expr_path_l), syn::Expr::Path(expr_path_r)) => (
-            der!(expr_path_l.path.segments[0].ident.to_string()),
-            der!(expr_path_r.path.segments[0].ident.to_string()),
-        ),
-        (syn::Expr::Path(expr_path_l), syn::Expr::Lit(_)) => (
-            der!(expr_path_l.path.segments[0].ident.to_string()),
-            String::from("_"),
-        ),
-        (syn::Expr::Lit(_), syn::Expr::Path(expr_path_r)) => (
-            String::from("_"),
-            der!(expr_path_r.path.segments[0].ident.to_string()),
-        ),
-        _ => panic!("reverse_add: Uncovered `syn::BinOp::Add(_)` binary expression combination"),
+        (syn::Expr::Path(expr_path_l), syn::Expr::Path(expr_path_r)) => {
+            let (l, r) = (
+                expr_path_l.path.segments[0].ident.to_string(),
+                expr_path_r.path.segments[0].ident.to_string(),
+            );
+            append_insert(&l, lis.clone(), component_map);
+            append_insert(&r, lis.clone(), component_map);
+            (wrt!(l, lis), wrt!(r, lis))
+        }
+        (syn::Expr::Path(expr_path_l), syn::Expr::Lit(_)) => {
+            let l = expr_path_l.path.segments[0].ident.to_string();
+            append_insert(&l, lis.clone(), component_map);
+            (wrt!(l, lis), String::from("_"))
+        }
+        (syn::Expr::Lit(_), syn::Expr::Path(expr_path_r)) => {
+            let r = expr_path_r.path.segments[0].ident.to_string();
+            append_insert(&r, lis.clone(), component_map);
+            (String::from("_"), wrt!(r, lis))
+        }
+        _ => panic!("reverse_add: Unsupported bin expr"),
     };
-    let stmt_str = format!("let ({},{}) = rust_ad::dup!({},2);", a, b, der!(lis));
+    let stmt_str = format!("let ({},{}) = ({},{});", a, b, der!(lis), der!(lis));
     let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_add: parse fail");
     new_stmt
 }
-pub fn reverse_sub(stmt: &syn::Stmt) -> syn::Stmt {
+pub fn reverse_sub<const OUT: Type>(
+    stmt: &syn::Stmt,
+    component_map: &mut HashMap<String, Vec<String>>,
+) -> syn::Stmt {
     let local = stmt.local().expect("reverse_sub: not local");
     let init = local.init.as_ref().unwrap();
     let init_expr = &*init.1;
@@ -438,25 +408,35 @@ pub fn reverse_sub(stmt: &syn::Stmt) -> syn::Stmt {
         .to_string();
 
     let (a, b): (String, String) = match (&*bin_expr.left, &*bin_expr.right) {
-        (syn::Expr::Path(expr_path_l), syn::Expr::Path(expr_path_r)) => (
-            der!(expr_path_l.path.segments[0].ident.to_string()),
-            format!("-{}", der!(expr_path_r.path.segments[0].ident.to_string())),
-        ),
-        (syn::Expr::Path(expr_path_l), syn::Expr::Lit(_)) => (
-            der!(expr_path_l.path.segments[0].ident.to_string()),
-            String::from("_"),
-        ),
-        (syn::Expr::Lit(_), syn::Expr::Path(expr_path_r)) => (
-            String::from("_"),
-            format!("-{}", der!(expr_path_r.path.segments[0].ident.to_string())),
-        ),
-        _ => panic!("reverse_sub: Uncovered `syn::BinOp::Sub(_)` binary expression combination"),
+        (syn::Expr::Path(expr_path_l), syn::Expr::Path(expr_path_r)) => {
+            let (l, r) = (
+                expr_path_l.path.segments[0].ident.to_string(),
+                expr_path_r.path.segments[0].ident.to_string(),
+            );
+            append_insert(&l, lis.clone(), component_map);
+            append_insert(&r, lis.clone(), component_map);
+            (wrt!(l, lis), wrt!(r, lis))
+        }
+        (syn::Expr::Path(expr_path_l), syn::Expr::Lit(_)) => {
+            let l = expr_path_l.path.segments[0].ident.to_string();
+            append_insert(&l, lis.clone(), component_map);
+            (wrt!(l, lis), String::from("_"))
+        }
+        (syn::Expr::Lit(_), syn::Expr::Path(expr_path_r)) => {
+            let r = expr_path_r.path.segments[0].ident.to_string();
+            append_insert(&r, lis.clone(), component_map);
+            (String::from("_"), wrt!(r, lis))
+        }
+        _ => panic!("reverse_sub: Unsupported bin expr"),
     };
-    let stmt_str = format!("let ({},{}) = rust_ad::dup!({},2);", a, b, lis);
+    let stmt_str = format!("let ({},{}) = ({},-{});", a, b, der!(lis), der!(lis));
     let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_sub: parse fail");
     new_stmt
 }
-pub fn reverse_mul(stmt: &syn::Stmt) -> syn::Stmt {
+pub fn reverse_mul<const OUT: Type>(
+    stmt: &syn::Stmt,
+    component_map: &mut HashMap<String, Vec<String>>,
+) -> syn::Stmt {
     let local = stmt.local().expect("reverse_mul: not local");
     let init = local.init.as_ref().unwrap();
     let init_expr = &*init.1;
@@ -474,14 +454,16 @@ pub fn reverse_mul(stmt: &syn::Stmt) -> syn::Stmt {
                 expr_path_l.path.segments[0].ident.to_string(),
                 expr_path_r.path.segments[0].ident.to_string(),
             );
+            append_insert(&l, lis.clone(), component_map);
+            append_insert(&r, lis.clone(), component_map);
             format!(
                 "let ({},{}) = ({}*{},{}*{});",
-                der!(l),
-                der!(r),
+                wrt!(l, lis),
+                wrt!(r, lis),
                 r,
-                lis,
+                der!(lis),
                 l,
-                lis
+                der!(lis)
             )
         }
         (syn::Expr::Path(expr_path_l), syn::Expr::Lit(expr_lit_r)) => {
@@ -489,21 +471,26 @@ pub fn reverse_mul(stmt: &syn::Stmt) -> syn::Stmt {
                 expr_path_l.path.segments[0].ident.to_string(),
                 lit_str(expr_lit_r),
             );
-            format!("let {} = {}*{};", der!(l), r, lis)
+            append_insert(&l, lis.clone(), component_map);
+            format!("let {} = {}*{};", wrt!(l, lis), r, der!(lis))
         }
         (syn::Expr::Lit(expr_lit_l), syn::Expr::Path(expr_path_r)) => {
             let (l, r) = (
                 lit_str(expr_lit_l),
                 expr_path_r.path.segments[0].ident.to_string(),
             );
-            format!("let {} = {}*{};", der!(r), l, lis)
+            append_insert(&r, lis.clone(), component_map);
+            format!("let {} = {}*{};", wrt!(r, lis), l, der!(lis))
         }
-        _ => panic!("reverse_mul: Uncovered `syn::BinOp::Mul(_)` binary expression combination"),
+        _ => panic!("reverse_mul: Unsupported bin expr"),
     };
     let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_mul: parse fail");
     new_stmt
 }
-pub fn reverse_div(stmt: &syn::Stmt) -> syn::Stmt {
+pub fn reverse_div<const OUT: Type>(
+    stmt: &syn::Stmt,
+    component_map: &mut HashMap<String, Vec<String>>,
+) -> syn::Stmt {
     let local = stmt.local().expect("reverse_div: not local");
     let init = local.init.as_ref().unwrap();
     let init_expr = &*init.1;
@@ -517,44 +504,134 @@ pub fn reverse_div(stmt: &syn::Stmt) -> syn::Stmt {
 
     let stmt_str = match (&*bin_expr.left, &*bin_expr.right) {
         (syn::Expr::Path(expr_path_l), syn::Expr::Path(expr_path_r)) => {
-            let (l, r) = (
+            let (numerator, denominator) = (
                 expr_path_l.path.segments[0].ident.to_string(),
                 expr_path_r.path.segments[0].ident.to_string(),
             );
+            append_insert(&numerator, lis.clone(), component_map);
+            append_insert(&denominator, lis.clone(), component_map);
             format!(
-                "let ({},{}) = ({}/{},{}*{});",
-                der!(l),
-                der!(r),
-                lis,
-                r,
-                l,
-                lis
+                "let ({},{}) = ({dx} * (1{}/{denominator}), {dx} * (-{numerator} / ({denominator}*{denominator})));",
+                wrt!(numerator,lis),
+                wrt!(denominator,lis),
+                OUT.to_string(),
+                numerator=numerator,
+                denominator=denominator,
+                dx = der!(lis),
             )
         }
         (syn::Expr::Path(expr_path_l), syn::Expr::Lit(expr_lit_r)) => {
-            let (l, r) = (
+            let (numerator, denominator) = (
                 expr_path_l.path.segments[0].ident.to_string(),
-                expr_lit_r
-                    .lit
-                    .float()
-                    .expect("reverse_div: right not literal")
-                    .to_string(),
+                lit_str(expr_lit_r),
             );
-            format!("let {} = {}/{};", der!(l), lis, r)
+            append_insert(&numerator, lis.clone(), component_map);
+            format!(
+                "let {} = {} * (1{}/{});",
+                wrt!(numerator, lis),
+                der!(lis),
+                OUT.to_string(),
+                denominator
+            )
         }
         (syn::Expr::Lit(expr_lit_l), syn::Expr::Path(expr_path_r)) => {
-            let (l, r) = (
-                expr_lit_l
-                    .lit
-                    .float()
-                    .expect("reverse_div: left not literal")
-                    .to_string(),
+            let (numerator, denominator) = (
+                lit_str(expr_lit_l),
                 expr_path_r.path.segments[0].ident.to_string(),
             );
-            format!("let {} = {}*{};", der!(r), l, lis)
+            append_insert(&denominator, lis.clone(), component_map);
+            format!(
+                "let {} = {} * (-{}/({}*{}));",
+                wrt!(denominator, lis),
+                der!(lis),
+                numerator,
+                denominator,
+                denominator
+            )
         }
-        _ => panic!("Uncovered `syn::BinOp::Mul(_)` binary expression combination"),
+        _ => panic!("reverse_div: Unsupported bin expr"),
     };
     let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_div: parse fail");
+    new_stmt
+}
+
+/// Deriative of f32::powi(i32) operation.
+pub fn reverse_powi<const OUT: Type>(
+    stmt: &syn::Stmt,
+    component_map: &mut HashMap<String, Vec<String>>,
+) -> syn::Stmt {
+    assert!(OUT == Type::F32 || OUT == Type::F64);
+    let local = stmt.local().expect("forward_powi: not local");
+    let init = &local.init;
+    let method_expr = init
+        .as_ref()
+        .unwrap()
+        .1
+        .method_call()
+        .expect("forward_powi: not method");
+
+    let lis = local
+        .pat
+        .ident()
+        .expect("forward_powi: not ident")
+        .ident
+        .to_string();
+
+    // let (base, exponent) = (
+    //     expr_str(&*method_expr.receiver),
+    //     expr_str(&method_expr.args[0]),
+    // );
+    let (base, exponent) = (&*method_expr.receiver, &method_expr.args[0]);
+
+    let stmt_str = match (base, exponent) {
+        (syn::Expr::Path(expr_path_l), syn::Expr::Path(expr_path_r)) => {
+            let (base, exponent) = (
+                expr_path_l.path.segments[0].ident.to_string(),
+                expr_path_r.path.segments[0].ident.to_string(),
+            );
+            append_insert(&base, lis.clone(), component_map);
+            append_insert(&exponent, lis.clone(), component_map);
+            format!(
+                "let ({},{}) = ({dx} * ({exponent} as {val_type} * {base}.powi({exponent}-1i32)), {dx} * ({base}.powi({exponent}) * {base}.ln() ) );",
+                wrt!(base,lis),
+                wrt!(exponent,lis),
+                base = base,
+                exponent = exponent,
+                dx = der!(lis),
+                val_type = OUT.to_string()
+            )
+        }
+        (syn::Expr::Path(expr_path_l), syn::Expr::Lit(expr_lit_r)) => {
+            let (base, exponent) = (
+                expr_path_l.path.segments[0].ident.to_string(),
+                lit_str(expr_lit_r),
+            );
+            append_insert(&base, lis.clone(), component_map);
+            format!(
+                "let {} = {} * ({exponent} as {val_type} * {base}.powi({exponent}-1i32));",
+                wrt!(base, lis),
+                der!(lis),
+                base = base,
+                exponent = exponent,
+                val_type = OUT.to_string()
+            )
+        }
+        (syn::Expr::Lit(expr_lit_l), syn::Expr::Path(expr_path_r)) => {
+            let (base, exponent) = (
+                lit_str(expr_lit_l),
+                expr_path_r.path.segments[0].ident.to_string(),
+            );
+            append_insert(&exponent, lis.clone(), component_map);
+            format!(
+                "let {} = {} * ({base}.powi({exponent}) * {base}.ln() );",
+                wrt!(exponent, lis),
+                der!(lis),
+                base = base,
+                exponent = exponent,
+            )
+        }
+        _ => panic!("reverse_powi: Unsupported bin expr"),
+    };
+    let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_powi: parse fail");
     new_stmt
 }

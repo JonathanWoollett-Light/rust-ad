@@ -18,9 +18,8 @@ use reverse::*;
 
 /// Calls forward auto-differentiation function corresponding to a given function.
 ///
-/// E.g.
 /// ```
-/// #[forward_autodiff]
+/// #[rust_ad::forward_autodiff]
 /// fn multi(x: f32, y: f32) -> f32 {
 ///     let a = x.powi(2i32);
 ///     let b = x * 2f32;
@@ -35,7 +34,9 @@ use reverse::*;
 ///     assert_eq!(der_y, -0.08f32); // -2/y^2
 /// }
 /// ```
+/// 
 /// This is just a procedural functional macro replacement for the declarative macro:
+/// 
 /// ```
 /// #[macro_export]
 /// macro_rules! forward {
@@ -44,6 +45,7 @@ use reverse::*;
 ///     }}
 /// }
 /// ```
+/// 
 /// Since you can't export declarative macros from a procedural macro crate.
 #[proc_macro]
 pub fn forward(_item: TokenStream) -> TokenStream {
@@ -75,19 +77,25 @@ pub fn forward(_item: TokenStream) -> TokenStream {
 }
 /// Calls reverse auto-differentiation function corresponding to a given function.
 ///
-/// E.g.
 /// ```
 /// #[rust_ad::reverse_autodiff]
-/// fn function_name(x: f32, y: f32) -> f32 {
-///     let a = 7f32 * x;
-///     let b = 3f32 * y;
-///     return b;
+/// fn multi(x: f32, y: f32) -> f32 {
+///     let a = x.powi(2i32);
+///     let b = x * 2f32;
+///     let c = 2f32 / y;
+///     let f = a + b + c;
+///     return f;
 /// }
 /// fn main() {
-///     println!("{:?}",rust_ad::reverse!(function_name,2.,4.,1.))
+///     let (f, der_x, der_y) = rust_ad::reverse!(multi, 3f32, 5f32, 1f32);
+///     assert_eq!(f, 15.4f32);
+///     assert_eq!(der_x, 8f32); // 2(x+1)
+///     assert_eq!(der_y, -0.08f32); // -2/y^2
 /// }
 /// ```
+/// 
 /// This is just a procedural functional macro replacement for the declarative macro:
+/// 
 /// ```
 /// #[macro_export]
 /// macro_rules! reverse {
@@ -96,6 +104,7 @@ pub fn forward(_item: TokenStream) -> TokenStream {
 ///     }}
 /// }
 /// ```
+/// 
 /// Since you can't export declarative macros from a procedural macro crate.
 #[proc_macro]
 pub fn reverse(_item: TokenStream) -> TokenStream {
@@ -170,9 +179,8 @@ pub fn unweave(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
 /// Generates the forward auto-differentiation function for a given function.
 ///
-/// E.g.
 /// ```
-/// #[forward_autodiff]
+/// #[rust_ad::forward_autodiff]
 /// fn multi(x: f32, y: f32) -> f32 {
 ///     let a = x.powi(2i32);
 ///     let b = x * 2f32;
@@ -187,6 +195,7 @@ pub fn unweave(_attr: TokenStream, item: TokenStream) -> TokenStream {
 ///     assert_eq!(der_y, -0.08f32); // -2/y^2
 /// }
 /// ```
+/// 
 /// Much like a derive macro, this is appended to your code, the original `function_name` function remains unedited.
 #[proc_macro_attribute]
 pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -320,43 +329,23 @@ pub fn dup(_item: TokenStream) -> TokenStream {
 
 /// Generates the reverse auto-differentiation function for a given function.
 ///
-/// E.g.
 /// ```
 /// #[rust_ad::reverse_autodiff]
-/// fn function_name(x: f32, y: f32) -> f32 {
-///     let a = 7.0f32 * x;
-///     let b = 3f32 * x;
-///     let c = x + b;
-///     let d = y + b + c;
-///     return d;
+/// fn multi(x: f32, y: f32) -> f32 {
+///     let a = x.powi(2i32);
+///     let b = x * 2f32;
+///     let c = 2f32 / y;
+///     let f = a + b + c;
+///     return f;
+/// }
+/// fn main() {
+///     let (f, der_x, der_y) = __rev_multi(3f32, 5f32, 1f32);
+///     assert_eq!(f, 15.4f32);
+///     assert_eq!(der_x, 8f32); // 2(x+1)
+///     assert_eq!(der_y, -0.08f32); // -2/y^2
 /// }
 /// ```
-/// Expands to:
-/// ```
-/// fn __rev_function_name(x: f32, y: f32, __der_d: f32) -> (f32, f32, f32) {
-///     let (x0, x1, x2) = (x.clone(), x.clone(), x.clone());
-///     let (y0,) = (y.clone(),);
-///     let a = 7.0f32 * x0;
-///     let b = 3f32 * x1;
-///     let (b0, b1) = (b.clone(), b.clone());
-///     let c = x2 + b0;
-///     let (c0,) = (c.clone(),);
-///     let _d = y0 + b1;
-///     let (_d0,) = (_d.clone(),);
-///     let d = _d0 + c0;
-///     let (__der__d0, __der_c0) = (__der_d.clone(), __der_d.clone());
-///     let __der__d = __der__d0;
-///     let (__der_y0, __der_b1) = (__der__d.clone(), __der__d.clone());
-///     let __der_c = __der_c0;
-///     let (__der_x2, __der_b0) = (__der_c.clone(), __der_c.clone());
-///     let __der_b = __der_b0 + __der_b1;
-///     let __der_x1 = 3f32 * b;
-///     let __der_x0 = 7.0f32 * a;
-///     let __der_y = __der_y0;
-///     let __der_x = __der_x0 + __der_x1 + __der_x2;
-///     return (d, __der_x, __der_y);
-/// }
-/// ```
+/// 
 /// Much like a derive macro, this is appended to your code, the original `function_name` function remains unedited.
 #[proc_macro_attribute]
 pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -369,14 +358,15 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let function_holder = function.clone();
 
-    // Add input derivatives to output signature & validates output signature.
-    // ---------------------------------------------------------------------------
-    let return_stmt = match reverse_update_signature(&mut function) {
-        Ok(rtn_stmt) => rtn_stmt,
-        Err(rtn) => return rtn,
-    };
+    let function_inputs = function.sig.inputs.iter()
+    .map(|fn_arg| {
+        let ty = fn_arg.typed().expect("reverse: sig not type");
+        let pat = ty.pat.ident().expect("reverse: sig not ident");
+        pat.ident.to_string()
+    })
+    .collect::<Vec<_>>();
 
-    // Unwraps nested binary expressions.
+    // Unwraps nested binary expressions
     // ---------------------------------------------------------------------------
     let statements = function
         .block
@@ -386,103 +376,47 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
         .collect::<Vec<_>>();
     function.block.stmts = statements;
 
-    // Counts number of times each variable appears.
+    // Add input derivatives to output signature & validates output signature.
     // ---------------------------------------------------------------------------
-    let mut counts = HashMap::new();
-    for stmt in function.block.stmts.iter_mut() {
-        // eprintln!("counting: {}, {:#?}",index,stmt);
-        if let syn::Stmt::Local(local) = stmt {
-            if let Some(init) = &mut local.init {
-                if let syn::Expr::Binary(bin) = &mut *init.1 {
-                    if let syn::Expr::Path(expr_path) = &mut *bin.left {
-                        let ident = &expr_path.path.segments[0].ident;
+    let return_stmt = match reverse_update_signature(&mut function) {
+        Ok(rtn_stmt) => rtn_stmt,
+        Err(rtn) => return rtn,
+    };
 
-                        let count = add_insert(&mut counts, format!("{}", ident));
-                        expr_path.path.segments[0].ident =
-                            syn::Ident::new(&format!("{}{}", ident, count), ident.span());
-                    }
-                    if let syn::Expr::Path(expr_path) = &mut *bin.right {
-                        let ident = &expr_path.path.segments[0].ident;
-                        let count = add_insert(&mut counts, format!("{}", ident));
-                        expr_path.path.segments[0].ident =
-                            syn::Ident::new(&format!("{}{}", ident, count), ident.span());
-                    }
-                }
-            }
-        }
-    }
-
-    // Duplicates inputs for each usage.
+    // Propagates types through function
     // ---------------------------------------------------------------------------
-    let mut dup_inputs = Vec::new();
-    // `.rev()` is unnecessary here, but it declare dupes of inputs in order that inputs are declared, so it's nice.
-    for input in function.sig.inputs.iter() {
-        match input {
-            syn::FnArg::Typed(t) => {
-                match &*t.pat {
-                    syn::Pat::Ident(i) => {
-                        let ident_str = format!("{}", i.ident);
-                        if let Some(count) = counts.remove(&ident_str) {
-                            let output = format!(
-                                "let ({}) = rust_ad::dup!({},{});",
-                                (0..count)
-                                    .map(|c| format!("{}{},", ident_str, c))
-                                    .collect::<String>(),
-                                ident_str,
-                                count
-                            );
-                            // eprintln!("here? {}",output);
-                            let new_stmt: syn::Stmt = syn::parse_str(&output).unwrap();
-                            // eprintln!("here??");
-                            dup_inputs.push(new_stmt);
-                        }
-                    }
-                    _ => panic!("All function inputs need to be identified"),
-                }
-            }
-            _ => panic!("All function inputs need to be typed"),
-        }
-    }
-
-    // Duplicates variables for each usage.
-    // ---------------------------------------------------------------------------
-    let mut dup_stmts = Vec::new();
-    for stmt in function.block.stmts.iter() {
-        let mut joint = vec![stmt.clone()];
-        if let syn::Stmt::Local(local) = stmt {
-            if let syn::Pat::Ident(pat_ident) = &local.pat {
-                let str_ident = pat_ident.ident.to_string();
-                if let Some(count) = counts.get(&str_ident) {
-                    let new_str = format!(
-                        "let ({}) = rust_ad::dup!({},{});",
-                        (0..*count)
-                            .map(|c| format!("{}{},", str_ident, c))
-                            .collect::<String>(),
-                        str_ident,
-                        count
-                    );
-                    let new_stmt: syn::Stmt = syn::parse_str(&new_str).unwrap();
-                    joint.push(new_stmt);
-                }
-            }
-        }
-        dup_stmts.append(&mut joint);
-    }
-    dup_inputs.append(&mut dup_stmts);
-    function.block.stmts = dup_inputs;
-
-    // Gets types
     let type_map = propagate_types(&function);
 
     // Generates reverse mode code
     // ---------------------------------------------------------------------------
-    let mut reverse_stmts = function
-        .block
-        .stmts
-        .iter()
-        .rev()
-        .filter_map(|s| reverse_derivative(s, &type_map))
-        .collect::<Vec<_>>();
+    let mut component_map = HashMap::new();
+
+    let mut rev_iter = function.block.stmts.iter().rev();
+
+    let mut reverse_stmts = Vec::new();
+    if let Some(first) = rev_iter.next() {
+        if let Some(der) = reverse_derivative(first, &type_map, &mut component_map) {
+            reverse_stmts.push(der);
+        }
+    }
+    while let Some(next) = rev_iter.next() {
+        if let Some(acc) = reverse_accumulate_derivative(next,&component_map) {
+            reverse_stmts.push(acc);
+        }
+        if let Some(der) = reverse_derivative(next, &type_map, &mut component_map) {
+            reverse_stmts.push(der);
+        }
+    }
+    reverse_stmts.push(reverse_accumulate_inputs(&function_inputs,&component_map,&type_map));
+    // let mut reverse_stmts = function
+    //     .block
+    //     .stmts
+    //     .iter()
+    //     .rev()
+    //     .filter_map(|s| reverse_derivative(s, &type_map, &mut component_map))
+    //     .collect::<Vec<_>>();
+
+    // eprintln!("component_map: {:?}", component_map);
 
     function.block.stmts.append(&mut reverse_stmts);
     // Appends return statement after adding reverse code.

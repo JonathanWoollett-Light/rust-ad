@@ -30,6 +30,15 @@ pub const RECEIVER_PREFIX: &'static str = "r";
 /// Prefix used for flattening retrn statements;
 pub const RETURN_SUFFIX: &'static str = "rtn";
 
+/// Insert key into map with initial value element or append to existing value
+pub fn append_insert(key: &str, value: String, map: &mut HashMap<String, Vec<String>>) {
+    if let Some(entry) = map.get_mut(key) {
+        entry.push(value);
+    } else {
+        map.insert(String::from(key), vec![value]);
+    }
+}
+
 /// Gets type of given expression (only supports literals and paths)
 pub fn expr_type(expr: &syn::Expr, type_map: &HashMap<String, String>) -> Result<String, String> {
     match expr {

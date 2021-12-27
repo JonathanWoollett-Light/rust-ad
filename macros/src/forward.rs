@@ -113,7 +113,7 @@ pub fn forward_derivative(
                 let out_ident = local
                     .pat
                     .ident()
-                    .expect("forward_add: not ident")
+                    .expect("forward_derivative: not ident")
                     .ident
                     .to_string();
                 // This `y`
@@ -149,7 +149,7 @@ pub fn forward_derivative(
                 let out_ident = local
                     .pat
                     .ident()
-                    .expect("forward_add: not ident")
+                    .expect("forward_derivative: not ident")
                     .ident
                     .to_string();
                 // This is type of `y`
