@@ -2,31 +2,34 @@ use crate::{traits::*, utils::*};
 
 use crate::*;
 
-/// Derivative of express for given expression with respect to itself, for a given input variable (only supports literals and paths).
-fn der_wrt(expr: &syn::Expr, input_var: &str, function_inputs: &[String]) -> String {
+/// Gets cumulative derivative for given expression for a given input variable (only supports literals and paths).
+/// 
+/// This is difficult to explain here. 
+/// TODO A good explanation.
+fn cumulative_derivative_wrt(expr: &syn::Expr, input_var: &str, function_inputs: &[String]) -> String {
     match expr {
-        // d/dx(7) is always 0 irrespective of `x`
+        // There is no cummulative derivative for literals.
         syn::Expr::Lit(_) => String::from("Zero::zero()"),
         syn::Expr::Path(path_expr) => {
-            // x is the left or right of binary expression typically, its the component, so if its ident
+            // x typically is the left or right of binary expression, regardless we are doing d/dx(expr) so at this we got 
             let x = path_expr.path.segments[0].ident.to_string();
 
             // δa/δa = a_ (input value)
             if x == input_var {
-                // d/dx(x) * a_ (where `a_` is our cumulative derivative)
+                // d/dx(x) * a_ (where `a_` is our seed cumulative derivative)
                 der!(input_var)
             }
-            // If `x` is an input, then it with respect to another input is `Zero::zero()` since the inputs don't are presumed to be independant.
+            // If `x` is an input, then it with respect to another input is `Zero::zero()` since the inputs are presumed to be independant.
             else if function_inputs.contains(&x) {
                 String::from("Zero::zero()")
             }
-            // Nnot input, so needs to be relative to some function.
+            // Not input, so needs to be relative to some function.
             else {
                 // d/dx(x) * b_wrt_a (where `b_wrt_a` is our cumulative derivative)
                 wrt!(x, input_var)
             }
         }
-        _ => panic!("der_wrt: unsupported expr"),
+        _ => panic!("cumulative_derivative_wrt: unsupported expr"),
     }
 }
 /// ```ignore
@@ -59,8 +62,8 @@ pub fn forward_add(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
         .map(|input| {
             format!(
                 "{dx1}+{dx2}",
-                dx1 = der_wrt(&*bin_expr.left, input,function_inputs),
-                dx2 = der_wrt(&*bin_expr.right, input,function_inputs)
+                dx1 = cumulative_derivative_wrt(&*bin_expr.left, input,function_inputs),
+                dx2 = cumulative_derivative_wrt(&*bin_expr.right, input,function_inputs)
             )
         })
         .intersperse(String::from(","))
@@ -98,8 +101,8 @@ pub fn forward_sub(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
         .map(|input| {
             format!(
                 "{dx1}-{dx2}",
-                dx1 = der_wrt(&*bin_expr.left, input,function_inputs),
-                dx2 = der_wrt(&*bin_expr.right, input,function_inputs)
+                dx1 = cumulative_derivative_wrt(&*bin_expr.left, input,function_inputs),
+                dx2 = cumulative_derivative_wrt(&*bin_expr.right, input,function_inputs)
             )
         })
         .intersperse(String::from(","))
@@ -141,8 +144,8 @@ pub fn forward_mul(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
                 "{x2}*{dx1}+{x1}*{dx2}",
                 x1 = expr_str(l),
                 x2 = expr_str(r),
-                dx1 = der_wrt(l, input,function_inputs),
-                dx2 = der_wrt(r, input,function_inputs)
+                dx1 = cumulative_derivative_wrt(l, input,function_inputs),
+                dx2 = cumulative_derivative_wrt(r, input,function_inputs)
             )
         })
         .intersperse(String::from(","))
@@ -188,8 +191,8 @@ pub fn forward_div(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
                 "{dx1}*{x2} - {dx2}*{x2}*{x2}/{x1}",
                 x1 = expr_str(l),
                 x2 = expr_str(r),
-                dx1 = der_wrt(l, input,function_inputs),
-                dx2 = der_wrt(r, input,function_inputs)
+                dx1 = cumulative_derivative_wrt(l, input,function_inputs),
+                dx2 = cumulative_derivative_wrt(r, input,function_inputs)
             )
         })
         .intersperse(String::from(","))

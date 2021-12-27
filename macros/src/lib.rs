@@ -854,6 +854,6 @@ fn propagate_types(func: &syn::ItemFn) -> HashMap<String, String> {
             }
         }
     }
-    eprintln!("final map: {:?}", map);
+    // eprintln!("final map: {:?}", map);
     map
 }
