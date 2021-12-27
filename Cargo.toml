@@ -8,7 +8,7 @@ license = "Apache-2.0"
 repository = "https://github.com/JonathanWoollett-Light/rust-ad"
 documentation = "https://docs.rs/rust-ad/"
 readme = "README.md"
-exclude = ["./main.rs"]
+exclude = ["/src/main.rs"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
