@@ -260,7 +260,7 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
         .type_()
         .expect("forward: return not typed")
         .path()
-        .expect("forward: return not path")
+        .expect("forward: return not path -- Currently only returning a single variable is support e.g. `return a;`")
         .path
         .segments[0]
         .ident;
@@ -567,7 +567,8 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
                         .pat
                         .ident_mut()
                         .expect("unwrap: left not ident")
-                        .ident = syn::parse_str(&left_ident).expect("unwrap: left ident parse fail");
+                        .ident =
+                        syn::parse_str(&left_ident).expect("unwrap: left ident parse fail");
                     *left_local.init.as_mut().unwrap().1 = syn::Expr::Binary(left_bin_expr.clone());
                     // Recurse
                     statements.append(&mut unwrap_statement(&left_stmt));
@@ -598,7 +599,8 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
                         .pat
                         .ident_mut()
                         .expect("unwrap: right not ident")
-                        .ident = syn::parse_str(&right_ident).expect("unwrap: right ident parse fail");
+                        .ident =
+                        syn::parse_str(&right_ident).expect("unwrap: right ident parse fail");
                     *right_local.init.as_mut().unwrap().1 =
                         syn::Expr::Binary(right_bin_expr.clone());
                     // Recurse
@@ -642,7 +644,8 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
                             .pat
                             .ident_mut()
                             .expect("unwrap: function not ident")
-                            .ident = syn::parse_str(&func_ident).expect("unwrap: function ident parse fail");
+                            .ident =
+                            syn::parse_str(&func_ident).expect("unwrap: function ident parse fail");
                         *func_local.init.as_mut().unwrap().1 =
                             syn::Expr::Binary(arg_bin_expr.clone());
                         // Recurse
@@ -681,7 +684,8 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
                             .pat
                             .ident_mut()
                             .expect("unwrap: receiver not ident")
-                            .ident = syn::parse_str(&reciver_ident).expect("unwrap: receiver ident parse fail");
+                            .ident = syn::parse_str(&reciver_ident)
+                            .expect("unwrap: receiver ident parse fail");
                         *reciver_local.init.as_mut().unwrap().1 =
                             syn::Expr::Binary(bin_expr.clone());
                         // Recurse
@@ -720,7 +724,8 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
                             .pat
                             .ident_mut()
                             .expect("unwrap: method not ident")
-                            .ident = syn::parse_str(&func_ident).expect("unwrap: method ident parse fail");
+                            .ident =
+                            syn::parse_str(&func_ident).expect("unwrap: method ident parse fail");
                         *func_local.init.as_mut().unwrap().1 =
                             syn::Expr::Binary(arg_bin_expr.clone());
                         // Recurse
@@ -743,14 +748,14 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
                 }
             }
         }
-    }
-    else if let syn::Stmt::Semi(semi_expr,_) = stmt {
+    } else if let syn::Stmt::Semi(semi_expr, _) = stmt {
         if let syn::Expr::Return(rtn_expr) = semi_expr {
             if let Some(rtn) = &rtn_expr.expr {
                 if let syn::Expr::Binary(_bin_expr) = &**rtn {
-                    let new_ident = format!("__{}",RETURN_SUFFIX);
-                    let new_stmt_str = format!("let {};",new_ident);
-                    let mut new_stmt: syn::Stmt = syn::parse_str(&new_stmt_str).expect("unwrap: return stmt parse fail");
+                    let new_ident = format!("__{}", RETURN_SUFFIX);
+                    let new_stmt_str = format!("let {};", new_ident);
+                    let mut new_stmt: syn::Stmt =
+                        syn::parse_str(&new_stmt_str).expect("unwrap: return stmt parse fail");
                     let new_local = new_stmt
                         .local_mut()
                         .expect("unwrap: return statement not local");
@@ -758,18 +763,18 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
                         .pat
                         .ident_mut()
                         .expect("unwrap: return not ident")
-                        .ident = syn::parse_str(&new_ident).expect("unwrap: return ident parse fail");
-                    
+                        .ident =
+                        syn::parse_str(&new_ident).expect("unwrap: return ident parse fail");
+
                     // TODO Create `eq_token` some better way.
                     let eq_token = syn::parse_str("=").expect("unwrap: fml this is dumb");
 
-                    new_local.init = Some((eq_token,rtn.clone()));
+                    new_local.init = Some((eq_token, rtn.clone()));
                     // Recurse
                     statements.append(&mut unwrap_statement(&new_stmt));
 
-                    
                     // Updates statement to contain variable referencing new statement.
-                    let new_rtn_str = format!("return {};",new_ident);
+                    let new_rtn_str = format!("return {};", new_ident);
                     let new_rtn_expr: syn::Stmt =
                         syn::parse_str(&new_rtn_str).expect("unwrap: return parse fail");
                     base_statement = new_rtn_expr;

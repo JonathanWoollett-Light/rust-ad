@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 
 mod derivatives;
-pub use derivatives::{Type,cumulative_derivative_wrt_rt};
+pub use derivatives::{cumulative_derivative_wrt_rt, Type};
 
 mod dict;
 pub use dict::*;
@@ -31,36 +31,43 @@ pub const RECEIVER_PREFIX: &'static str = "r";
 pub const RETURN_SUFFIX: &'static str = "rtn";
 
 /// Gets type of given expression (only supports literals and paths)
-pub fn expr_type(expr: &syn::Expr, type_map: &HashMap<String, String>) -> Result<String,String> {
+pub fn expr_type(expr: &syn::Expr, type_map: &HashMap<String, String>) -> Result<String, String> {
     match expr {
         syn::Expr::Path(path_expr) => {
             let var = path_expr.path.segments[0].ident.to_string();
-            match type_map
-            .get(&var)
-            {
+            match type_map.get(&var) {
                 Some(ident) => Ok(ident.clone()),
-                None => Err(format!("expr_type: `{}` not found in type map `{:?}`",var,type_map))
+                None => Err(format!(
+                    "expr_type: `{}` not found in type map `{:?}`",
+                    var, type_map
+                )),
             }
-        },
+        }
         syn::Expr::Lit(lit_expr) => literal_type(lit_expr),
         _ => panic!("expr_type: unsupported type"),
     }
 }
 
 /// Gets type of literal (only supproted numerical types)
-pub fn literal_type(expr_lit: &syn::ExprLit) -> Result<String,String> {
+pub fn literal_type(expr_lit: &syn::ExprLit) -> Result<String, String> {
     match &expr_lit.lit {
         syn::Lit::Float(float_lit) => {
             // Float literal is either f32 or f64
             let float_str = float_lit.to_string();
 
             let n = float_str.len();
-            if !(n>3) {
-                return Err("All literals need a type suffix e.g. `10.2f32` -- Bad float literal (len)".into());
+            if !(n > 3) {
+                return Err(
+                    "All literals need a type suffix e.g. `10.2f32` -- Bad float literal (len)"
+                        .into(),
+                );
             }
             let float_type_str = &float_str[n - 3..n];
             if !(float_type_str == "f32" || float_type_str == "f64") {
-                return Err("All literals need a type suffix e.g. `10.2f32` -- Bad float literal (type)".into());
+                return Err(
+                    "All literals need a type suffix e.g. `10.2f32` -- Bad float literal (type)"
+                        .into(),
+                );
             }
             Ok(String::from(float_type_str))
         }
@@ -104,7 +111,9 @@ pub fn literal_type(expr_lit: &syn::ExprLit) -> Result<String,String> {
 
             match large_type.or(standard_type).or(short_type) {
                 Some(int_lit_some) => Ok(int_lit_some),
-                None => Err("All literals need a type suffix e.g. `10.2f32` -- Bad integer literal".into()),
+                None => Err(
+                    "All literals need a type suffix e.g. `10.2f32` -- Bad integer literal".into(),
+                ),
             }
         }
         _ => Err("Unsupported literal (only integer and float literals are supported)".into()),
@@ -136,7 +145,8 @@ pub fn method_signature(
     // Gets method identifier
     let method_str = method_expr.method.to_string();
     // Gets receiver type
-    let receiver_type_str = expr_type(&*method_expr.receiver, type_map).expect("method_signature: bad expr");
+    let receiver_type_str =
+        expr_type(&*method_expr.receiver, type_map).expect("method_signature: bad expr");
     // Gets argument types
     let arg_types = method_expr
         .args
@@ -174,8 +184,10 @@ pub fn operation_signature(
     type_map: &HashMap<String, String>,
 ) -> OperationSignature {
     // Gets types of lhs and rhs of expression
-    let left_type = expr_type(&*operation_expr.left, type_map).expect("operation_signature: bad left");
-    let right_type = expr_type(&*operation_expr.right, type_map).expect("operation_signature: bad right");
+    let left_type =
+        expr_type(&*operation_expr.left, type_map).expect("operation_signature: bad left");
+    let right_type =
+        expr_type(&*operation_expr.right, type_map).expect("operation_signature: bad right");
     // Creates operation signature struct
     OperationSignature::from((left_type, operation_expr.op, right_type))
 }

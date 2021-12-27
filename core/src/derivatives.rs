@@ -23,7 +23,7 @@ use crate::*;
 /// 4. Where the component is an input, but we are not looking at the cumulative derivative for this
 ///     input, it is `0.` since we don't have cumulative deriatives for inputs with respect to each
 ///     other with `1. * x_wrt_y`, `x_wrt_y` doens't exist and we presume inputs independant.
-fn cumulative_derivative_wrt<const OUT_TYPE:Type>(
+fn cumulative_derivative_wrt<const OUT_TYPE: Type>(
     expr: &syn::Expr,
     input_var: &str,
     function_inputs: &[String],
@@ -56,7 +56,7 @@ pub fn cumulative_derivative_wrt_rt(
     expr: &syn::Expr,
     input_var: &str,
     function_inputs: &[String],
-    out_type: &Type
+    out_type: &Type,
 ) -> String {
     match expr {
         // Result 1
@@ -83,11 +83,22 @@ pub fn cumulative_derivative_wrt_rt(
 }
 #[derive(PartialEq, Eq)]
 pub enum Type {
-    F32,F64,U8,U16,U32,U64,U128,I8,I16,I32,I64,I128
+    F32,
+    F64,
+    U8,
+    U16,
+    U32,
+    U64,
+    U128,
+    I8,
+    I16,
+    I32,
+    I64,
+    I128,
 }
 impl Type {
     pub fn zero(&self) -> String {
-        format!("0{}",self.to_string())
+        format!("0{}", self.to_string())
     }
 }
 impl ToString for Type {
@@ -104,13 +115,14 @@ impl ToString for Type {
             Self::I16 => "i16",
             Self::I32 => "i32",
             Self::I64 => "i64",
-            Self::I128 => "i128"
-        }.into()
+            Self::I128 => "i128",
+        }
+        .into()
     }
 }
 impl TryFrom<&str> for Type {
     type Error = &'static str;
-    fn try_from(string:&str) -> Result<Self,Self::Error> {
+    fn try_from(string: &str) -> Result<Self, Self::Error> {
         match string {
             "f32" => Ok(Self::F32),
             "f64" => Ok(Self::F64),
@@ -124,15 +136,12 @@ impl TryFrom<&str> for Type {
             "i32" => Ok(Self::I32),
             "i64" => Ok(Self::I64),
             "i128" => Ok(Self::I128),
-            _ => Err("Type::try_from unsupported type")
+            _ => Err("Type::try_from unsupported type"),
         }
     }
 }
-/// ```ignore
-/// y = add (x1, x2)
-/// dy = add (dx1, dx2)
-/// ```
-pub fn forward_add<const OUT:Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
+
+pub fn forward_add<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     let local = stmt.local().expect("forward_add: not local");
     let bin_expr = &local
         .init
@@ -167,11 +176,8 @@ pub fn forward_add<const OUT:Type>(stmt: &syn::Stmt, function_inputs: &[String])
     let stmt_str = format!("let ({}) = ({});", idents, deriatives);
     syn::parse_str(&stmt_str).expect("forward_add: parse fail")
 }
-/// ```ignore
-/// y = sub (x1, x2)
-/// dy = sub (dx1, dx2)
-/// ```
-pub fn forward_sub<const OUT:Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
+
+pub fn forward_sub<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     let local = stmt.local().expect("forward_sub: not local");
     let bin_expr = &local
         .init
@@ -206,11 +212,8 @@ pub fn forward_sub<const OUT:Type>(stmt: &syn::Stmt, function_inputs: &[String])
     let stmt_str = format!("let ({}) = ({});", idents, deriatives);
     syn::parse_str(&stmt_str).expect("forward_sub: parse fail")
 }
-/// ```ignore
-/// y = mul (x1, x2)
-/// dy = add (mul (x2, dx1), mul (x1, dx2))
-/// ```
-pub fn forward_mul<const OUT:Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
+
+pub fn forward_mul<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     let local = stmt.local().expect("forward_mul: not local");
     let bin_expr = &local
         .init
@@ -249,15 +252,8 @@ pub fn forward_mul<const OUT:Type>(stmt: &syn::Stmt, function_inputs: &[String])
     let stmt_str = format!("let ({}) = ({});", idents, deriatives);
     syn::parse_str(&stmt_str).expect("forward_add: parse fail")
 }
-/// ```ignore
-/// y = div (x1, x2)
-/// dy = add (div (dx1, x2), negate (mul (div (x1, mul (x2, x2)), dx2)))
-/// ```
-/// Simpler:
-/// ```ignore
-/// dy = dx1*x2 - dx2*x2*x2/x1
-/// ```
-pub fn forward_div<const OUT:Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
+
+pub fn forward_div<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     let local = stmt.local().expect("forward_div: not local");
     let bin_expr = &local
         .init
@@ -279,16 +275,19 @@ pub fn forward_div<const OUT:Type>(stmt: &syn::Stmt, function_inputs: &[String])
         .intersperse(String::from(","))
         .collect::<String>();
 
-    let (l, r) = (&*bin_expr.left, &*bin_expr.right);
+    // d/d(numerator) = 1/denominator, d/d(denominator) = -numerator/(denominator*denominator)
+    // 1/denominator -numerator/(denominator*denominator) simplifies to
+    let (numerator, denominator) = (&*bin_expr.left, &*bin_expr.right);
     let deriatives = function_inputs
         .iter()
         .map(|input| {
             format!(
-                "{dx1}*{x2} - {dx2}*{x2}*{x2}/{x1}",
-                x1 = expr_str(l),
-                x2 = expr_str(r),
-                dx1 = cumulative_derivative_wrt::<OUT>(l, input, function_inputs),
-                dx2 = cumulative_derivative_wrt::<OUT>(r, input, function_inputs)
+                "{dx1} * (1{val_type} / {denominator}) + {dx2}* (-{numerator}/({denominator}*{denominator}))",
+                val_type = OUT.to_string(),
+                numerator = expr_str(numerator),
+                denominator = expr_str(denominator),
+                dx1 = cumulative_derivative_wrt::<OUT>(numerator, input, function_inputs),
+                dx2 = cumulative_derivative_wrt::<OUT>(denominator, input, function_inputs)
             )
         })
         .intersperse(String::from(","))
@@ -296,9 +295,8 @@ pub fn forward_div<const OUT:Type>(stmt: &syn::Stmt, function_inputs: &[String])
     let stmt_str = format!("let ({}) = ({});", idents, deriatives);
     syn::parse_str(&stmt_str).expect("forward_div: parse fail")
 }
-// TODO Can we reduce/Remove code duplication between `forward_powi_f64` and `forward_powi_f32`?
 /// Deriative of f32::powi(i32) operation.
-pub fn forward_powi<const OUT:Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
+pub fn forward_powi<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     assert!(OUT == Type::F32 || OUT == Type::F64);
     let local = stmt.local().expect("forward_powi: not local");
     let init = &local.init;
