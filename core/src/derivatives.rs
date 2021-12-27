@@ -494,6 +494,60 @@ pub fn forward_ln<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String])
     let stmt_str = format!("let ({}) = ({});", idents, deriatives);
     syn::parse_str(&stmt_str).expect("forward_ln: parse fail")
 }
+/// Forward deriative of [`log`](https://doc.rust-lang.org/std/primitive.f32.html#method.log).
+pub fn forward_log<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
+    assert!(OUT == Type::F32 || OUT == Type::F64);
+    let local = stmt.local().expect("forward_log: not local");
+    let init = &local.init;
+    let method_expr = init
+        .as_ref()
+        .unwrap()
+        .1
+        .method_call()
+        .expect("forward_log: not method");
+
+    let val_ident = local
+        .pat
+        .ident()
+        .expect("forward_log: not ident")
+        .ident
+        .to_string();
+
+    let idents = function_inputs
+        .iter()
+        .map(|input| wrt!(val_ident, input))
+        .intersperse(String::from(","))
+        .collect::<String>();
+
+    let (log_input, base) = (
+        expr_str(&*method_expr.receiver),
+        expr_str(&method_expr.args[0]),
+    );
+    let deriatives = function_inputs
+        .iter()
+        .map(|input| {
+            if *input == log_input {
+                format!(
+                    "1{val_type} / ( {log_input} * {base}.ln() )",
+                    log_input = log_input,
+                    base = base,
+                    val_type = OUT.to_string()
+                )
+            } else if *input == base {
+                format!(
+                    "-{log_input}.ln() / ( {base} * {base}.ln() * {base}.ln() )",
+                    log_input = log_input,
+                    base = base,
+                )
+            } else {
+                OUT.zero()
+            }
+        })
+        .intersperse(String::from(","))
+        .collect::<String>();
+    let stmt_str = format!("let ({}) = ({});", idents, deriatives);
+    syn::parse_str(&stmt_str).expect("forward_log: parse fail")
+}
 
 /// Reverse deriative of [std::ops::Add].
 pub fn reverse_add<const OUT: Type>(
@@ -943,5 +997,82 @@ pub fn reverse_ln<const OUT: Type>(
         _ => panic!("reverse_ln: Unsupported bin expr"),
     };
     let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_ln: parse fail");
+    Some(new_stmt)
+}
+/// Reverse deriative of [`log`](https://doc.rust-lang.org/std/primitive.f32.html#method.log).
+pub fn reverse_log<const OUT: Type>(
+    stmt: &syn::Stmt,
+    component_map: &mut HashMap<String, Vec<String>>,
+) -> Option<syn::Stmt> {
+    assert!(OUT == Type::F32 || OUT == Type::F64);
+    let local = stmt.local().expect("reverse_log: not local");
+    let init = &local.init;
+    let method_expr = init
+        .as_ref()
+        .unwrap()
+        .1
+        .method_call()
+        .expect("reverse_log: not method");
+
+    let lis = local
+        .pat
+        .ident()
+        .expect("reverse_log: not ident")
+        .ident
+        .to_string();
+
+    let (input, base) = (&*method_expr.receiver, &method_expr.args[0]);
+
+    let stmt_str = match (input, base) {
+        (syn::Expr::Path(expr_path_l), syn::Expr::Path(expr_path_r)) => {
+            let (input, base) = (
+                expr_path_l.path.segments[0].ident.to_string(),
+                expr_path_r.path.segments[0].ident.to_string(),
+            );
+            append_insert(&input, lis.clone(), component_map);
+            append_insert(&base, lis.clone(), component_map);
+            format!(
+                "let ({},{}) = {dx} * ( 1{val_type} / ( {input} * {base}.ln() )), {dx} * (-{input}.ln() / ( {base} * {base}.ln() * {base}.ln() ));",
+                wrt!(input,lis),
+                wrt!(base,lis),
+                input = input,
+                base = base,
+                dx = der!(lis),
+                val_type = OUT.to_string()
+            )
+        }
+        (syn::Expr::Path(expr_path_l), syn::Expr::Lit(expr_lit_r)) => {
+            let (input, base) = (
+                expr_path_l.path.segments[0].ident.to_string(),
+                lit_str(expr_lit_r),
+            );
+            append_insert(&input, lis.clone(), component_map);
+            format!(
+                "let {} = {} * ( 1{val_type} / ( {input} * {base}.ln() ));",
+                wrt!(input, lis),
+                der!(lis),
+                base = base,
+                input = input,
+                val_type = OUT.to_string()
+            )
+        }
+        (syn::Expr::Lit(expr_lit_l), syn::Expr::Path(expr_path_r)) => {
+            let (input, base) = (
+                lit_str(expr_lit_l),
+                expr_path_r.path.segments[0].ident.to_string(),
+            );
+            append_insert(&base, lis.clone(), component_map);
+            format!(
+                "let {} = {} * (-{input}.ln() / ( {base} * {base}.ln() * {base}.ln() );",
+                wrt!(base, lis),
+                der!(lis),
+                input = input,
+                base = base,
+            )
+        },
+        (syn::Expr::Lit(_), syn::Expr::Lit(_)) => return None,
+        _ => panic!("reverse_log: Unsupported bin expr"),
+    };
+    let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_log: parse fail");
     Some(new_stmt)
 }
