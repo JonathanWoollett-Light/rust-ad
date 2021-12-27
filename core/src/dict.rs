@@ -188,7 +188,9 @@ lazy_static::lazy_static! {
     pub static ref SUPPORTED_METHODS: MethodMap = {
         let mut map = MethodMap::new();
         map.insert(("powi","f32",&["i32"]).into(),ProcedureOutputs::new("f32",Some(forward_powi::<{Type::F32}>),Some(reverse_powi::<{Type::F32}>)));
+        map.insert(("powi","f32",&["i32"]).into(),ProcedureOutputs::new("f32",Some(forward_powf::<{Type::F32}>),Some(reverse_powf::<{Type::F32}>)));
         map.insert(("powi","f64",&["i32"]).into(),ProcedureOutputs::new("f64",Some(forward_powi::<{Type::F64}>),Some(reverse_powi::<{Type::F64}>)));
+        map.insert(("powi","f64",&["i32"]).into(),ProcedureOutputs::new("f64",Some(forward_powf::<{Type::F64}>),Some(reverse_powf::<{Type::F64}>)));
         map
     };
     /// Internal map of currently supported operations.

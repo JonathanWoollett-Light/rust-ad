@@ -6,7 +6,7 @@ use crate::*;
 /// Gets cumulative derivative for given expression for a given input variable (only supports literals and paths).
 ///
 /// This is difficult to explain here.
-/// TODO A good explanation.
+///
 /// In practical application we unwrap all statements such that `let e=2.*b+d;` becomes 2
 ///  statements `let _e=2.*b;` and `let e=_e+d;`, when we do this can optimize this
 ///  function, instead of needing to do `d/db(2.*b+d)` and `d/dd(2.*b+d)` we can
@@ -82,6 +82,7 @@ pub fn cumulative_derivative_wrt_rt(
         _ => panic!("cumulative_derivative_wrt: unsupported expr"),
     }
 }
+
 #[derive(PartialEq, Eq)]
 pub enum Type {
     F32,
@@ -142,6 +143,7 @@ impl TryFrom<&str> for Type {
     }
 }
 
+/// Forward deriative of [std::ops::Add].
 pub fn forward_add<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     let local = stmt.local().expect("forward_add: not local");
     let bin_expr = &local
@@ -177,7 +179,7 @@ pub fn forward_add<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]
     let stmt_str = format!("let ({}) = ({});", idents, deriatives);
     syn::parse_str(&stmt_str).expect("forward_add: parse fail")
 }
-
+/// Forward deriative of [std::ops::Sub].
 pub fn forward_sub<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     let local = stmt.local().expect("forward_sub: not local");
     let bin_expr = &local
@@ -213,7 +215,7 @@ pub fn forward_sub<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]
     let stmt_str = format!("let ({}) = ({});", idents, deriatives);
     syn::parse_str(&stmt_str).expect("forward_sub: parse fail")
 }
-
+/// Forward deriative of [std::ops::Mul].
 pub fn forward_mul<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     let local = stmt.local().expect("forward_mul: not local");
     let bin_expr = &local
@@ -253,7 +255,7 @@ pub fn forward_mul<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]
     let stmt_str = format!("let ({}) = ({});", idents, deriatives);
     syn::parse_str(&stmt_str).expect("forward_add: parse fail")
 }
-
+/// Forward deriative of [std::ops::Div].
 pub fn forward_div<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     let local = stmt.local().expect("forward_div: not local");
     let bin_expr = &local
@@ -296,7 +298,7 @@ pub fn forward_div<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]
     let stmt_str = format!("let ({}) = ({});", idents, deriatives);
     syn::parse_str(&stmt_str).expect("forward_div: parse fail")
 }
-/// Deriative of f32::powi(i32) operation.
+/// Forward deriative of [`powi`](https://doc.rust-lang.org/std/primitive.f32.html#method.powi).
 pub fn forward_powi<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     assert!(OUT == Type::F32 || OUT == Type::F64);
     let local = stmt.local().expect("forward_powi: not local");
@@ -350,7 +352,62 @@ pub fn forward_powi<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String
     let stmt_str = format!("let ({}) = ({});", idents, deriatives);
     syn::parse_str(&stmt_str).expect("forward_powi: parse fail")
 }
+/// Forward deriative of [`powf`](https://doc.rust-lang.org/std/primitive.f32.html#method.powf).
+pub fn forward_powf<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
+    assert!(OUT == Type::F32 || OUT == Type::F64);
+    let local = stmt.local().expect("forward_powf: not local");
+    let init = &local.init;
+    let method_expr = init
+        .as_ref()
+        .unwrap()
+        .1
+        .method_call()
+        .expect("forward_powf: not method");
 
+    let val_ident = local
+        .pat
+        .ident()
+        .expect("forward_powf: not ident")
+        .ident
+        .to_string();
+
+    let idents = function_inputs
+        .iter()
+        .map(|input| wrt!(val_ident, input))
+        .intersperse(String::from(","))
+        .collect::<String>();
+
+    let (base, exponent) = (
+        expr_str(&*method_expr.receiver),
+        expr_str(&method_expr.args[0]),
+    );
+    let deriatives = function_inputs
+        .iter()
+        .map(|input| {
+            if *input == base {
+                format!(
+                    "{exponent} * {base}.powf({exponent} - 1{type_str})",
+                    exponent = exponent,
+                    base = base,
+                    type_str = OUT.to_string()
+                )
+            } else if *input == exponent {
+                format!(
+                    "{base}.powf({exponent}) * {base}.ln()",
+                    exponent = exponent,
+                    base = base
+                )
+            } else {
+                OUT.zero()
+            }
+        })
+        .intersperse(String::from(","))
+        .collect::<String>();
+    let stmt_str = format!("let ({}) = ({});", idents, deriatives);
+    syn::parse_str(&stmt_str).expect("forward_powf: parse fail")
+}
+
+/// Reverse deriative of [std::ops::Add].
 pub fn reverse_add<const OUT: Type>(
     stmt: &syn::Stmt,
     component_map: &mut HashMap<String, Vec<String>>,
@@ -392,6 +449,7 @@ pub fn reverse_add<const OUT: Type>(
     let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_add: parse fail");
     new_stmt
 }
+/// Reverse deriative of [std::ops::Sub].
 pub fn reverse_sub<const OUT: Type>(
     stmt: &syn::Stmt,
     component_map: &mut HashMap<String, Vec<String>>,
@@ -433,6 +491,7 @@ pub fn reverse_sub<const OUT: Type>(
     let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_sub: parse fail");
     new_stmt
 }
+/// Reverse deriative of [std::ops::Mul].
 pub fn reverse_mul<const OUT: Type>(
     stmt: &syn::Stmt,
     component_map: &mut HashMap<String, Vec<String>>,
@@ -487,6 +546,7 @@ pub fn reverse_mul<const OUT: Type>(
     let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_mul: parse fail");
     new_stmt
 }
+/// Reverse deriative of [std::ops::Div].
 pub fn reverse_div<const OUT: Type>(
     stmt: &syn::Stmt,
     component_map: &mut HashMap<String, Vec<String>>,
@@ -555,32 +615,28 @@ pub fn reverse_div<const OUT: Type>(
     new_stmt
 }
 
-/// Deriative of f32::powi(i32) operation.
+/// Reverse deriative of [`powi`](https://doc.rust-lang.org/std/primitive.f32.html#method.powi).
 pub fn reverse_powi<const OUT: Type>(
     stmt: &syn::Stmt,
     component_map: &mut HashMap<String, Vec<String>>,
 ) -> syn::Stmt {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("forward_powi: not local");
+    let local = stmt.local().expect("reverse_powi: not local");
     let init = &local.init;
     let method_expr = init
         .as_ref()
         .unwrap()
         .1
         .method_call()
-        .expect("forward_powi: not method");
+        .expect("reverse_powi: not method");
 
     let lis = local
         .pat
         .ident()
-        .expect("forward_powi: not ident")
+        .expect("reverse_powi: not ident")
         .ident
         .to_string();
 
-    // let (base, exponent) = (
-    //     expr_str(&*method_expr.receiver),
-    //     expr_str(&method_expr.args[0]),
-    // );
     let (base, exponent) = (&*method_expr.receiver, &method_expr.args[0]);
 
     let stmt_str = match (base, exponent) {
@@ -633,5 +689,82 @@ pub fn reverse_powi<const OUT: Type>(
         _ => panic!("reverse_powi: Unsupported bin expr"),
     };
     let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_powi: parse fail");
+    new_stmt
+}
+
+/// Reverse deriative of [`powf`](https://doc.rust-lang.org/std/primitive.f32.html#method.powf).
+pub fn reverse_powf<const OUT: Type>(
+    stmt: &syn::Stmt,
+    component_map: &mut HashMap<String, Vec<String>>,
+) -> syn::Stmt {
+    assert!(OUT == Type::F32 || OUT == Type::F64);
+    let local = stmt.local().expect("reverse_powf: not local");
+    let init = &local.init;
+    let method_expr = init
+        .as_ref()
+        .unwrap()
+        .1
+        .method_call()
+        .expect("reverse_powf: not method");
+
+    let lis = local
+        .pat
+        .ident()
+        .expect("reverse_powf: not ident")
+        .ident
+        .to_string();
+
+    let (base, exponent) = (&*method_expr.receiver, &method_expr.args[0]);
+
+    let stmt_str = match (base, exponent) {
+        (syn::Expr::Path(expr_path_l), syn::Expr::Path(expr_path_r)) => {
+            let (base, exponent) = (
+                expr_path_l.path.segments[0].ident.to_string(),
+                expr_path_r.path.segments[0].ident.to_string(),
+            );
+            append_insert(&base, lis.clone(), component_map);
+            append_insert(&exponent, lis.clone(), component_map);
+            format!(
+                "let ({},{}) = ({dx} * ({exponent} * {base}.powi({exponent}-1{val_type})), {dx} * ({base}.powi({exponent}) * {base}.ln() ) );",
+                wrt!(base,lis),
+                wrt!(exponent,lis),
+                base = base,
+                exponent = exponent,
+                dx = der!(lis),
+                val_type = OUT.to_string()
+            )
+        }
+        (syn::Expr::Path(expr_path_l), syn::Expr::Lit(expr_lit_r)) => {
+            let (base, exponent) = (
+                expr_path_l.path.segments[0].ident.to_string(),
+                lit_str(expr_lit_r),
+            );
+            append_insert(&base, lis.clone(), component_map);
+            format!(
+                "let {} = {} * ({exponent} * {base}.powi({exponent}-1{val_type}));",
+                wrt!(base, lis),
+                der!(lis),
+                base = base,
+                exponent = exponent,
+                val_type = OUT.to_string()
+            )
+        }
+        (syn::Expr::Lit(expr_lit_l), syn::Expr::Path(expr_path_r)) => {
+            let (base, exponent) = (
+                lit_str(expr_lit_l),
+                expr_path_r.path.segments[0].ident.to_string(),
+            );
+            append_insert(&exponent, lis.clone(), component_map);
+            format!(
+                "let {} = {} * ({base}.powi({exponent}) * {base}.ln() );",
+                wrt!(exponent, lis),
+                der!(lis),
+                base = base,
+                exponent = exponent,
+            )
+        }
+        _ => panic!("reverse_powf: Unsupported bin expr"),
+    };
+    let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_powf: parse fail");
     new_stmt
 }
