@@ -24,9 +24,8 @@ extern crate rust_ad;
 // }
 
 #[rust_ad::forward_autodiff]
-fn empty(x: f32) -> f32 {
-    let a = x;
-    return a;
+fn plus(x: f32) -> f32 {
+    return x + 3f32;
 }
 
 fn main() {}

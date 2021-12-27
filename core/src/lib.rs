@@ -26,6 +26,8 @@ pub const REVERSE_MODE_PREFIX: &'static str = "__rev_";
 pub const FUNCTION_PREFFIX: &'static str = "f";
 /// Prefix used for flattening binary expressions as a reciever for a method.
 pub const RECEIVER_PREFIX: &'static str = "r";
+/// Prefix used for flattening retrn statements;
+pub const RETURN_SUFFIX: &'static str = "rtn";
 
 /// Gets type of given expression (only supports literals and paths)
 pub fn expr_type(expr: &syn::Expr, type_map: &HashMap<String, String>) -> String {
