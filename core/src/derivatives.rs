@@ -406,6 +406,50 @@ pub fn forward_powf<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String
     let stmt_str = format!("let ({}) = ({});", idents, deriatives);
     syn::parse_str(&stmt_str).expect("forward_powf: parse fail")
 }
+/// Forward deriative of [`sqrt`](https://doc.rust-lang.org/std/primitive.f32.html#method.sqrt).
+pub fn forward_sqrt<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
+    assert!(OUT == Type::F32 || OUT == Type::F64);
+    let local = stmt.local().expect("forward_sqrt: not local");
+    let init = &local.init;
+    let method_expr = init
+        .as_ref()
+        .unwrap()
+        .1
+        .method_call()
+        .expect("forward_sqrt: not method");
+
+    let val_ident = local
+        .pat
+        .ident()
+        .expect("forward_sqrt: not ident")
+        .ident
+        .to_string();
+
+    let idents = function_inputs
+        .iter()
+        .map(|input| wrt!(val_ident, input))
+        .intersperse(String::from(","))
+        .collect::<String>();
+
+    let base = expr_str(&*method_expr.receiver);
+    let deriatives = function_inputs
+        .iter()
+        .map(|input| {
+            if *input == base {
+                format!(
+                    "1{type_str} / (2{type_str} * {base}.sqrt())",
+                    base = base,
+                    type_str = OUT.to_string()
+                )
+            } else {
+                OUT.zero()
+            }
+        })
+        .intersperse(String::from(","))
+        .collect::<String>();
+    let stmt_str = format!("let ({}) = ({});", idents, deriatives);
+    syn::parse_str(&stmt_str).expect("forward_powf: parse fail")
+}
 
 /// Reverse deriative of [std::ops::Add].
 pub fn reverse_add<const OUT: Type>(
@@ -691,7 +735,6 @@ pub fn reverse_powi<const OUT: Type>(
     let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_powi: parse fail");
     new_stmt
 }
-
 /// Reverse deriative of [`powf`](https://doc.rust-lang.org/std/primitive.f32.html#method.powf).
 pub fn reverse_powf<const OUT: Type>(
     stmt: &syn::Stmt,
@@ -764,6 +807,59 @@ pub fn reverse_powf<const OUT: Type>(
             )
         }
         _ => panic!("reverse_powf: Unsupported bin expr"),
+    };
+    let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_powf: parse fail");
+    new_stmt
+}
+/// Reverse deriative of [`sqrt`](https://doc.rust-lang.org/std/primitive.f64.html#method.sqrt).
+pub fn reverse_sqrt<const OUT: Type>(
+    stmt: &syn::Stmt,
+    component_map: &mut HashMap<String, Vec<String>>,
+) -> syn::Stmt {
+    assert!(OUT == Type::F32 || OUT == Type::F64);
+    let local = stmt.local().expect("reverse_sqrt: not local");
+    let init = &local.init;
+    let method_expr = init
+        .as_ref()
+        .unwrap()
+        .1
+        .method_call()
+        .expect("reverse_sqrt: not method");
+
+    let lis = local
+        .pat
+        .ident()
+        .expect("reverse_sqrt: not ident")
+        .ident
+        .to_string();
+
+    let base = &*method_expr.receiver;
+
+    let stmt_str = match base {
+        syn::Expr::Path(expr_path) => {
+            let base = expr_path.path.segments[0].ident.to_string();
+            append_insert(&base, lis.clone(), component_map);
+            format!(
+                "let {} = ({dx} * ({exponent} * {base}.powi({exponent}-1{val_type})), {dx} * ({base}.powi({exponent}) * {base}.ln() ) );",
+                wrt!(base,lis),
+                base = base,
+                dx = der!(lis),
+                val_type = OUT.to_string()
+            )
+        }
+        syn::Expr::Lit(expr_lit_r) => {
+            let base = lit_str(expr_lit_r);
+            append_insert(&base, lis.clone(), component_map);
+            format!(
+                "let {} = 1{val_type};",
+                wrt!(base, lis),
+                der!(lis),
+                base = base,
+                exponent = exponent,
+                val_type = OUT.to_string()
+            )
+        }
+        _ => panic!("reverse_sqrt: Unsupported bin expr"),
     };
     let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_powf: parse fail");
     new_stmt
