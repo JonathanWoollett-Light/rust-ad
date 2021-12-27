@@ -51,4 +51,4 @@
 pub use rust_ad_macros::*;
 
 #[cfg(test)]
-mod test;
+mod tests;
