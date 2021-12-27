@@ -584,7 +584,7 @@ pub fn reverse_add<const OUT: Type>(
             let r = expr_path_r.path.segments[0].ident.to_string();
             append_insert(&r, lis.clone(), component_map);
             (String::from("_"), wrt!(r, lis))
-        },
+        }
         (syn::Expr::Lit(_), syn::Expr::Lit(_)) => return None,
         _ => panic!("reverse_add: Unsupported bin expr"),
     };
@@ -627,7 +627,7 @@ pub fn reverse_sub<const OUT: Type>(
             let r = expr_path_r.path.segments[0].ident.to_string();
             append_insert(&r, lis.clone(), component_map);
             (String::from("_"), wrt!(r, lis))
-        },
+        }
         (syn::Expr::Lit(_), syn::Expr::Lit(_)) => return None,
         _ => panic!("reverse_sub: Unsupported bin expr"),
     };
@@ -684,7 +684,7 @@ pub fn reverse_mul<const OUT: Type>(
             );
             append_insert(&r, lis.clone(), component_map);
             format!("let {} = {}*{};", wrt!(r, lis), l, der!(lis))
-        },
+        }
         (syn::Expr::Lit(_), syn::Expr::Lit(_)) => return None,
         _ => panic!("reverse_mul: Unsupported bin expr"),
     };
@@ -753,7 +753,7 @@ pub fn reverse_div<const OUT: Type>(
                 denominator,
                 denominator
             )
-        },
+        }
         (syn::Expr::Lit(_), syn::Expr::Lit(_)) => return None,
         _ => panic!("reverse_div: Unsupported bin expr"),
     };
@@ -831,7 +831,7 @@ pub fn reverse_powi<const OUT: Type>(
                 base = base,
                 exponent = exponent,
             )
-        },
+        }
         (syn::Expr::Lit(_), syn::Expr::Lit(_)) => return None,
         _ => panic!("reverse_powi: Unsupported bin expr"),
     };
@@ -908,7 +908,7 @@ pub fn reverse_powf<const OUT: Type>(
                 base = base,
                 exponent = exponent,
             )
-        },
+        }
         (syn::Expr::Lit(_), syn::Expr::Lit(_)) => return None,
         _ => panic!("reverse_powf: Unsupported bin expr"),
     };
@@ -945,7 +945,7 @@ pub fn reverse_sqrt<const OUT: Type>(
             append_insert(&base, lis.clone(), component_map);
             format!(
                 "let {} = {dx} * ( 1{val_type} / ( 2{val_type} * {base}.sqrt() ) );",
-                wrt!(base,lis),
+                wrt!(base, lis),
                 base = base,
                 dx = der!(lis),
                 val_type = OUT.to_string()
@@ -987,7 +987,7 @@ pub fn reverse_ln<const OUT: Type>(
             append_insert(&base, lis.clone(), component_map);
             format!(
                 "let {} = {dx} * ( 1{val_type} / {base} );",
-                wrt!(base,lis),
+                wrt!(base, lis),
                 base = base,
                 dx = der!(lis),
                 val_type = OUT.to_string()
@@ -1069,7 +1069,7 @@ pub fn reverse_log<const OUT: Type>(
                 input = input,
                 base = base,
             )
-        },
+        }
         (syn::Expr::Lit(_), syn::Expr::Lit(_)) => return None,
         _ => panic!("reverse_log: Unsupported bin expr"),
     };

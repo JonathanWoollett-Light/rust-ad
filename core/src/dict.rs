@@ -65,7 +65,8 @@ pub struct ProcedureOutputs {
     /// Transformation procedure to give the forward derivative
     pub forward_derivative: Option<fn(&syn::Stmt, &[String]) -> syn::Stmt>,
     /// Transfomation procedure to give the reverse derivative
-    pub reverse_derivative: Option<fn(&syn::Stmt, &mut HashMap<String, Vec<String>>) -> Option<syn::Stmt>>,
+    pub reverse_derivative:
+        Option<fn(&syn::Stmt, &mut HashMap<String, Vec<String>>) -> Option<syn::Stmt>>,
 }
 impl From<&'static str> for ProcedureOutputs {
     fn from(output_type: &'static str) -> Self {
@@ -80,7 +81,9 @@ impl ProcedureOutputs {
     pub fn new(
         output_type: &'static str,
         forward_derivative: Option<fn(&syn::Stmt, &[String]) -> syn::Stmt>,
-        reverse_derivative: Option<fn(&syn::Stmt, &mut HashMap<String, Vec<String>>) -> Option<syn::Stmt>>,
+        reverse_derivative: Option<
+            fn(&syn::Stmt, &mut HashMap<String, Vec<String>>) -> Option<syn::Stmt>,
+        >,
     ) -> Self {
         Self {
             output_type: String::from(output_type),
