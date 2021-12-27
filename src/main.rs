@@ -14,13 +14,19 @@ extern crate rust_ad;
 //     return a;
 // }
 
+// #[rust_ad::forward_autodiff]
+// fn function_name(x: f32, y: f32) -> f32 {
+//     let a = 7.0f32 * x;
+//     let b = 3f32 * x;
+//     let c = x + b;
+//     let d = y + b + c;
+//     return d;
+// }
+
 #[rust_ad::forward_autodiff]
-fn function_name(x: f32, y: f32) -> f32 {
-    let a = 7.0f32 * x;
-    let b = 3f32 * x;
-    let c = x + b;
-    let d = y + b + c;
-    return d;
+fn empty(x: f32) -> f32 {
+    let a = x;
+    return a;
 }
 
 fn main() {}

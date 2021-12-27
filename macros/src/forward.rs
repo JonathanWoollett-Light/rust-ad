@@ -1,21 +1,29 @@
-use rust_ad_core::*;
 use rust_ad_core::traits::*;
+use rust_ad_core::*;
 use std::collections::HashMap;
 
 pub fn update_forward_return(s: Option<&mut syn::Stmt>, function_inputs: &[String]) {
     *s.unwrap() = match s {
         Some(syn::Stmt::Semi(syn::Expr::Return(expr_return), _)) => {
-            let b = expr_return.expr.as_ref().expect("update_forward_return: No return expression");
+            let b = expr_return
+                .expr
+                .as_ref()
+                .expect("update_forward_return: No return expression");
             let expr = &**b;
             let expr_path = expr.path().expect("update_forward_return: No return path");
 
             let ident = &expr_path.path.segments[0].ident;
+            // The if case where `ident == input` is for when you are returning an input.
             let return_str = format!(
                 "return ({},{});",
                 ident,
                 function_inputs
                     .iter()
-                    .map(|input| wrt!(ident, input))
+                    .map(|input| if ident == input {
+                        der!(input)
+                    } else {
+                        wrt!(ident, input)
+                    })
                     .intersperse(String::from(","))
                     .collect::<String>()
             );
@@ -57,6 +65,7 @@ pub fn forward_derivative(
 ) -> Option<syn::Stmt> {
     if let syn::Stmt::Local(local) = stmt {
         if let Some(init) = &local.init {
+            // eprintln!("init: {:#?}",init);
             if let syn::Expr::Binary(bin_expr) = &*init.1 {
                 // Creates operation signature struct
                 let operation_sig = operation_signature(bin_expr, type_map);
@@ -96,6 +105,22 @@ pub fn forward_derivative(
                     &stmt,
                     function_inputs,
                 );
+                return Some(new_stmt);
+            } else if let syn::Expr::Path(expr_path) = &*init.1 {
+                let out_ident = local
+                    .pat
+                    .ident()
+                    .expect("forward_add: not ident")
+                    .ident
+                    .to_string();
+                let in_ident = expr_path.path.segments[0].ident.to_string();
+                let new_stmt_str = format!(
+                    "let {} = {};",
+                    wrt!(out_ident, in_ident),
+                    cumulative_derivative_wrt(&*init.1, &in_ident, function_inputs)
+                );
+                let new_stmt: syn::Stmt =
+                    syn::parse_str(&new_stmt_str).expect("forward_derivative: parse fail");
                 return Some(new_stmt);
             }
         }

@@ -295,10 +295,10 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     // Updates return statement
     update_forward_return(function.block.stmts.last_mut(), function_inputs.as_slice());
 
-    let new = quote::quote! { 
-        #function_holder 
+    let new = quote::quote! {
+        #function_holder
         use num::Zero;
-        #function 
+        #function
     };
     TokenStream::from(new)
 }

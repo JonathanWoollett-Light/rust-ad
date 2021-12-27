@@ -49,3 +49,6 @@
 //! - [Automatic Differentation in Rust](https://github.com/JonathanWoollett-Light/autodiff-book)
 //! - [automatic-differentiation-worked-examples](http://h2.jaguarpaw.co.uk/posts/automatic-differentiation-worked-examples/)
 pub use rust_ad_macros::*;
+
+#[cfg(test)]
+mod test;

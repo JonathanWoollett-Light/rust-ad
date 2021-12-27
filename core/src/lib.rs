@@ -5,6 +5,7 @@
 use std::collections::HashMap;
 
 mod derivatives;
+pub use derivatives::cumulative_derivative_wrt;
 
 mod dict;
 pub use dict::*;
