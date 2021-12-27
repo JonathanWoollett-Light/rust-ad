@@ -1,5 +1,7 @@
 extern crate rust_ad;
 
+use num::Zero;
+
 // File for testing.
 
 // #[rust_ad::forward_autodiff]
@@ -25,7 +27,8 @@ extern crate rust_ad;
 
 #[rust_ad::forward_autodiff]
 fn plus(x: f32) -> f32 {
-    return x + 3f32;
+    return x+1f32;
 }
+
 
 fn main() {}

@@ -297,7 +297,6 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let new = quote::quote! {
         #function_holder
-        use num::Zero;
         #function
     };
     TokenStream::from(new)
