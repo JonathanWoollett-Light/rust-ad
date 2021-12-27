@@ -6,26 +6,41 @@ use crate::*;
 /// 
 /// This is difficult to explain here. 
 /// TODO A good explanation.
+/// In practical application we unwrap all statements such that `let e=2.*b+d;` becomes 2 
+///  statements `let _e=2.*b;` and `let e=_e+d;`, when we do this can optimize this
+///  function, instead of needing to do `d/db(2.*b+d)` and `d/dd(2.*b+d)` we can
+///  simply know in an addition if the component is a variable the deriative is `1.`
+///  since `d/d_e(_e+d)` and `d/d_d(_e+d)` are both 1, thus we know the result
+///  for an input `x` would be `1.*_e_x + 1.*d_x` simply `_e_x + d_x`.
+/// 
+/// In this optimization we apply this function t0o each component (e.g. `_e`, `d` etc.) seperately
+///  with 4 possible results for each:
+/// 1. Where the component is a literal (not a variable) it is simply `0.`, 
+/// 2. Where the component is not a function input, we get the cumulative deriative for this 
+///    variable with respect to our function input (e.g. `_e_x`).
+/// 3. Where the component is an input and we looking at the cumulative derivative for this input it 
+///     is our seed input cumulative derivative e.g. `_x` since `1. * _x`.
+/// 4. Where the component is an input, but we are not looking at the cumulative derivative for this
+///     input, it is `0.` since we don't have cumulative deriatives for inputs with respect to each 
+///     other with `1. * x_wrt_y`, `x_wrt_y` doens't exist and we presume inputs independant.
 fn cumulative_derivative_wrt(expr: &syn::Expr, input_var: &str, function_inputs: &[String]) -> String {
     match expr {
-        // There is no cummulative derivative for literals.
+        // Result 1
         syn::Expr::Lit(_) => String::from("Zero::zero()"),
         syn::Expr::Path(path_expr) => {
             // x typically is the left or right of binary expression, regardless we are doing d/dx(expr) so at this we got 
             let x = path_expr.path.segments[0].ident.to_string();
 
-            // δa/δa = a_ (input value)
+            // Result 3
             if x == input_var {
-                // d/dx(x) * a_ (where `a_` is our seed cumulative derivative)
                 der!(input_var)
             }
-            // If `x` is an input, then it with respect to another input is `Zero::zero()` since the inputs are presumed to be independant.
+            // Result 4
             else if function_inputs.contains(&x) {
                 String::from("Zero::zero()")
             }
-            // Not input, so needs to be relative to some function.
+            // Result 2
             else {
-                // d/dx(x) * b_wrt_a (where `b_wrt_a` is our cumulative derivative)
                 wrt!(x, input_var)
             }
         }
