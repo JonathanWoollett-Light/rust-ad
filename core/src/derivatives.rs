@@ -2,25 +2,28 @@ use crate::{traits::*, utils::*};
 
 use crate::*;
 
-/// Derivative of given expression with respect to given variable (only supports literals and paths).
-fn der_wrt(expr: &syn::Expr, wrt: &str, function_inputs: &[String]) -> String {
+/// Derivative of express for given expression with respect to itself, for a given input variable (only supports literals and paths).
+fn der_wrt(expr: &syn::Expr, input_var: &str, function_inputs: &[String]) -> String {
     match expr {
+        // d/dx(7) is always 0 irrespective of `x`
         syn::Expr::Lit(_) => String::from("Zero::zero()"),
         syn::Expr::Path(path_expr) => {
             // x is the left or right of binary expression typically, its the component, so if its ident
             let x = path_expr.path.segments[0].ident.to_string();
 
             // δa/δa = a_ (input value)
-            if x == wrt {
-                der!(wrt)
+            if x == input_var {
+                // d/dx(x) * a_ (where `a_` is our cumulative derivative)
+                der!(input_var)
             }
             // If `x` is an input, then it with respect to another input is `Zero::zero()` since the inputs don't are presumed to be independant.
             else if function_inputs.contains(&x) {
                 String::from("Zero::zero()")
             }
-            // δy/δa = a_wrt_y (not input, so needs to be relative to some function e.g. `b`)
+            // Nnot input, so needs to be relative to some function.
             else {
-                wrt!(x, wrt)
+                // d/dx(x) * b_wrt_a (where `b_wrt_a` is our cumulative derivative)
+                wrt!(x, input_var)
             }
         }
         _ => panic!("der_wrt: unsupported expr"),
