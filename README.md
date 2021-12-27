@@ -8,6 +8,8 @@ A restrictive WIP beginnings of a library attempting to implement auto-different
 
 **Why would I use this over \<insert library\>?** You wouldn't, not yet anyway. I'd say wait until support for ndarray is more comprehensive, then this becomes probably the most convenient Rust AutoDiff library.
 
+**It's all messy be warned.**
+
 ## Status
 
 - [x] Forward Auto-differentiation
