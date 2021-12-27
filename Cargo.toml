@@ -14,7 +14,6 @@ exclude = ["/src/main.rs","/src/tests.rs"]
 
 [dependencies]
 syn = { version="1.0.82", features=["full","extra-traits"] }
-num = "0.4.0"
 rust-ad-macros = { version = "0.2.2", path = "macros" }
 rust-ad-core = { version = "0.2.2", path = "core" }
 
