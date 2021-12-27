@@ -1,5 +1,3 @@
-
-
 use crate::{traits::*, utils::*};
 
 use crate::*;
@@ -44,6 +42,36 @@ fn cumulative_derivative_wrt<const OUT_TYPE:Type>(
             // Result 4
             else if function_inputs.contains(&x) {
                 OUT_TYPE.zero()
+            }
+            // Result 2
+            else {
+                wrt!(x, input_var)
+            }
+        }
+        _ => panic!("cumulative_derivative_wrt: unsupported expr"),
+    }
+}
+/// Gets cumulative derivative for given expression for a given input variable (only supports literals and paths).
+pub fn cumulative_derivative_wrt_rt(
+    expr: &syn::Expr,
+    input_var: &str,
+    function_inputs: &[String],
+    out_type: &Type
+) -> String {
+    match expr {
+        // Result 1
+        syn::Expr::Lit(_) => out_type.zero(),
+        syn::Expr::Path(path_expr) => {
+            // x typically is the left or right of binary expression, regardless we are doing d/dx(expr) so at this we got
+            let x = path_expr.path.segments[0].ident.to_string();
+
+            // Result 3
+            if x == input_var {
+                der!(input_var)
+            }
+            // Result 4
+            else if function_inputs.contains(&x) {
+                out_type.zero()
             }
             // Result 2
             else {
@@ -281,12 +309,12 @@ pub fn forward_powi<const OUT:Type>(stmt: &syn::Stmt, function_inputs: &[String]
         .method_call()
         .expect("forward_powi: not method");
 
-    let val_ident = der!(local
+    let val_ident = local
         .pat
         .ident()
         .expect("forward_powi: not ident")
         .ident
-        .to_string());
+        .to_string();
 
     let idents = function_inputs
         .iter()

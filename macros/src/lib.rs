@@ -811,6 +811,7 @@ fn propagate_types(func: &syn::ItemFn) -> HashMap<String, String> {
     // Propagates types through statements
     for stmt in func.block.stmts.iter() {
         // eprintln!("map: {:?}", map);
+        // eprintln!("stmt:\n{:#?}\n", stmt);
         if let syn::Stmt::Local(local) = stmt {
             // Gets identifier/s of variable/s being defined
             let var_idents = match &local.pat {
@@ -876,6 +877,12 @@ fn propagate_types(func: &syn::ItemFn) -> HashMap<String, String> {
                         .expect("propagate_types: missing macro var")
                         .clone();
                     Some(output_type)
+                } else if let syn::Expr::Path(path_expr) = &*init.1 {
+                    let ident = path_expr.path.segments[0].ident.to_string();
+                    Some(map.get(&ident).expect("propagate_types: no path").clone())
+                } else if let syn::Expr::Lit(lit_expr) = &*init.1 {
+                    let lit_type = literal_type(lit_expr).expect("propagate_types: lit fail");
+                    Some(lit_type)
                 } else {
                     None
                 };
