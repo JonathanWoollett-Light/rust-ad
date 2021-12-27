@@ -8,8 +8,8 @@ extern crate rust_ad;
 // }
 
 #[rust_ad::reverse_autodiff]
-    fn plus(x: f32) -> f32 {
-        return x + 1f32;
-    }
+fn plus(x: f32) -> f32 {
+    return x + 1f32;
+}
 
 fn main() {}

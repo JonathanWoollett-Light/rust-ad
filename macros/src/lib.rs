@@ -34,9 +34,9 @@ use reverse::*;
 ///     assert_eq!(der_y, -0.08f32); // -2/y^2
 /// }
 /// ```
-/// 
+///
 /// This is just a procedural functional macro replacement for the declarative macro:
-/// 
+///
 /// ```
 /// #[macro_export]
 /// macro_rules! forward {
@@ -45,7 +45,7 @@ use reverse::*;
 ///     }}
 /// }
 /// ```
-/// 
+///
 /// Since you can't export declarative macros from a procedural macro crate.
 #[proc_macro]
 pub fn forward(_item: TokenStream) -> TokenStream {
@@ -93,9 +93,9 @@ pub fn forward(_item: TokenStream) -> TokenStream {
 ///     assert_eq!(der_y, -0.08f32); // -2/y^2
 /// }
 /// ```
-/// 
+///
 /// This is just a procedural functional macro replacement for the declarative macro:
-/// 
+///
 /// ```
 /// #[macro_export]
 /// macro_rules! reverse {
@@ -104,7 +104,7 @@ pub fn forward(_item: TokenStream) -> TokenStream {
 ///     }}
 /// }
 /// ```
-/// 
+///
 /// Since you can't export declarative macros from a procedural macro crate.
 #[proc_macro]
 pub fn reverse(_item: TokenStream) -> TokenStream {
@@ -195,7 +195,7 @@ pub fn unweave(_attr: TokenStream, item: TokenStream) -> TokenStream {
 ///     assert_eq!(der_y, -0.08f32); // -2/y^2
 /// }
 /// ```
-/// 
+///
 /// Much like a derive macro, this is appended to your code, the original `function_name` function remains unedited.
 #[proc_macro_attribute]
 pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -345,7 +345,7 @@ pub fn dup(_item: TokenStream) -> TokenStream {
 ///     assert_eq!(der_y, -0.08f32); // -2/y^2
 /// }
 /// ```
-/// 
+///
 /// Much like a derive macro, this is appended to your code, the original `function_name` function remains unedited.
 #[proc_macro_attribute]
 pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -358,13 +358,16 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let function_holder = function.clone();
 
-    let function_inputs = function.sig.inputs.iter()
-    .map(|fn_arg| {
-        let ty = fn_arg.typed().expect("reverse: sig not type");
-        let pat = ty.pat.ident().expect("reverse: sig not ident");
-        pat.ident.to_string()
-    })
-    .collect::<Vec<_>>();
+    let function_inputs = function
+        .sig
+        .inputs
+        .iter()
+        .map(|fn_arg| {
+            let ty = fn_arg.typed().expect("reverse: sig not type");
+            let pat = ty.pat.ident().expect("reverse: sig not ident");
+            pat.ident.to_string()
+        })
+        .collect::<Vec<_>>();
 
     // Unwraps nested binary expressions
     // ---------------------------------------------------------------------------
@@ -400,14 +403,18 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     }
     while let Some(next) = rev_iter.next() {
-        if let Some(acc) = reverse_accumulate_derivative(next,&component_map) {
+        if let Some(acc) = reverse_accumulate_derivative(next, &component_map) {
             reverse_stmts.push(acc);
         }
         if let Some(der) = reverse_derivative(next, &type_map, &mut component_map) {
             reverse_stmts.push(der);
         }
     }
-    reverse_stmts.push(reverse_accumulate_inputs(&function_inputs,&component_map,&type_map));
+    reverse_stmts.push(reverse_accumulate_inputs(
+        &function_inputs,
+        &component_map,
+        &type_map,
+    ));
     // let mut reverse_stmts = function
     //     .block
     //     .stmts

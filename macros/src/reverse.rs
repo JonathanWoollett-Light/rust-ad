@@ -7,17 +7,38 @@ use syn::spanned::Spanned;
 
 use std::collections::HashMap;
 
-pub fn reverse_accumulate_inputs(function_inputs: &[String], component_map: &HashMap<String, Vec<String>>, type_map: &HashMap<String, String>) -> syn::Stmt {
-    let stmt_str  = format!(
+pub fn reverse_accumulate_inputs(
+    function_inputs: &[String],
+    component_map: &HashMap<String, Vec<String>>,
+    type_map: &HashMap<String, String>,
+) -> syn::Stmt {
+    let stmt_str = format!(
         "let ({}) = ({});",
-        function_inputs.iter().map(|input|der!(input)).intersperse(String::from(",")).collect::<String>(),
-        function_inputs.iter().map(|input| {
-            if let Some(components) = component_map.get(input) {
-                components.iter().map(|c|wrt!(input,c)).intersperse(String::from("+")).collect::<String>()
-            } else { 
-                format!("1{}",type_map.get(input).expect("reverse_accumulate_inputs: no input type")) 
-            }
-        }).intersperse(String::from(",")).collect::<String>()
+        function_inputs
+            .iter()
+            .map(|input| der!(input))
+            .intersperse(String::from(","))
+            .collect::<String>(),
+        function_inputs
+            .iter()
+            .map(|input| {
+                if let Some(components) = component_map.get(input) {
+                    components
+                        .iter()
+                        .map(|c| wrt!(input, c))
+                        .intersperse(String::from("+"))
+                        .collect::<String>()
+                } else {
+                    format!(
+                        "1{}",
+                        type_map
+                            .get(input)
+                            .expect("reverse_accumulate_inputs: no input type")
+                    )
+                }
+            })
+            .intersperse(String::from(","))
+            .collect::<String>()
     );
     syn::parse_str(&stmt_str).expect("reverse_accumulate_inputs: parse fail")
 }
@@ -29,11 +50,11 @@ pub fn reverse_accumulate_derivative(
         // eprintln!("local: {:#?}",local);
         // panic!("just stop here");
         let local_ident = local
-                    .pat
-                    .ident()
-                    .expect("reverse_derivative: not ident")
-                    .ident
-                    .to_string();
+            .pat
+            .ident()
+            .expect("reverse_derivative: not ident")
+            .ident
+            .to_string();
         let acc_der_stmt_str = format!(
             "let {} = {};",
             der!(local_ident),
@@ -41,14 +62,16 @@ pub fn reverse_accumulate_derivative(
                 .get(&local_ident)
                 .expect("reverse_derivative: ident not in map")
                 .iter()
-                .map(|d|wrt!(local_ident,d))
+                .map(|d| wrt!(local_ident, d))
                 .intersperse(String::from("+"))
                 .collect::<String>()
         );
-        let acc_der_stmt = syn::parse_str(&acc_der_stmt_str).expect("reverse_derivative: acc parse fail");
+        let acc_der_stmt =
+            syn::parse_str(&acc_der_stmt_str).expect("reverse_derivative: acc parse fail");
         Some(acc_der_stmt)
+    } else {
+        None
     }
-    else { None }
 }
 pub fn reverse_derivative(
     stmt: &syn::Stmt,
@@ -107,10 +130,11 @@ pub fn reverse_derivative(
                     .to_string();
                 // Variable being assigned to `out_ident`
                 let in_ident = expr_path.path.segments[0].ident.to_string();
-                
-                append_insert(&in_ident,out_ident.clone(),component_map);
-                let stmt_str = format!("let {} = {};", wrt!(in_ident,out_ident), der!(out_ident));
-                let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_derivative: parse fail");
+
+                append_insert(&in_ident, out_ident.clone(), component_map);
+                let stmt_str = format!("let {} = {};", wrt!(in_ident, out_ident), der!(out_ident));
+                let new_stmt: syn::Stmt =
+                    syn::parse_str(&stmt_str).expect("reverse_derivative: parse fail");
 
                 return Some(new_stmt);
             } else if let syn::Expr::Lit(expr_lit) = &*init.1 {
@@ -123,9 +147,10 @@ pub fn reverse_derivative(
                     .expect("reverse_derivative: not ident")
                     .ident
                     .to_string();
-                
-                let stmt_str = format!("let {} = 0{};", der!(out_ident),return_type.to_string());
-                let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_derivative: parse fail");
+
+                let stmt_str = format!("let {} = 0{};", der!(out_ident), return_type.to_string());
+                let new_stmt: syn::Stmt =
+                    syn::parse_str(&stmt_str).expect("reverse_derivative: parse fail");
 
                 return Some(new_stmt);
             }

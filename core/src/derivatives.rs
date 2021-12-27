@@ -1,7 +1,7 @@
 use crate::{traits::*, utils::*};
 
-use crate::*;
 use crate::append_insert;
+use crate::*;
 
 /// Gets cumulative derivative for given expression for a given input variable (only supports literals and paths).
 ///
