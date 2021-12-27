@@ -20,14 +20,19 @@ use reverse::*;
 ///
 /// E.g.
 /// ```
-/// #[rust_ad::forward_autodiff]
-/// fn function_name(x: f32, y: f32) -> f32 {
-///     let a = 7f32 * x;
-///     let b = 3f32 * y;
-///     return b;
+/// #[forward_autodiff]
+/// fn multi(x: f32, y: f32) -> f32 {
+///     let a = x.powi(2i32);
+///     let b = x * 2f32;
+///     let c = 2f32 / y;
+///     let f = a + b + c;
+///     return f;
 /// }
 /// fn main() {
-///     println!("{:?}",rust_ad::forward!(function_name,2.,4.,1.,5.))
+///     let (f, der_x, der_y) = rust_ad::forward!(multi, 3f32, 5f32, 1f32, 1f32);
+///     assert_eq!(f, 15.4f32);
+///     assert_eq!(der_x, 8f32); // 2(x+1)
+///     assert_eq!(der_y, -0.08f32); // -2/y^2
 /// }
 /// ```
 /// This is just a procedural functional macro replacement for the declarative macro:
@@ -167,35 +172,19 @@ pub fn unweave(_attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// E.g.
 /// ```
-/// #[rust_ad::forward_autodiff]
-/// fn function_name(x: f32, y: f32) -> f32 {
-///     let p = 7.0f32 * x;
-///     let r = 10f32 - y;
-///     let q = p * x * 5f32;
-///     let v = 2f32 * p * q + 3.0f32 * r;
-///     return v;
+/// #[forward_autodiff]
+/// fn multi(x: f32, y: f32) -> f32 {
+///     let a = x.powi(2i32);
+///     let b = x * 2f32;
+///     let c = 2f32 / y;
+///     let f = a + b + c;
+///     return f;
 /// }
-/// ```
-/// Expands to:
-/// ```
-/// fn __for_function_name(x: f32, y: f32, __der_x: f32, __der_y: f32) -> (f32, f32) {
-///     let p = 7.0f32 * x;
-///     let __der_p = x * 0f32 + 7.0f32 * __der_x;
-///     let r = 10f32 - y;
-///     let __der_r = 0f32 - __der_y;
-///     let _q = p * x;
-///     let __der__q = x * __der_p + p * __der_x;
-///     let q = _q * 5f32;
-///     let __der_q = 5f32 * __der__q + _q * 0f32;
-///     let __v = 2f32 * p;
-///     let __der___v = p * 0f32 + 2f32 * __der_p;
-///     let _v = __v * q;
-///     let __der__v = q * __der___v + __v * __der_q;
-///     let v_ = 3.0f32 * r;
-///     let __der_v_ = r * 0f32 + 3.0f32 * __der_r;
-///     let v = _v + v_;
-///     let __der_v = __der__v + __der_v_;
-///     return (v, __der_v);
+/// fn main() {
+///     let (f, der_x, der_y) = __for_multi(3f32, 5f32, 1f32, 1f32);
+///     assert_eq!(f, 15.4f32);
+///     assert_eq!(der_x, 8f32); // 2(x+1)
+///     assert_eq!(der_y, -0.08f32); // -2/y^2
 /// }
 /// ```
 /// Much like a derive macro, this is appended to your code, the original `function_name` function remains unedited.
