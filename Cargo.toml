@@ -1,6 +1,6 @@
 [package]
 name = "rust-ad"
-version = "0.4.2"
+version = "0.4.3"
 edition = "2021"
 
 description = "Rust Auto-Differentiation."
@@ -14,8 +14,8 @@ exclude = ["/src/main.rs","/src/tests.rs"]
 
 [dependencies]
 syn = { version="1.0.82", features=["full","extra-traits"] }
-rust-ad-macros = { version = "0.2.2", path = "macros" }
-rust-ad-core = { version = "0.2.2", path = "core" }
+rust-ad-macros = { version = "0.2.3", path = "macros" }
+rust-ad-core = { version = "0.2.3", path = "core" }
 
 [workspace]
 members = ["./macros","./core"]
