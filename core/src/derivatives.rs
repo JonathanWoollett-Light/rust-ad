@@ -450,12 +450,56 @@ pub fn forward_sqrt<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String
     let stmt_str = format!("let ({}) = ({});", idents, deriatives);
     syn::parse_str(&stmt_str).expect("forward_powf: parse fail")
 }
+/// Forward deriative of [`ln`](https://doc.rust-lang.org/std/primitive.f32.html#method.ln).
+pub fn forward_ln<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
+    assert!(OUT == Type::F32 || OUT == Type::F64);
+    let local = stmt.local().expect("forward_ln: not local");
+    let init = &local.init;
+    let method_expr = init
+        .as_ref()
+        .unwrap()
+        .1
+        .method_call()
+        .expect("forward_ln: not method");
+
+    let val_ident = local
+        .pat
+        .ident()
+        .expect("forward_ln: not ident")
+        .ident
+        .to_string();
+
+    let idents = function_inputs
+        .iter()
+        .map(|input| wrt!(val_ident, input))
+        .intersperse(String::from(","))
+        .collect::<String>();
+
+    let base = expr_str(&*method_expr.receiver);
+    let deriatives = function_inputs
+        .iter()
+        .map(|input| {
+            if *input == base {
+                format!(
+                    "1{type_str} / {base}",
+                    base = base,
+                    type_str = OUT.to_string()
+                )
+            } else {
+                OUT.zero()
+            }
+        })
+        .intersperse(String::from(","))
+        .collect::<String>();
+    let stmt_str = format!("let ({}) = ({});", idents, deriatives);
+    syn::parse_str(&stmt_str).expect("forward_ln: parse fail")
+}
 
 /// Reverse deriative of [std::ops::Add].
 pub fn reverse_add<const OUT: Type>(
     stmt: &syn::Stmt,
     component_map: &mut HashMap<String, Vec<String>>,
-) -> syn::Stmt {
+) -> Option<syn::Stmt> {
     let local = stmt.local().expect("reverse_add: not local");
     let init = local.init.as_ref().unwrap();
     let init_expr = &*init.1;
@@ -486,18 +530,19 @@ pub fn reverse_add<const OUT: Type>(
             let r = expr_path_r.path.segments[0].ident.to_string();
             append_insert(&r, lis.clone(), component_map);
             (String::from("_"), wrt!(r, lis))
-        }
+        },
+        (syn::Expr::Lit(_), syn::Expr::Lit(_)) => return None,
         _ => panic!("reverse_add: Unsupported bin expr"),
     };
     let stmt_str = format!("let ({},{}) = ({},{});", a, b, der!(lis), der!(lis));
     let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_add: parse fail");
-    new_stmt
+    Some(new_stmt)
 }
 /// Reverse deriative of [std::ops::Sub].
 pub fn reverse_sub<const OUT: Type>(
     stmt: &syn::Stmt,
     component_map: &mut HashMap<String, Vec<String>>,
-) -> syn::Stmt {
+) -> Option<syn::Stmt> {
     let local = stmt.local().expect("reverse_sub: not local");
     let init = local.init.as_ref().unwrap();
     let init_expr = &*init.1;
@@ -528,18 +573,19 @@ pub fn reverse_sub<const OUT: Type>(
             let r = expr_path_r.path.segments[0].ident.to_string();
             append_insert(&r, lis.clone(), component_map);
             (String::from("_"), wrt!(r, lis))
-        }
+        },
+        (syn::Expr::Lit(_), syn::Expr::Lit(_)) => return None,
         _ => panic!("reverse_sub: Unsupported bin expr"),
     };
     let stmt_str = format!("let ({},{}) = ({},-{});", a, b, der!(lis), der!(lis));
     let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_sub: parse fail");
-    new_stmt
+    Some(new_stmt)
 }
 /// Reverse deriative of [std::ops::Mul].
 pub fn reverse_mul<const OUT: Type>(
     stmt: &syn::Stmt,
     component_map: &mut HashMap<String, Vec<String>>,
-) -> syn::Stmt {
+) -> Option<syn::Stmt> {
     let local = stmt.local().expect("reverse_mul: not local");
     let init = local.init.as_ref().unwrap();
     let init_expr = &*init.1;
@@ -584,17 +630,18 @@ pub fn reverse_mul<const OUT: Type>(
             );
             append_insert(&r, lis.clone(), component_map);
             format!("let {} = {}*{};", wrt!(r, lis), l, der!(lis))
-        }
+        },
+        (syn::Expr::Lit(_), syn::Expr::Lit(_)) => return None,
         _ => panic!("reverse_mul: Unsupported bin expr"),
     };
     let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_mul: parse fail");
-    new_stmt
+    Some(new_stmt)
 }
 /// Reverse deriative of [std::ops::Div].
 pub fn reverse_div<const OUT: Type>(
     stmt: &syn::Stmt,
     component_map: &mut HashMap<String, Vec<String>>,
-) -> syn::Stmt {
+) -> Option<syn::Stmt> {
     let local = stmt.local().expect("reverse_div: not local");
     let init = local.init.as_ref().unwrap();
     let init_expr = &*init.1;
@@ -652,18 +699,19 @@ pub fn reverse_div<const OUT: Type>(
                 denominator,
                 denominator
             )
-        }
+        },
+        (syn::Expr::Lit(_), syn::Expr::Lit(_)) => return None,
         _ => panic!("reverse_div: Unsupported bin expr"),
     };
     let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_div: parse fail");
-    new_stmt
+    Some(new_stmt)
 }
 
 /// Reverse deriative of [`powi`](https://doc.rust-lang.org/std/primitive.f32.html#method.powi).
 pub fn reverse_powi<const OUT: Type>(
     stmt: &syn::Stmt,
     component_map: &mut HashMap<String, Vec<String>>,
-) -> syn::Stmt {
+) -> Option<syn::Stmt> {
     assert!(OUT == Type::F32 || OUT == Type::F64);
     let local = stmt.local().expect("reverse_powi: not local");
     let init = &local.init;
@@ -729,17 +777,18 @@ pub fn reverse_powi<const OUT: Type>(
                 base = base,
                 exponent = exponent,
             )
-        }
+        },
+        (syn::Expr::Lit(_), syn::Expr::Lit(_)) => return None,
         _ => panic!("reverse_powi: Unsupported bin expr"),
     };
     let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_powi: parse fail");
-    new_stmt
+    Some(new_stmt)
 }
 /// Reverse deriative of [`powf`](https://doc.rust-lang.org/std/primitive.f32.html#method.powf).
 pub fn reverse_powf<const OUT: Type>(
     stmt: &syn::Stmt,
     component_map: &mut HashMap<String, Vec<String>>,
-) -> syn::Stmt {
+) -> Option<syn::Stmt> {
     assert!(OUT == Type::F32 || OUT == Type::F64);
     let local = stmt.local().expect("reverse_powf: not local");
     let init = &local.init;
@@ -805,17 +854,18 @@ pub fn reverse_powf<const OUT: Type>(
                 base = base,
                 exponent = exponent,
             )
-        }
+        },
+        (syn::Expr::Lit(_), syn::Expr::Lit(_)) => return None,
         _ => panic!("reverse_powf: Unsupported bin expr"),
     };
     let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_powf: parse fail");
-    new_stmt
+    Some(new_stmt)
 }
 /// Reverse deriative of [`sqrt`](https://doc.rust-lang.org/std/primitive.f64.html#method.sqrt).
 pub fn reverse_sqrt<const OUT: Type>(
     stmt: &syn::Stmt,
     component_map: &mut HashMap<String, Vec<String>>,
-) -> syn::Stmt {
+) -> Option<syn::Stmt> {
     assert!(OUT == Type::F32 || OUT == Type::F64);
     let local = stmt.local().expect("reverse_sqrt: not local");
     let init = &local.init;
@@ -840,27 +890,58 @@ pub fn reverse_sqrt<const OUT: Type>(
             let base = expr_path.path.segments[0].ident.to_string();
             append_insert(&base, lis.clone(), component_map);
             format!(
-                "let {} = ({dx} * ({exponent} * {base}.powi({exponent}-1{val_type})), {dx} * ({base}.powi({exponent}) * {base}.ln() ) );",
+                "let {} = {dx} * ( 1{val_type} / ( 2{val_type} * {base}.sqrt() ) );",
                 wrt!(base,lis),
                 base = base,
                 dx = der!(lis),
                 val_type = OUT.to_string()
             )
         }
-        syn::Expr::Lit(expr_lit_r) => {
-            let base = lit_str(expr_lit_r);
+        syn::Expr::Lit(_) => return None,
+        _ => panic!("reverse_sqrt: Unsupported bin expr"),
+    };
+    let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_sqrt: parse fail");
+    Some(new_stmt)
+}
+/// Reverse deriative of [`ln`](https://doc.rust-lang.org/std/primitive.f32.html#method.ln).
+pub fn reverse_ln<const OUT: Type>(
+    stmt: &syn::Stmt,
+    component_map: &mut HashMap<String, Vec<String>>,
+) -> Option<syn::Stmt> {
+    assert!(OUT == Type::F32 || OUT == Type::F64);
+    let local = stmt.local().expect("reverse_ln: not local");
+    let init = &local.init;
+    let method_expr = init
+        .as_ref()
+        .unwrap()
+        .1
+        .method_call()
+        .expect("reverse_ln: not method");
+
+    let lis = local
+        .pat
+        .ident()
+        .expect("reverse_ln: not ident")
+        .ident
+        .to_string();
+
+    let base = &*method_expr.receiver;
+
+    let stmt_str = match base {
+        syn::Expr::Path(expr_path) => {
+            let base = expr_path.path.segments[0].ident.to_string();
             append_insert(&base, lis.clone(), component_map);
             format!(
-                "let {} = 1{val_type};",
-                wrt!(base, lis),
-                der!(lis),
+                "let {} = {dx} * ( 1{val_type} / {base} );",
+                wrt!(base,lis),
                 base = base,
-                exponent = exponent,
+                dx = der!(lis),
                 val_type = OUT.to_string()
             )
         }
-        _ => panic!("reverse_sqrt: Unsupported bin expr"),
+        syn::Expr::Lit(_) => return None,
+        _ => panic!("reverse_ln: Unsupported bin expr"),
     };
-    let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_powf: parse fail");
-    new_stmt
+    let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_ln: parse fail");
+    Some(new_stmt)
 }

@@ -92,7 +92,7 @@ pub fn reverse_derivative(
                 let new_stmt = operation_out_signature.reverse_derivative.expect(
                     "reverse_derivative: binary expression unimplemented forward deriative",
                 )(&stmt, component_map);
-                return Some(new_stmt);
+                return new_stmt;
             } else if let syn::Expr::Call(call_expr) = &*init.1 {
                 // Create function in signature
                 let function_in_signature = function_signature(call_expr, type_map);
@@ -107,7 +107,7 @@ pub fn reverse_derivative(
                     &stmt,
                     component_map,
                 );
-                return Some(new_stmt);
+                return new_stmt;
             } else if let syn::Expr::MethodCall(method_expr) = &*init.1 {
                 let method_sig = method_signature(method_expr, type_map);
                 let method_out = SUPPORTED_METHODS
@@ -119,7 +119,7 @@ pub fn reverse_derivative(
                     &stmt,
                     component_map,
                 );
-                return Some(new_stmt);
+                return new_stmt;
             } else if let syn::Expr::Path(expr_path) = &*init.1 {
                 // Variable identifier
                 let out_ident = local

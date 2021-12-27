@@ -39,8 +39,8 @@
 //! </table>
 //!
 //! ### Specific operation support
-//! - `f32`: [`powi`](https://doc.rust-lang.org/std/primitive.f32.html#method.powi), [`powf`](https://doc.rust-lang.org/std/primitive.f32.html#method.powf)
-//! - `f64`: [`powi`](https://doc.rust-lang.org/std/primitive.f64.html#method.powi), [`powf`](https://doc.rust-lang.org/std/primitive.f64.html#method.powf)
+//! - `f32`: [`powi`](https://doc.rust-lang.org/std/primitive.f32.html#method.powi), [`powf`](https://doc.rust-lang.org/std/primitive.f32.html#method.powf), [`sqrt`](https://doc.rust-lang.org/std/primitive.f32.html#method.sqrt), [`ln`](https://doc.rust-lang.org/std/primitive.f32.html#method.ln)
+//! - `f64`: [`powi`](https://doc.rust-lang.org/std/primitive.f64.html#method.powi), [`powf`](https://doc.rust-lang.org/std/primitive.f64.html#method.powf), [`sqrt`](https://doc.rust-lang.org/std/primitive.f64.html#method.sqrt), [`ln`](https://doc.rust-lang.org/std/primitive.f64.html#method.ln)
 //!
 //! ### Notes on internals
 //! With `cargo expand` when an `.unwrap()` panics it doesn't give a line reference. Using unique panic messages makes locating errors easier. These should help debuging quite specifically (ctrl+f).

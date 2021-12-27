@@ -65,7 +65,7 @@ pub struct ProcedureOutputs {
     /// Transformation procedure to give the forward derivative
     pub forward_derivative: Option<fn(&syn::Stmt, &[String]) -> syn::Stmt>,
     /// Transfomation procedure to give the reverse derivative
-    pub reverse_derivative: Option<fn(&syn::Stmt, &mut HashMap<String, Vec<String>>) -> syn::Stmt>,
+    pub reverse_derivative: Option<fn(&syn::Stmt, &mut HashMap<String, Vec<String>>) -> Option<syn::Stmt>>,
 }
 impl From<&'static str> for ProcedureOutputs {
     fn from(output_type: &'static str) -> Self {
@@ -80,7 +80,7 @@ impl ProcedureOutputs {
     pub fn new(
         output_type: &'static str,
         forward_derivative: Option<fn(&syn::Stmt, &[String]) -> syn::Stmt>,
-        reverse_derivative: Option<fn(&syn::Stmt, &mut HashMap<String, Vec<String>>) -> syn::Stmt>,
+        reverse_derivative: Option<fn(&syn::Stmt, &mut HashMap<String, Vec<String>>) -> Option<syn::Stmt>>,
     ) -> Self {
         Self {
             output_type: String::from(output_type),
@@ -94,14 +94,14 @@ impl
     From<(
         &'static str,
         Option<fn(&syn::Stmt, &[String]) -> syn::Stmt>,
-        Option<fn(&syn::Stmt, &mut HashMap<String, Vec<String>>) -> syn::Stmt>,
+        Option<fn(&syn::Stmt, &mut HashMap<String, Vec<String>>) -> Option<syn::Stmt>>,
     )> for ProcedureOutputs
 {
     fn from(
         (output_type, forward_derivative, reverse_derivative): (
             &'static str,
             Option<fn(&syn::Stmt, &[String]) -> syn::Stmt>,
-            Option<fn(&syn::Stmt, &mut HashMap<String, Vec<String>>) -> syn::Stmt>,
+            Option<fn(&syn::Stmt, &mut HashMap<String, Vec<String>>) -> Option<syn::Stmt>>,
         ),
     ) -> Self {
         Self {
@@ -190,9 +190,11 @@ lazy_static::lazy_static! {
         map.insert(("powi","f32",&["i32"]).into(),ProcedureOutputs::new("f32",Some(forward_powi::<{Type::F32}>),Some(reverse_powi::<{Type::F32}>)));
         map.insert(("powi","f32",&["f32"]).into(),ProcedureOutputs::new("f32",Some(forward_powf::<{Type::F32}>),Some(reverse_powf::<{Type::F32}>)));
         map.insert(("powi","f32",&[]).into(),ProcedureOutputs::new("f32",Some(forward_sqrt::<{Type::F32}>),Some(reverse_sqrt::<{Type::F32}>)));
+        map.insert(("powi","f32",&[]).into(),ProcedureOutputs::new("f32",Some(forward_ln::<{Type::F32}>),Some(reverse_ln::<{Type::F32}>)));
         map.insert(("powi","f64",&["i32"]).into(),ProcedureOutputs::new("f64",Some(forward_powi::<{Type::F64}>),Some(reverse_powi::<{Type::F64}>)));
         map.insert(("powi","f64",&["f64"]).into(),ProcedureOutputs::new("f64",Some(forward_powf::<{Type::F64}>),Some(reverse_powf::<{Type::F64}>)));
         map.insert(("powi","f64",&[]).into(),ProcedureOutputs::new("f64",Some(forward_sqrt::<{Type::F64}>),Some(reverse_sqrt::<{Type::F64}>)));
+        map.insert(("powi","f64",&[]).into(),ProcedureOutputs::new("f64",Some(forward_ln::<{Type::F64}>),Some(reverse_ln::<{Type::F64}>)));
         map
     };
     /// Internal map of currently supported operations.
