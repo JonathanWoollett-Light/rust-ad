@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 extern crate rust_ad;
 
 // File for testing.
@@ -17,5 +19,5 @@ fn multi(x: f32, y: f32) -> f32 {
 }
 
 fn main() {
-    let (f, der_x, der_y) = rust_ad::forward!(multi, 3f32, 5f32);
+    let (_f, _der_x, _der_y) = rust_ad::forward!(multi, 3f32, 5f32);
 }

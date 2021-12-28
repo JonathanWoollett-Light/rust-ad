@@ -871,7 +871,7 @@ pub fn reverse_powf<const OUT: Type>(
             append_insert(&base, lis.clone(), component_map);
             append_insert(&exponent, lis.clone(), component_map);
             format!(
-                "let ({},{}) = ({dx} * ({exponent} * {base}.powi({exponent}-1{val_type})), {dx} * ({base}.powi({exponent}) * {base}.ln() ) );",
+                "let ({},{}) = ({dx} * ({exponent} * {base}.powf({exponent}-1{val_type})), {dx} * ({base}.powf({exponent}) * {base}.ln() ) );",
                 wrt!(base,lis),
                 wrt!(exponent,lis),
                 base = base,
@@ -887,7 +887,7 @@ pub fn reverse_powf<const OUT: Type>(
             );
             append_insert(&base, lis.clone(), component_map);
             format!(
-                "let {} = {} * ({exponent} * {base}.powi({exponent}-1{val_type}));",
+                "let {} = {} * ({exponent} * {base}.powf({exponent}-1{val_type}));",
                 wrt!(base, lis),
                 der!(lis),
                 base = base,
@@ -902,7 +902,7 @@ pub fn reverse_powf<const OUT: Type>(
             );
             append_insert(&exponent, lis.clone(), component_map);
             format!(
-                "let {} = {} * ({base}.powi({exponent}) * {base}.ln() );",
+                "let {} = {} * ({base}.powf({exponent}) * {base}.ln() );",
                 wrt!(exponent, lis),
                 der!(lis),
                 base = base,
