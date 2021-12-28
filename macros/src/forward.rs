@@ -74,9 +74,7 @@ pub fn forward_derivative(
                     .get(&operation_sig)
                     .expect("forward_derivative: unsupported operation");
                 // Applies the forward deriative function for the found operation.
-                let new_stmt = operation_out_signature.forward_derivative.expect(
-                    "forward_derivative: binary expression unimplemented forward deriative",
-                )(&stmt, function_inputs);
+                let new_stmt = (operation_out_signature.forward_derivative)(&stmt, function_inputs);
                 return Some(new_stmt);
             } else if let syn::Expr::Call(call_expr) = &*init.1 {
                 // Create function in signature
@@ -86,12 +84,7 @@ pub fn forward_derivative(
                     .get(&function_in_signature)
                     .expect("forward_derivative: unsupported function");
                 // Gets new stmt
-                let new_stmt = function_out_signature
-                    .forward_derivative
-                    .expect("forward_derivative: binary unimplemented forward")(
-                    &stmt,
-                    function_inputs,
-                );
+                let new_stmt = (function_out_signature.forward_derivative)(&stmt, function_inputs);
 
                 return Some(new_stmt);
             } else if let syn::Expr::MethodCall(method_expr) = &*init.1 {
@@ -99,12 +92,7 @@ pub fn forward_derivative(
                 let method_out = SUPPORTED_METHODS
                     .get(&method_sig)
                     .expect("forward_derivative: unsupported method");
-                let new_stmt = method_out
-                    .forward_derivative
-                    .expect("forward_derivative: method unimplemented forward")(
-                    &stmt,
-                    function_inputs,
-                );
+                let new_stmt = (method_out.forward_derivative)(&stmt, function_inputs);
                 return Some(new_stmt);
             } else if let syn::Expr::Path(expr_path) = &*init.1 {
                 // Given `let x = y;`

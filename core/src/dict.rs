@@ -63,27 +63,15 @@ pub struct ProcedureOutputs {
     /// Output type of procedure
     pub output_type: String,
     /// Transformation procedure to give the forward derivative
-    pub forward_derivative: Option<fn(&syn::Stmt, &[String]) -> syn::Stmt>,
+    pub forward_derivative: fn(&syn::Stmt, &[String]) -> syn::Stmt,
     /// Transfomation procedure to give the reverse derivative
-    pub reverse_derivative:
-        Option<fn(&syn::Stmt, &mut HashMap<String, Vec<String>>) -> Option<syn::Stmt>>,
-}
-impl From<&'static str> for ProcedureOutputs {
-    fn from(output_type: &'static str) -> Self {
-        Self {
-            output_type: String::from(output_type),
-            forward_derivative: None,
-            reverse_derivative: None,
-        }
-    }
+    pub reverse_derivative: fn(&syn::Stmt, &mut HashMap<String, Vec<String>>) -> Option<syn::Stmt>,
 }
 impl ProcedureOutputs {
     pub fn new(
         output_type: &'static str,
-        forward_derivative: Option<fn(&syn::Stmt, &[String]) -> syn::Stmt>,
-        reverse_derivative: Option<
-            fn(&syn::Stmt, &mut HashMap<String, Vec<String>>) -> Option<syn::Stmt>,
-        >,
+        forward_derivative: fn(&syn::Stmt, &[String]) -> syn::Stmt,
+        reverse_derivative: fn(&syn::Stmt, &mut HashMap<String, Vec<String>>) -> Option<syn::Stmt>,
     ) -> Self {
         Self {
             output_type: String::from(output_type),
@@ -92,19 +80,19 @@ impl ProcedureOutputs {
         }
     }
 }
-// TODO Why doesn't this work? (e.g. `("f32",Some(forward_add),None).into()` causes error)
+// TODO Why doesn't this work?
 impl
     From<(
         &'static str,
-        Option<fn(&syn::Stmt, &[String]) -> syn::Stmt>,
-        Option<fn(&syn::Stmt, &mut HashMap<String, Vec<String>>) -> Option<syn::Stmt>>,
+        fn(&syn::Stmt, &[String]) -> syn::Stmt,
+        fn(&syn::Stmt, &mut HashMap<String, Vec<String>>) -> Option<syn::Stmt>,
     )> for ProcedureOutputs
 {
     fn from(
         (output_type, forward_derivative, reverse_derivative): (
             &'static str,
-            Option<fn(&syn::Stmt, &[String]) -> syn::Stmt>,
-            Option<fn(&syn::Stmt, &mut HashMap<String, Vec<String>>) -> Option<syn::Stmt>>,
+            fn(&syn::Stmt, &[String]) -> syn::Stmt,
+            fn(&syn::Stmt, &mut HashMap<String, Vec<String>>) -> Option<syn::Stmt>,
         ),
     ) -> Self {
         Self {
@@ -183,89 +171,88 @@ type OperationMap = HashMap<OperationSignature, ProcedureOutputs>;
 lazy_static::lazy_static! {
     /// Internal map of currently supported functions.
     pub static ref SUPPORTED_FUNCTIONS: FunctionMap = {
-        let mut map = FunctionMap::new();
-        map.insert(("some_function",&["f64","f64"]).into(),"f32".into());
+        let map = FunctionMap::new();
         map
     };
     /// Internal map of currently supported methods.
     pub static ref SUPPORTED_METHODS: MethodMap = {
         let mut map = MethodMap::new();
-        map.insert(("powi","f32",&["i32"]).into(),ProcedureOutputs::new("f32",Some(forward_powi::<{Type::F32}>),Some(reverse_powi::<{Type::F32}>)));
-        map.insert(("powf","f32",&["f32"]).into(),ProcedureOutputs::new("f32",Some(forward_powf::<{Type::F32}>),Some(reverse_powf::<{Type::F32}>)));
-        map.insert(("sqrt","f32",&[]).into(),ProcedureOutputs::new("f32",Some(forward_sqrt::<{Type::F32}>),Some(reverse_sqrt::<{Type::F32}>)));
-        map.insert(("ln","f32",&[]).into(),ProcedureOutputs::new("f32",Some(forward_ln::<{Type::F32}>),Some(reverse_ln::<{Type::F32}>)));
-        map.insert(("log","f32",&["f32"]).into(),ProcedureOutputs::new("f32",Some(forward_log::<{Type::F32}>),Some(reverse_log::<{Type::F32}>)));
+        map.insert(("powi","f32",&["i32"]).into(),ProcedureOutputs::new("f32",forward_powi::<{Type::F32}>,reverse_powi::<{Type::F32}>));
+        map.insert(("powf","f32",&["f32"]).into(),ProcedureOutputs::new("f32",forward_powf::<{Type::F32}>,reverse_powf::<{Type::F32}>));
+        map.insert(("sqrt","f32",&[]).into(),ProcedureOutputs::new("f32",forward_sqrt::<{Type::F32}>,reverse_sqrt::<{Type::F32}>));
+        map.insert(("ln","f32",&[]).into(),ProcedureOutputs::new("f32",forward_ln::<{Type::F32}>,reverse_ln::<{Type::F32}>));
+        map.insert(("log","f32",&["f32"]).into(),ProcedureOutputs::new("f32",forward_log::<{Type::F32}>,reverse_log::<{Type::F32}>));
 
-        map.insert(("powi","f64",&["i32"]).into(),ProcedureOutputs::new("f64",Some(forward_powi::<{Type::F64}>),Some(reverse_powi::<{Type::F64}>)));
-        map.insert(("powf","f64",&["f64"]).into(),ProcedureOutputs::new("f64",Some(forward_powf::<{Type::F64}>),Some(reverse_powf::<{Type::F64}>)));
-        map.insert(("sqrt","f64",&[]).into(),ProcedureOutputs::new("f64",Some(forward_sqrt::<{Type::F64}>),Some(reverse_sqrt::<{Type::F64}>)));
-        map.insert(("ln","f64",&[]).into(),ProcedureOutputs::new("f64",Some(forward_ln::<{Type::F64}>),Some(reverse_ln::<{Type::F64}>)));
-        map.insert(("log","f64",&["f64"]).into(),ProcedureOutputs::new("f64",Some(forward_log::<{Type::F64}>),Some(reverse_log::<{Type::F64}>)));
+        map.insert(("powi","f64",&["i32"]).into(),ProcedureOutputs::new("f64",forward_powi::<{Type::F64}>,reverse_powi::<{Type::F64}>));
+        map.insert(("powf","f64",&["f64"]).into(),ProcedureOutputs::new("f64",forward_powf::<{Type::F64}>,reverse_powf::<{Type::F64}>));
+        map.insert(("sqrt","f64",&[]).into(),ProcedureOutputs::new("f64",forward_sqrt::<{Type::F64}>,reverse_sqrt::<{Type::F64}>));
+        map.insert(("ln","f64",&[]).into(),ProcedureOutputs::new("f64",forward_ln::<{Type::F64}>,reverse_ln::<{Type::F64}>));
+        map.insert(("log","f64",&["f64"]).into(),ProcedureOutputs::new("f64",forward_log::<{Type::F64}>,reverse_log::<{Type::F64}>));
         map
     };
     /// Internal map of currently supported operations.
     pub static ref SUPPORTED_OPERATIONS: OperationMap = {
         let mut map = OperationMap::new();
         // f32 arithmetics
-        map.insert(("f32","+","f32").into(),ProcedureOutputs::new("f32",Some(forward_add::<{Type::F32}>),Some(reverse_add::<{Type::F32}>)));
-        map.insert(("f32","*","f32").into(),ProcedureOutputs::new("f32",Some(forward_mul::<{Type::F32}>),Some(reverse_mul::<{Type::F32}>)));
-        map.insert(("f32","/","f32").into(),ProcedureOutputs::new("f32",Some(forward_div::<{Type::F32}>),Some(reverse_div::<{Type::F32}>)));
-        map.insert(("f32","-","f32").into(),ProcedureOutputs::new("f32",Some(forward_sub::<{Type::F32}>),Some(reverse_sub::<{Type::F32}>)));
+        map.insert(("f32","+","f32").into(),ProcedureOutputs::new("f32",forward_add::<{Type::F32}>,reverse_add::<{Type::F32}>));
+        map.insert(("f32","*","f32").into(),ProcedureOutputs::new("f32",forward_mul::<{Type::F32}>,reverse_mul::<{Type::F32}>));
+        map.insert(("f32","/","f32").into(),ProcedureOutputs::new("f32",forward_div::<{Type::F32}>,reverse_div::<{Type::F32}>));
+        map.insert(("f32","-","f32").into(),ProcedureOutputs::new("f32",forward_sub::<{Type::F32}>,reverse_sub::<{Type::F32}>));
         // f64 arithmetics
-        map.insert(("f64","+","f64").into(),ProcedureOutputs::new("f64",Some(forward_add::<{Type::F64}>),Some(reverse_add::<{Type::F64}>)));
-        map.insert(("f64","*","f64").into(),ProcedureOutputs::new("f64",Some(forward_mul::<{Type::F64}>),Some(reverse_mul::<{Type::F64}>)));
-        map.insert(("f64","/","f64").into(),ProcedureOutputs::new("f64",Some(forward_div::<{Type::F64}>),Some(reverse_div::<{Type::F64}>)));
-        map.insert(("f64","-","f64").into(),ProcedureOutputs::new("f64",Some(forward_sub::<{Type::F64}>),Some(reverse_sub::<{Type::F64}>)));
+        map.insert(("f64","+","f64").into(),ProcedureOutputs::new("f64",forward_add::<{Type::F64}>,reverse_add::<{Type::F64}>));
+        map.insert(("f64","*","f64").into(),ProcedureOutputs::new("f64",forward_mul::<{Type::F64}>,reverse_mul::<{Type::F64}>));
+        map.insert(("f64","/","f64").into(),ProcedureOutputs::new("f64",forward_div::<{Type::F64}>,reverse_div::<{Type::F64}>));
+        map.insert(("f64","-","f64").into(),ProcedureOutputs::new("f64",forward_sub::<{Type::F64}>,reverse_sub::<{Type::F64}>));
         // i8 arithmetics
-        map.insert(("i8","+","i8").into(),ProcedureOutputs::new("i8",Some(forward_add::<{Type::I8}>),Some(reverse_add::<{Type::I8}>)));
-        map.insert(("i8","*","i8").into(),ProcedureOutputs::new("i8",Some(forward_mul::<{Type::I8}>),Some(reverse_mul::<{Type::I8}>)));
-        map.insert(("i8","/","i8").into(),ProcedureOutputs::new("i8",Some(forward_div::<{Type::I8}>),Some(reverse_div::<{Type::I8}>)));
-        map.insert(("i8","-","i8").into(),ProcedureOutputs::new("i8",Some(forward_sub::<{Type::I8}>),Some(reverse_sub::<{Type::I8}>)));
+        map.insert(("i8","+","i8").into(),ProcedureOutputs::new("i8",forward_add::<{Type::I8}>,reverse_add::<{Type::I8}>));
+        map.insert(("i8","*","i8").into(),ProcedureOutputs::new("i8",forward_mul::<{Type::I8}>,reverse_mul::<{Type::I8}>));
+        map.insert(("i8","/","i8").into(),ProcedureOutputs::new("i8",forward_div::<{Type::I8}>,reverse_div::<{Type::I8}>));
+        map.insert(("i8","-","i8").into(),ProcedureOutputs::new("i8",forward_sub::<{Type::I8}>,reverse_sub::<{Type::I8}>));
         // i16 arithmetics
-        map.insert(("i16","+","i16").into(),ProcedureOutputs::new("i16",Some(forward_add::<{Type::I16}>),Some(reverse_add::<{Type::I16}>)));
-        map.insert(("i16","*","i16").into(),ProcedureOutputs::new("i16",Some(forward_mul::<{Type::I16}>),Some(reverse_mul::<{Type::I16}>)));
-        map.insert(("i16","/","i16").into(),ProcedureOutputs::new("i16",Some(forward_div::<{Type::I16}>),Some(reverse_div::<{Type::I16}>)));
-        map.insert(("i16","-","i16").into(),ProcedureOutputs::new("i16",Some(forward_sub::<{Type::I16}>),Some(reverse_sub::<{Type::I16}>)));
+        map.insert(("i16","+","i16").into(),ProcedureOutputs::new("i16",forward_add::<{Type::I16}>,reverse_add::<{Type::I16}>));
+        map.insert(("i16","*","i16").into(),ProcedureOutputs::new("i16",forward_mul::<{Type::I16}>,reverse_mul::<{Type::I16}>));
+        map.insert(("i16","/","i16").into(),ProcedureOutputs::new("i16",forward_div::<{Type::I16}>,reverse_div::<{Type::I16}>));
+        map.insert(("i16","-","i16").into(),ProcedureOutputs::new("i16",forward_sub::<{Type::I16}>,reverse_sub::<{Type::I16}>));
         // i32 arithmetics
-        map.insert(("i32","+","i32").into(),ProcedureOutputs::new("i32",Some(forward_add::<{Type::I32}>),Some(reverse_add::<{Type::I32}>)));
-        map.insert(("i32","*","i32").into(),ProcedureOutputs::new("i32",Some(forward_mul::<{Type::I32}>),Some(reverse_mul::<{Type::I32}>)));
-        map.insert(("i32","/","i32").into(),ProcedureOutputs::new("i32",Some(forward_div::<{Type::I32}>),Some(reverse_div::<{Type::I32}>)));
-        map.insert(("i32","-","i32").into(),ProcedureOutputs::new("i32",Some(forward_sub::<{Type::I32}>),Some(reverse_sub::<{Type::I32}>)));
+        map.insert(("i32","+","i32").into(),ProcedureOutputs::new("i32",forward_add::<{Type::I32}>,reverse_add::<{Type::I32}>));
+        map.insert(("i32","*","i32").into(),ProcedureOutputs::new("i32",forward_mul::<{Type::I32}>,reverse_mul::<{Type::I32}>));
+        map.insert(("i32","/","i32").into(),ProcedureOutputs::new("i32",forward_div::<{Type::I32}>,reverse_div::<{Type::I32}>));
+        map.insert(("i32","-","i32").into(),ProcedureOutputs::new("i32",forward_sub::<{Type::I32}>,reverse_sub::<{Type::I32}>));
         // i64 arithmetics
-        map.insert(("i64","+","i64").into(),ProcedureOutputs::new("i64",Some(forward_add::<{Type::I64}>),Some(reverse_add::<{Type::I64}>)));
-        map.insert(("i64","*","i64").into(),ProcedureOutputs::new("i64",Some(forward_mul::<{Type::I64}>),Some(reverse_mul::<{Type::I64}>)));
-        map.insert(("i64","/","i64").into(),ProcedureOutputs::new("i64",Some(forward_div::<{Type::I64}>),Some(reverse_div::<{Type::I64}>)));
-        map.insert(("i64","-","i64").into(),ProcedureOutputs::new("i64",Some(forward_sub::<{Type::I64}>),Some(reverse_sub::<{Type::I64}>)));
+        map.insert(("i64","+","i64").into(),ProcedureOutputs::new("i64",forward_add::<{Type::I64}>,reverse_add::<{Type::I64}>));
+        map.insert(("i64","*","i64").into(),ProcedureOutputs::new("i64",forward_mul::<{Type::I64}>,reverse_mul::<{Type::I64}>));
+        map.insert(("i64","/","i64").into(),ProcedureOutputs::new("i64",forward_div::<{Type::I64}>,reverse_div::<{Type::I64}>));
+        map.insert(("i64","-","i64").into(),ProcedureOutputs::new("i64",forward_sub::<{Type::I64}>,reverse_sub::<{Type::I64}>));
         // i128 arithmetics
-        map.insert(("i128","+","i128").into(),ProcedureOutputs::new("i128",Some(forward_add::<{Type::I128}>),Some(reverse_add::<{Type::I128}>)));
-        map.insert(("i128","*","i128").into(),ProcedureOutputs::new("i128",Some(forward_mul::<{Type::I128}>),Some(reverse_mul::<{Type::I128}>)));
-        map.insert(("i128","/","i128").into(),ProcedureOutputs::new("i128",Some(forward_div::<{Type::I128}>),Some(reverse_div::<{Type::I128}>)));
-        map.insert(("i128","-","i128").into(),ProcedureOutputs::new("i128",Some(forward_sub::<{Type::I128}>),Some(reverse_sub::<{Type::I128}>)));
+        map.insert(("i128","+","i128").into(),ProcedureOutputs::new("i128",forward_add::<{Type::I128}>,reverse_add::<{Type::I128}>));
+        map.insert(("i128","*","i128").into(),ProcedureOutputs::new("i128",forward_mul::<{Type::I128}>,reverse_mul::<{Type::I128}>));
+        map.insert(("i128","/","i128").into(),ProcedureOutputs::new("i128",forward_div::<{Type::I128}>,reverse_div::<{Type::I128}>));
+        map.insert(("i128","-","i128").into(),ProcedureOutputs::new("i128",forward_sub::<{Type::I128}>,reverse_sub::<{Type::I128}>));
         // u8 arithmetics
-        map.insert(("u8","+","u8").into(),ProcedureOutputs::new("u8",Some(forward_add::<{Type::U8}>),Some(reverse_add::<{Type::U8}>)));
-        map.insert(("u8","*","u8").into(),ProcedureOutputs::new("u8",Some(forward_mul::<{Type::U8}>),Some(reverse_mul::<{Type::U8}>)));
-        map.insert(("u8","/","u8").into(),ProcedureOutputs::new("u8",Some(forward_div::<{Type::U8}>),Some(reverse_div::<{Type::U8}>)));
-        map.insert(("u8","-","u8").into(),ProcedureOutputs::new("u8",Some(forward_sub::<{Type::U8}>),Some(reverse_sub::<{Type::U8}>)));
+        map.insert(("u8","+","u8").into(),ProcedureOutputs::new("u8",forward_add::<{Type::U8}>,reverse_add::<{Type::U8}>));
+        map.insert(("u8","*","u8").into(),ProcedureOutputs::new("u8",forward_mul::<{Type::U8}>,reverse_mul::<{Type::U8}>));
+        map.insert(("u8","/","u8").into(),ProcedureOutputs::new("u8",forward_div::<{Type::U8}>,reverse_div::<{Type::U8}>));
+        map.insert(("u8","-","u8").into(),ProcedureOutputs::new("u8",forward_sub::<{Type::U8}>,reverse_sub::<{Type::U8}>));
         // u16 arithmetics
-        map.insert(("u16","+","u16").into(),ProcedureOutputs::new("u16",Some(forward_add::<{Type::U16}>),Some(reverse_add::<{Type::U16}>)));
-        map.insert(("u16","*","u16").into(),ProcedureOutputs::new("u16",Some(forward_mul::<{Type::U16}>),Some(reverse_mul::<{Type::U16}>)));
-        map.insert(("u16","/","u16").into(),ProcedureOutputs::new("u16",Some(forward_div::<{Type::U16}>),Some(reverse_div::<{Type::U16}>)));
-        map.insert(("u16","-","u16").into(),ProcedureOutputs::new("u16",Some(forward_sub::<{Type::U16}>),Some(reverse_sub::<{Type::U16}>)));
+        map.insert(("u16","+","u16").into(),ProcedureOutputs::new("u16",forward_add::<{Type::U16}>,reverse_add::<{Type::U16}>));
+        map.insert(("u16","*","u16").into(),ProcedureOutputs::new("u16",forward_mul::<{Type::U16}>,reverse_mul::<{Type::U16}>));
+        map.insert(("u16","/","u16").into(),ProcedureOutputs::new("u16",forward_div::<{Type::U16}>,reverse_div::<{Type::U16}>));
+        map.insert(("u16","-","u16").into(),ProcedureOutputs::new("u16",forward_sub::<{Type::U16}>,reverse_sub::<{Type::U16}>));
         // u32 arithmetics
-        map.insert(("u32","+","u32").into(),ProcedureOutputs::new("u32",Some(forward_add::<{Type::U32}>),Some(reverse_add::<{Type::U32}>)));
-        map.insert(("u32","*","u32").into(),ProcedureOutputs::new("u32",Some(forward_mul::<{Type::U32}>),Some(reverse_mul::<{Type::U32}>)));
-        map.insert(("u32","/","u32").into(),ProcedureOutputs::new("u32",Some(forward_div::<{Type::U32}>),Some(reverse_div::<{Type::U32}>)));
-        map.insert(("u32","-","u32").into(),ProcedureOutputs::new("u32",Some(forward_sub::<{Type::U32}>),Some(reverse_sub::<{Type::U32}>)));
+        map.insert(("u32","+","u32").into(),ProcedureOutputs::new("u32",forward_add::<{Type::U32}>,reverse_add::<{Type::U32}>));
+        map.insert(("u32","*","u32").into(),ProcedureOutputs::new("u32",forward_mul::<{Type::U32}>,reverse_mul::<{Type::U32}>));
+        map.insert(("u32","/","u32").into(),ProcedureOutputs::new("u32",forward_div::<{Type::U32}>,reverse_div::<{Type::U32}>));
+        map.insert(("u32","-","u32").into(),ProcedureOutputs::new("u32",forward_sub::<{Type::U32}>,reverse_sub::<{Type::U32}>));
         // u64 arithmetics
-        map.insert(("u64","+","u64").into(),ProcedureOutputs::new("u64",Some(forward_add::<{Type::U64}>),Some(reverse_add::<{Type::U64}>)));
-        map.insert(("u64","*","u64").into(),ProcedureOutputs::new("u64",Some(forward_mul::<{Type::U64}>),Some(reverse_mul::<{Type::U64}>)));
-        map.insert(("u64","/","u64").into(),ProcedureOutputs::new("u64",Some(forward_div::<{Type::U64}>),Some(reverse_div::<{Type::U64}>)));
-        map.insert(("u64","-","u64").into(),ProcedureOutputs::new("u64",Some(forward_sub::<{Type::U64}>),Some(reverse_sub::<{Type::U64}>)));
+        map.insert(("u64","+","u64").into(),ProcedureOutputs::new("u64",forward_add::<{Type::U64}>,reverse_add::<{Type::U64}>));
+        map.insert(("u64","*","u64").into(),ProcedureOutputs::new("u64",forward_mul::<{Type::U64}>,reverse_mul::<{Type::U64}>));
+        map.insert(("u64","/","u64").into(),ProcedureOutputs::new("u64",forward_div::<{Type::U64}>,reverse_div::<{Type::U64}>));
+        map.insert(("u64","-","u64").into(),ProcedureOutputs::new("u64",forward_sub::<{Type::U64}>,reverse_sub::<{Type::U64}>));
         // u128 arithmetics
-        map.insert(("u128","+","u128").into(),ProcedureOutputs::new("u128",Some(forward_add::<{Type::U128}>),Some(reverse_add::<{Type::U128}>)));
-        map.insert(("u128","*","u128").into(),ProcedureOutputs::new("u128",Some(forward_mul::<{Type::U128}>),Some(reverse_mul::<{Type::U128}>)));
-        map.insert(("u128","/","u128").into(),ProcedureOutputs::new("u128",Some(forward_div::<{Type::U128}>),Some(reverse_div::<{Type::U128}>)));
-        map.insert(("u128","-","u128").into(),ProcedureOutputs::new("u128",Some(forward_sub::<{Type::U128}>),Some(reverse_sub::<{Type::U128}>)));
+        map.insert(("u128","+","u128").into(),ProcedureOutputs::new("u128",forward_add::<{Type::U128}>,reverse_add::<{Type::U128}>));
+        map.insert(("u128","*","u128").into(),ProcedureOutputs::new("u128",forward_mul::<{Type::U128}>,reverse_mul::<{Type::U128}>));
+        map.insert(("u128","/","u128").into(),ProcedureOutputs::new("u128",forward_div::<{Type::U128}>,reverse_div::<{Type::U128}>));
+        map.insert(("u128","-","u128").into(),ProcedureOutputs::new("u128",forward_sub::<{Type::U128}>,reverse_sub::<{Type::U128}>));
         map
     };
 }
