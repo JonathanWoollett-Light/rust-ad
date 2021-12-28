@@ -191,7 +191,7 @@ mod forward_operations {
 
         /// Equations:
         /// - f = log2(x) + 2x*log2(x)+ 2/y
-        /// - ∂x|y=5 = ( 2x + 2x*ln(x)+1 ) / (x*ln(2)) 
+        /// - ∂x|y=5 = ( 2x + 2x*ln(x)+1 ) / (x*ln(2))
         /// - ∂y|x=3 = -2/y^2
         /// Values:
         /// - f(3,5) = 11.494737505

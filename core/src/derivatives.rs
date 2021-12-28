@@ -548,6 +548,47 @@ pub fn forward_log<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]
     let stmt_str = format!("let ({}) = ({});", idents, deriatives);
     syn::parse_str(&stmt_str).expect("forward_log: parse fail")
 }
+/// Forward deriative of [`sqrt`](https://doc.rust-lang.org/std/primitive.f32.html#method.sqrt).
+pub fn forward_abs<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
+    let local = stmt.local().expect("forward_abs: not local");
+    let init = &local.init;
+    let method_expr = init
+        .as_ref()
+        .unwrap()
+        .1
+        .method_call()
+        .expect("forward_abs: not method");
+
+    let val_ident = local
+        .pat
+        .ident()
+        .expect("forward_abs: not ident")
+        .ident
+        .to_string();
+
+    let idents = function_inputs
+        .iter()
+        .map(|input| wrt!(val_ident, input))
+        .intersperse(String::from(","))
+        .collect::<String>();
+
+    let base = expr_str(&*method_expr.receiver);
+    let deriatives = function_inputs
+        .iter()
+        .map(|input| {
+            // If base>0 then as it rises, so does lis, thus 1 derivative, inversly, if base<0, then -1 deriative
+            // x/x.abs() == if x >= 0 { 1 } else { -1 }
+            if *input == base {
+                format!("{base} / {base}.abs()", base = base,)
+            } else {
+                OUT.zero()
+            }
+        })
+        .intersperse(String::from(","))
+        .collect::<String>();
+    let stmt_str = format!("let ({}) = ({});", idents, deriatives);
+    syn::parse_str(&stmt_str).expect("forward_abs: parse fail")
+}
 
 /// Reverse deriative of [std::ops::Add].
 pub fn reverse_add<const OUT: Type>(
@@ -915,7 +956,7 @@ pub fn reverse_powf<const OUT: Type>(
     let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_powf: parse fail");
     Some(new_stmt)
 }
-/// Reverse deriative of [`sqrt`](https://doc.rust-lang.org/std/primitive.f64.html#method.sqrt).
+/// Reverse deriative of [`sqrt`](https://doc.rust-lang.org/std/primitive.f32.html#method.sqrt).
 pub fn reverse_sqrt<const OUT: Type>(
     stmt: &syn::Stmt,
     component_map: &mut HashMap<String, Vec<String>>,
@@ -1074,5 +1115,47 @@ pub fn reverse_log<const OUT: Type>(
         _ => panic!("reverse_log: Unsupported bin expr"),
     };
     let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_log: parse fail");
+    Some(new_stmt)
+}
+/// Reverse deriative of [`abs`](https://doc.rust-lang.org/std/primitive.f32.html#method.abs).
+pub fn reverse_abs<const OUT: Type>(
+    stmt: &syn::Stmt,
+    component_map: &mut HashMap<String, Vec<String>>,
+) -> Option<syn::Stmt> {
+    let local = stmt.local().expect("reverse_abs: not local");
+    let init = &local.init;
+    let method_expr = init
+        .as_ref()
+        .unwrap()
+        .1
+        .method_call()
+        .expect("reverse_abs: not method");
+
+    let lis = local
+        .pat
+        .ident()
+        .expect("reverse_abs: not ident")
+        .ident
+        .to_string();
+
+    let base = &*method_expr.receiver;
+
+    let stmt_str = match base {
+        syn::Expr::Path(expr_path) => {
+            let base = expr_path.path.segments[0].ident.to_string();
+            append_insert(&base, lis.clone(), component_map);
+            // If base>0 then as it rises, so does lis, thus 1 derivative, inversly, if base<0, then -1 deriative
+            // x/x.abs() == if x >= 0 { 1 } else { -1 }
+            format!(
+                "let {} = {dx} * ( {base} / {base}.abs() );",
+                wrt!(base, lis),
+                base = base,
+                dx = der!(lis),
+            )
+        }
+        syn::Expr::Lit(_) => return None,
+        _ => panic!("reverse_abs: Unsupported bin expr"),
+    };
+    let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_abs: parse fail");
     Some(new_stmt)
 }

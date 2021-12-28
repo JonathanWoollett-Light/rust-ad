@@ -182,12 +182,14 @@ lazy_static::lazy_static! {
         map.insert(("sqrt","f32",&[]).into(),ProcedureOutputs::new("f32",forward_sqrt::<{Type::F32}>,reverse_sqrt::<{Type::F32}>));
         map.insert(("ln","f32",&[]).into(),ProcedureOutputs::new("f32",forward_ln::<{Type::F32}>,reverse_ln::<{Type::F32}>));
         map.insert(("log","f32",&["f32"]).into(),ProcedureOutputs::new("f32",forward_log::<{Type::F32}>,reverse_log::<{Type::F32}>));
+        map.insert(("log","f32",&[]).into(),ProcedureOutputs::new("f32",forward_abs::<{Type::F32}>,reverse_abs::<{Type::F32}>));
 
         map.insert(("powi","f64",&["i32"]).into(),ProcedureOutputs::new("f64",forward_powi::<{Type::F64}>,reverse_powi::<{Type::F64}>));
         map.insert(("powf","f64",&["f64"]).into(),ProcedureOutputs::new("f64",forward_powf::<{Type::F64}>,reverse_powf::<{Type::F64}>));
         map.insert(("sqrt","f64",&[]).into(),ProcedureOutputs::new("f64",forward_sqrt::<{Type::F64}>,reverse_sqrt::<{Type::F64}>));
         map.insert(("ln","f64",&[]).into(),ProcedureOutputs::new("f64",forward_ln::<{Type::F64}>,reverse_ln::<{Type::F64}>));
         map.insert(("log","f64",&["f64"]).into(),ProcedureOutputs::new("f64",forward_log::<{Type::F64}>,reverse_log::<{Type::F64}>));
+        map.insert(("log","f64",&[]).into(),ProcedureOutputs::new("f64",forward_abs::<{Type::F64}>,reverse_abs::<{Type::F64}>));
         map
     };
     /// Internal map of currently supported operations.
