@@ -28,25 +28,12 @@ use reverse::*;
 ///     return f;
 /// }
 /// fn main() {
-///     let (f, der_x, der_y) = rust_ad::forward!(multi, 3f32, 5f32, 1f32, 1f32);
+///     let (f, der_x, der_y) = rust_ad::forward!(multi, 3f32, 5f32);
 ///     assert_eq!(f, 15.4f32);
 ///     assert_eq!(der_x, 8f32); // 2(x+1)
 ///     assert_eq!(der_y, -0.08f32); // -2/y^2
 /// }
 /// ```
-///
-/// This is just a procedural functional macro replacement for the declarative macro:
-///
-/// ```
-/// #[macro_export]
-/// macro_rules! forward {
-///     ($f:ident,$($x:expr),*) => {{
-///         FORWARD_MODE_PREFIX$ident($($x,)*);
-///     }}
-/// }
-/// ```
-///
-/// Since you can't export declarative macros from a procedural macro crate.
 #[proc_macro]
 pub fn forward(_item: TokenStream) -> TokenStream {
     let mut items = _item.into_iter();
@@ -54,25 +41,26 @@ pub fn forward(_item: TokenStream) -> TokenStream {
         Some(proc_macro::TokenTree::Ident(ident)) => ident,
         _ => panic!("Requires function identifier"),
     };
+    let vec = items.collect::<Vec<_>>();
+    let items = vec.chunks_exact(2);
     let inputs = items
-        .enumerate()
-        .filter_map(|(index, token)| {
-            if index % 2 == 0 {
-                match token {
-                    proc_macro::TokenTree::Punct(_) => None,
-                    _ => panic!("punctuation token out of place"),
+        .map(|item| {
+            let (punc, lit) = (&item[0], &item[1]);
+            match (punc, lit) {
+                (proc_macro::TokenTree::Punct(_), proc_macro::TokenTree::Literal(num)) => {
+                    format!("{},", num)
                 }
-            } else {
-                match token {
-                    proc_macro::TokenTree::Literal(num) => Some(num.to_string()),
-                    _ => panic!("literal token out of place"),
-                }
+                _ => panic!("forward: bad"),
             }
         })
-        .intersperse(String::from(","))
-        .collect::<String>();
+        .collect::<Vec<String>>();
+    let input_deriatives = "1f32,".repeat(inputs.len());
+    let inputs_str = inputs.into_iter().collect::<String>();
 
-    let call_str = format!("{}{}({})", FORWARD_MODE_PREFIX, function_ident, inputs);
+    let call_str = format!(
+        "{}{}({}{})",
+        FORWARD_MODE_PREFIX, function_ident, inputs_str, input_deriatives
+    );
     call_str.parse().unwrap()
 }
 /// Calls reverse auto-differentiation function corresponding to a given function.
@@ -87,25 +75,12 @@ pub fn forward(_item: TokenStream) -> TokenStream {
 ///     return f;
 /// }
 /// fn main() {
-///     let (f, der_x, der_y) = rust_ad::reverse!(multi, 3f32, 5f32, 1f32);
+///     let (f, der_x, der_y) = rust_ad::reverse!(multi, 3f32, 5f32);
 ///     assert_eq!(f, 15.4f32);
 ///     assert_eq!(der_x, 8f32); // 2(x+1)
 ///     assert_eq!(der_y, -0.08f32); // -2/y^2
 /// }
 /// ```
-///
-/// This is just a procedural functional macro replacement for the declarative macro:
-///
-/// ```
-/// #[macro_export]
-/// macro_rules! reverse {
-///     ($f:ident,$($x:expr),*) => {{
-///         REVERSE_MODE_PREFIX$ident($($x,)*);
-///     }}
-/// }
-/// ```
-///
-/// Since you can't export declarative macros from a procedural macro crate.
 #[proc_macro]
 pub fn reverse(_item: TokenStream) -> TokenStream {
     let mut items = _item.into_iter();
@@ -113,25 +88,21 @@ pub fn reverse(_item: TokenStream) -> TokenStream {
         Some(proc_macro::TokenTree::Ident(ident)) => ident,
         _ => panic!("Requires function identifier"),
     };
+    let vec = items.collect::<Vec<_>>();
+    let items = vec.chunks_exact(2);
     let inputs = items
-        .enumerate()
-        .filter_map(|(index, token)| {
-            if index % 2 == 0 {
-                match token {
-                    proc_macro::TokenTree::Punct(_) => None,
-                    _ => panic!("punctuation token out of place"),
+        .map(|item| {
+            let (punc, lit) = (&item[0], &item[1]);
+            match (punc, lit) {
+                (proc_macro::TokenTree::Punct(_), proc_macro::TokenTree::Literal(num)) => {
+                    format!("{},", num)
                 }
-            } else {
-                match token {
-                    proc_macro::TokenTree::Literal(num) => Some(num.to_string()),
-                    _ => panic!("literal token out of place"),
-                }
+                _ => panic!("reverse: bad"),
             }
         })
-        .intersperse(String::from(","))
         .collect::<String>();
 
-    let call_str = format!("{}{}({})", REVERSE_MODE_PREFIX, function_ident, inputs);
+    let call_str = format!("{}{}({}1f32)", REVERSE_MODE_PREFIX, function_ident, inputs);
     call_str.parse().unwrap()
 }
 

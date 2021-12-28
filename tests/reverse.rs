@@ -1,5 +1,6 @@
+/// General tests for forward auto-diff
 #[cfg(test)]
-mod reverse {
+mod reverse_general {
     #![allow(dead_code)]
     use rust_ad::{reverse, reverse_autodiff};
 
@@ -30,27 +31,30 @@ mod reverse {
 
     #[test]
     fn empty_test() {
-        let (x, der_x) = reverse!(empty, 1f32, 1f32);
+        let (x, der_x) = reverse!(empty, 1f32);
         assert_eq!(x, 1.);
         assert_eq!(der_x, 1.);
     }
     #[test]
     fn plus_test() {
-        let (x, der_x) = reverse!(plus, 1f32, 1f32);
+        let (x, der_x) = reverse!(plus, 1f32);
         assert_eq!(x, 2f32);
         assert_eq!(der_x, 1f32);
     }
     #[test]
     fn quad_test() {
-        let (x, der_x) = reverse!(quad, 3f32, 1f32);
+        let (x, der_x) = reverse!(quad, 3f32);
         assert_eq!(x, 17f32);
         assert_eq!(der_x, 8f32);
     }
     #[test]
     fn multi_test() {
-        let (f, der_x, der_y) = reverse!(multi, 3f32, 5f32, 1f32);
+        let (f, der_x, der_y) = reverse!(multi, 3f32, 5f32);
         assert_eq!(f, 15.4f32);
         assert_eq!(der_x, 8f32); // 2(x+1)
         assert_eq!(der_y, -0.08f32); // -2/y^2
     }
 }
+/// Tests for specific operations for reverse auto-diff
+#[cfg(test)]
+mod reverse_operations {}
