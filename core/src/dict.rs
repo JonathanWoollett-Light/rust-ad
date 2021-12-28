@@ -177,19 +177,82 @@ lazy_static::lazy_static! {
     /// Internal map of currently supported methods.
     pub static ref SUPPORTED_METHODS: MethodMap = {
         let mut map = MethodMap::new();
-        map.insert(("powi","f32",&["i32"]).into(),ProcedureOutputs::new("f32",forward_powi::<{Type::F32}>,reverse_powi::<{Type::F32}>));
-        map.insert(("powf","f32",&["f32"]).into(),ProcedureOutputs::new("f32",forward_powf::<{Type::F32}>,reverse_powf::<{Type::F32}>));
-        map.insert(("sqrt","f32",&[]).into(),ProcedureOutputs::new("f32",forward_sqrt::<{Type::F32}>,reverse_sqrt::<{Type::F32}>));
-        map.insert(("ln","f32",&[]).into(),ProcedureOutputs::new("f32",forward_ln::<{Type::F32}>,reverse_ln::<{Type::F32}>));
-        map.insert(("log","f32",&["f32"]).into(),ProcedureOutputs::new("f32",forward_log::<{Type::F32}>,reverse_log::<{Type::F32}>));
-        map.insert(("log","f32",&[]).into(),ProcedureOutputs::new("f32",forward_abs::<{Type::F32}>,reverse_abs::<{Type::F32}>));
-
+        // f32
+        // ----------------------------
+        // Exponents
         map.insert(("powi","f64",&["i32"]).into(),ProcedureOutputs::new("f64",forward_powi::<{Type::F64}>,reverse_powi::<{Type::F64}>));
         map.insert(("powf","f64",&["f64"]).into(),ProcedureOutputs::new("f64",forward_powf::<{Type::F64}>,reverse_powf::<{Type::F64}>));
         map.insert(("sqrt","f64",&[]).into(),ProcedureOutputs::new("f64",forward_sqrt::<{Type::F64}>,reverse_sqrt::<{Type::F64}>));
+        map.insert(("cbrt","f64",&[]).into(),ProcedureOutputs::new("f64",forward_cbrt::<{Type::F64}>,reverse_cbrt::<{Type::F64}>));
+        map.insert(("exp","f64",&[]).into(),ProcedureOutputs::new("f64",forward_exp::<{Type::F64}>,reverse_exp::<{Type::F64}>));
+        map.insert(("exp2","f64",&[]).into(),ProcedureOutputs::new("f64",forward_exp2::<{Type::F64}>,reverse_exp2::<{Type::F64}>));
+        map.insert(("exp_m1","f64",&[]).into(),ProcedureOutputs::new("f64",forward_exp_m1::<{Type::F64}>,reverse_exp_m1::<{Type::F64}>));
+        // Logs
         map.insert(("ln","f64",&[]).into(),ProcedureOutputs::new("f64",forward_ln::<{Type::F64}>,reverse_ln::<{Type::F64}>));
+        map.insert(("ln","f64",&[]).into(),ProcedureOutputs::new("f64",forward_ln_1p::<{Type::F64}>,reverse_ln_1p::<{Type::F64}>));
         map.insert(("log","f64",&["f64"]).into(),ProcedureOutputs::new("f64",forward_log::<{Type::F64}>,reverse_log::<{Type::F64}>));
-        map.insert(("log","f64",&[]).into(),ProcedureOutputs::new("f64",forward_abs::<{Type::F64}>,reverse_abs::<{Type::F64}>));
+        map.insert(("log10","f64",&[]).into(),ProcedureOutputs::new("f64",forward_log10::<{Type::F64}>,reverse_log10::<{Type::F64}>));
+        map.insert(("log2","f64",&[]).into(),ProcedureOutputs::new("f64",forward_log2::<{Type::F64}>,reverse_log2::<{Type::F64}>));
+        // Trig
+        map.insert(("acos","f64",&[]).into(),ProcedureOutputs::new("f64",forward_acos::<{Type::F64}>,reverse_acos::<{Type::F64}>));
+        map.insert(("acosh","f64",&[]).into(),ProcedureOutputs::new("f64",forward_acosh::<{Type::F64}>,reverse_acosh::<{Type::F64}>));
+        map.insert(("asin","f64",&[]).into(),ProcedureOutputs::new("f64",forward_asin::<{Type::F64}>,reverse_asin::<{Type::F64}>));
+        map.insert(("asinh","f64",&[]).into(),ProcedureOutputs::new("f64",forward_asinh::<{Type::F64}>,reverse_asinh::<{Type::F64}>));
+        map.insert(("atan","f64",&[]).into(),ProcedureOutputs::new("f64",forward_atan::<{Type::F64}>,reverse_atan::<{Type::F64}>));
+        map.insert(("sin","f64",&[]).into(),ProcedureOutputs::new("f64",forward_sin::<{Type::F64}>,reverse_sin::<{Type::F64}>));
+        map.insert(("atanh","f64",&[]).into(),ProcedureOutputs::new("f64",forward_atanh::<{Type::F64}>,reverse_atanh::<{Type::F64}>));
+        map.insert(("cos","f64",&[]).into(),ProcedureOutputs::new("f64",forward_cos::<{Type::F64}>,reverse_cos::<{Type::F64}>));
+        map.insert(("cosh","f64",&[]).into(),ProcedureOutputs::new("f64",forward_cosh::<{Type::F64}>,reverse_cosh::<{Type::F64}>));
+        map.insert(("sinh","f64",&[]).into(),ProcedureOutputs::new("f64",forward_sinh::<{Type::F64}>,reverse_sinh::<{Type::F64}>));
+        map.insert(("tan","f64",&[]).into(),ProcedureOutputs::new("f64",forward_tan::<{Type::F64}>,reverse_tan::<{Type::F64}>));
+        map.insert(("tanh","f64",&[]).into(),ProcedureOutputs::new("f64",forward_tanh::<{Type::F64}>,reverse_tanh::<{Type::F64}>));
+        // Misc
+        map.insert(("abs","f64",&[]).into(),ProcedureOutputs::new("f64",forward_abs::<{Type::F64}>,reverse_abs::<{Type::F64}>));
+        map.insert(("ceil","f64",&[]).into(),ProcedureOutputs::new("f64",forward_ceil::<{Type::F64}>,reverse_ceil::<{Type::F64}>));
+        map.insert(("floor","f64",&[]).into(),ProcedureOutputs::new("f64",forward_floor::<{Type::F64}>,reverse_floor::<{Type::F64}>));
+        map.insert(("fract","f64",&[]).into(),ProcedureOutputs::new("f64",forward_fract::<{Type::F64}>,reverse_fract::<{Type::F64}>));
+        map.insert(("recip","f64",&[]).into(),ProcedureOutputs::new("f64",forward_recip::<{Type::F64}>,reverse_recip::<{Type::F64}>));
+        map.insert(("round","f64",&[]).into(),ProcedureOutputs::new("f64",forward_round::<{Type::F64}>,reverse_round::<{Type::F64}>));
+
+        // f64
+        // ----------------------------
+        // Exponents
+        map.insert(("powi","f64",&["i32"]).into(),ProcedureOutputs::new("f64",forward_powi::<{Type::F64}>,reverse_powi::<{Type::F64}>));
+        map.insert(("powf","f64",&["f64"]).into(),ProcedureOutputs::new("f64",forward_powf::<{Type::F64}>,reverse_powf::<{Type::F64}>));
+        map.insert(("sqrt","f64",&[]).into(),ProcedureOutputs::new("f64",forward_sqrt::<{Type::F64}>,reverse_sqrt::<{Type::F64}>));
+        map.insert(("cbrt","f64",&[]).into(),ProcedureOutputs::new("f64",forward_cbrt::<{Type::F64}>,reverse_cbrt::<{Type::F64}>));
+        map.insert(("exp","f64",&[]).into(),ProcedureOutputs::new("f64",forward_exp::<{Type::F64}>,reverse_exp::<{Type::F64}>));
+        map.insert(("exp2","f64",&[]).into(),ProcedureOutputs::new("f64",forward_exp2::<{Type::F64}>,reverse_exp2::<{Type::F64}>));
+        map.insert(("exp_m1","f64",&[]).into(),ProcedureOutputs::new("f64",forward_exp_m1::<{Type::F64}>,reverse_exp_m1::<{Type::F64}>));
+        // Logs
+        map.insert(("ln","f64",&[]).into(),ProcedureOutputs::new("f64",forward_ln::<{Type::F64}>,reverse_ln::<{Type::F64}>));
+        map.insert(("ln","f64",&[]).into(),ProcedureOutputs::new("f64",forward_ln_1p::<{Type::F64}>,reverse_ln_1p::<{Type::F64}>));
+        map.insert(("log","f64",&["f64"]).into(),ProcedureOutputs::new("f64",forward_log::<{Type::F64}>,reverse_log::<{Type::F64}>));
+        map.insert(("log10","f64",&[]).into(),ProcedureOutputs::new("f64",forward_log10::<{Type::F64}>,reverse_log10::<{Type::F64}>));
+        map.insert(("log2","f64",&[]).into(),ProcedureOutputs::new("f64",forward_log2::<{Type::F64}>,reverse_log2::<{Type::F64}>));
+        // Trig
+        map.insert(("acos","f64",&[]).into(),ProcedureOutputs::new("f64",forward_acos::<{Type::F64}>,reverse_acos::<{Type::F64}>));
+        map.insert(("acosh","f64",&[]).into(),ProcedureOutputs::new("f64",forward_acosh::<{Type::F64}>,reverse_acosh::<{Type::F64}>));
+        map.insert(("asin","f64",&[]).into(),ProcedureOutputs::new("f64",forward_asin::<{Type::F64}>,reverse_asin::<{Type::F64}>));
+        map.insert(("asinh","f64",&[]).into(),ProcedureOutputs::new("f64",forward_asinh::<{Type::F64}>,reverse_asinh::<{Type::F64}>));
+        map.insert(("atan","f64",&[]).into(),ProcedureOutputs::new("f64",forward_atan::<{Type::F64}>,reverse_atan::<{Type::F64}>));
+        map.insert(("sin","f64",&[]).into(),ProcedureOutputs::new("f64",forward_sin::<{Type::F64}>,reverse_sin::<{Type::F64}>));
+        map.insert(("atanh","f64",&[]).into(),ProcedureOutputs::new("f64",forward_atanh::<{Type::F64}>,reverse_atanh::<{Type::F64}>));
+        map.insert(("cos","f64",&[]).into(),ProcedureOutputs::new("f64",forward_cos::<{Type::F64}>,reverse_cos::<{Type::F64}>));
+        map.insert(("cosh","f64",&[]).into(),ProcedureOutputs::new("f64",forward_cosh::<{Type::F64}>,reverse_cosh::<{Type::F64}>));
+        map.insert(("sinh","f64",&[]).into(),ProcedureOutputs::new("f64",forward_sinh::<{Type::F64}>,reverse_sinh::<{Type::F64}>));
+        map.insert(("tan","f64",&[]).into(),ProcedureOutputs::new("f64",forward_tan::<{Type::F64}>,reverse_tan::<{Type::F64}>));
+        map.insert(("tanh","f64",&[]).into(),ProcedureOutputs::new("f64",forward_tanh::<{Type::F64}>,reverse_tanh::<{Type::F64}>));
+        // Misc
+        map.insert(("abs","f64",&[]).into(),ProcedureOutputs::new("f64",forward_abs::<{Type::F64}>,reverse_abs::<{Type::F64}>));
+        map.insert(("ceil","f64",&[]).into(),ProcedureOutputs::new("f64",forward_ceil::<{Type::F64}>,reverse_ceil::<{Type::F64}>));
+        map.insert(("floor","f64",&[]).into(),ProcedureOutputs::new("f64",forward_floor::<{Type::F64}>,reverse_floor::<{Type::F64}>));
+        map.insert(("fract","f64",&[]).into(),ProcedureOutputs::new("f64",forward_fract::<{Type::F64}>,reverse_fract::<{Type::F64}>));
+        map.insert(("recip","f64",&[]).into(),ProcedureOutputs::new("f64",forward_recip::<{Type::F64}>,reverse_recip::<{Type::F64}>));
+        map.insert(("round","f64",&[]).into(),ProcedureOutputs::new("f64",forward_round::<{Type::F64}>,reverse_round::<{Type::F64}>));
+
+        // Return
+        // ------------------------------------------------------------------------------------
         map
     };
     /// Internal map of currently supported operations.

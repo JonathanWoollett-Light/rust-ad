@@ -13,35 +13,20 @@
 //! *`typeof` (e.g. [`decltype`](https://en.cppreference.com/w/cpp/language/decltype)) not being currently implemented in Rust makes support more difficult.
 //!
 //! °Support limited to the basic blas-like operations.
-//!
-//! ### Type support
-//! - **Primitive support:** `+`, `-`, `*` and `/` operations are supported.
-//! - **Extended support:** All operations from [std::ops] are supported.
-//! - **Near-full support:** Almost* all native operations (operations implemented by the library which defines the type) are supported.
-//!
-//! Please note these just specify a minimum set of operations, full details of other specific supported operations are given below.
-//!
+//! 
+//! Type/s | Support
+//! --- | ---
+//! Floats: `f32` & `f64` | ✓
+//! Intgers: `u16`, `i16` etc. | 
+//! 
+//! All mentioned types have support for basic `+`, `-`, `*` and `/` operations if they are implemented.
+//! 
+//! Support means almost* all the native operations (operations implemented by the library which defines the type) are supported.
+//! 
 //! *The 'almost' exception is here since some operations may simply not be worth supporting given extremely limited usage, possible deprecation, etc.
-//!
-//! <table>
-//!   <tr>
-//!   <td style="border-left-style: none;">Primitive support</td>
-//!   <td style="border-right-style: none;"><code>f32</code>,<code>f64</code>,<code>i8</code>,<code>i16</code>,<code>i32</code>,<code>i64</code>,<code>i128</code>,<code>u8</code>,<code>u16</code>,<code>u32</code>,<code>u64</code>,<code>u128</code></td>
-//! </tr>
-//! <tr>
-//!   <td style="border-left-style: none;">Extended support</td>
-//!   <td style="border-right-style: none;"></td>
-//! </tr>
-//! <tr>
-//!   <td style="border-left-style: none;">Near-full support</td>
-//!   <td style="border-right-style: none;"></td>
-//! </tr>
-//! </table>
-//!
-//! ### Specific operation support
-//! - `f32`: [`powi`](https://doc.rust-lang.org/std/primitive.f32.html#method.powi), [`powf`](https://doc.rust-lang.org/std/primitive.f32.html#method.powf), [`sqrt`](https://doc.rust-lang.org/std/primitive.f32.html#method.sqrt), [`ln`](https://doc.rust-lang.org/std/primitive.f32.html#method.ln), [`log`](https://doc.rust-lang.org/std/primitive.f32.html#method.log), [`abs`](https://doc.rust-lang.org/std/primitive.f32.html#method.abs)
-//! - `f64`: [`powi`](https://doc.rust-lang.org/std/primitive.f64.html#method.powi), [`powf`](https://doc.rust-lang.org/std/primitive.f64.html#method.powf), [`sqrt`](https://doc.rust-lang.org/std/primitive.f64.html#method.sqrt), [`ln`](https://doc.rust-lang.org/std/primitive.f64.html#method.ln), [`log`](https://doc.rust-lang.org/std/primitive.f64.html#method.log), [`abs`](https://doc.rust-lang.org/std/primitive.f64.html#method.abs)
-//!
+//! 
+//! For the specifics of operation support see the [rust-ad-core docs](https://docs.rs/rust-ad-core/).
+//! 
 //! ### Notes on internals
 //! With `cargo expand` when an `.unwrap()` panics it doesn't give a line reference. Using unique panic messages makes locating errors easier. These should help debuging quite specifically (ctrl+f).
 //!

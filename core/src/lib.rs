@@ -5,7 +5,8 @@
 
 use std::collections::HashMap;
 
-mod derivatives;
+/// Functions that given statements return the statements which compute the respective derivatives.
+pub mod derivatives;
 pub use derivatives::{cumulative_derivative_wrt_rt, Type};
 
 mod dict;
