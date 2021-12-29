@@ -1,3 +1,4 @@
+use super::lm_identifiers;
 use crate::*;
 use crate::{traits::*, utils::*};
 
@@ -67,7 +68,7 @@ pub fn forward_add<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]
         .1
         .binary()
         .expect("forward_add: not binary");
-    let val_ident = local
+    let local_ident = local
         .pat
         .ident()
         .expect("forward_add: not ident")
@@ -76,7 +77,7 @@ pub fn forward_add<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]
 
     let idents = function_inputs
         .iter()
-        .map(|input| wrt!(val_ident, input))
+        .map(|input| wrt!(local_ident, input))
         .intersperse(String::from(","))
         .collect::<String>();
     let deriatives = function_inputs
@@ -103,7 +104,7 @@ pub fn forward_sub<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]
         .1
         .binary()
         .expect("forward_sub: not binary");
-    let val_ident = local
+    let local_ident = local
         .pat
         .ident()
         .expect("forward_sub: not ident")
@@ -112,7 +113,7 @@ pub fn forward_sub<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]
 
     let idents = function_inputs
         .iter()
-        .map(|input| wrt!(val_ident, input))
+        .map(|input| wrt!(local_ident, input))
         .intersperse(String::from(","))
         .collect::<String>();
     let deriatives = function_inputs
@@ -139,7 +140,7 @@ pub fn forward_mul<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]
         .1
         .binary()
         .expect("forward_mul: not binary");
-    let val_ident = local
+    let local_ident = local
         .pat
         .ident()
         .expect("forward_mul: not ident")
@@ -148,7 +149,7 @@ pub fn forward_mul<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]
 
     let idents = function_inputs
         .iter()
-        .map(|input| wrt!(val_ident, input))
+        .map(|input| wrt!(local_ident, input))
         .intersperse(String::from(","))
         .collect::<String>();
 
@@ -179,7 +180,7 @@ pub fn forward_div<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]
         .1
         .binary()
         .expect("forward_div: not binary");
-    let val_ident = local
+    let local_ident = local
         .pat
         .ident()
         .expect("forward_div: not ident")
@@ -188,7 +189,7 @@ pub fn forward_div<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]
 
     let idents = function_inputs
         .iter()
-        .map(|input| wrt!(val_ident, input))
+        .map(|input| wrt!(local_ident, input))
         .intersperse(String::from(","))
         .collect::<String>();
 
@@ -219,25 +220,11 @@ pub fn forward_div<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]
 /// Forward deriative of [`powi`](https://doc.rust-lang.org/std/primitive.f32.html#method.powi).
 pub fn forward_powi<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("forward_powi: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("forward_powi: not method");
-
-    let val_ident = local
-        .pat
-        .ident()
-        .expect("forward_powi: not ident")
-        .ident
-        .to_string();
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
 
     let idents = function_inputs
         .iter()
-        .map(|input| wrt!(val_ident, input))
+        .map(|input| wrt!(local_ident, input))
         .intersperse(String::from(","))
         .collect::<String>();
 
@@ -273,25 +260,11 @@ pub fn forward_powi<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String
 /// Forward deriative of [`powf`](https://doc.rust-lang.org/std/primitive.f32.html#method.powf).
 pub fn forward_powf<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("forward_powf: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("forward_powf: not method");
-
-    let val_ident = local
-        .pat
-        .ident()
-        .expect("forward_powf: not ident")
-        .ident
-        .to_string();
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
 
     let idents = function_inputs
         .iter()
-        .map(|input| wrt!(val_ident, input))
+        .map(|input| wrt!(local_ident, input))
         .intersperse(String::from(","))
         .collect::<String>();
 
@@ -327,25 +300,11 @@ pub fn forward_powf<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String
 /// Forward deriative of [`sqrt`](https://doc.rust-lang.org/std/primitive.f32.html#method.sqrt).
 pub fn forward_sqrt<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("forward_sqrt: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("forward_sqrt: not method");
-
-    let val_ident = local
-        .pat
-        .ident()
-        .expect("forward_sqrt: not ident")
-        .ident
-        .to_string();
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
 
     let idents = function_inputs
         .iter()
-        .map(|input| wrt!(val_ident, input))
+        .map(|input| wrt!(local_ident, input))
         .intersperse(String::from(","))
         .collect::<String>();
 
@@ -371,25 +330,11 @@ pub fn forward_sqrt<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String
 /// Forward deriative of [`cbrt`](https://doc.rust-lang.org/std/primitive.f32.html#method.cbrt).
 pub fn forward_cbrt<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("forward_cbrt: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("forward_cbrt: not method");
-
-    let val_ident = local
-        .pat
-        .ident()
-        .expect("forward_cbrt: not ident")
-        .ident
-        .to_string();
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
 
     let idents = function_inputs
         .iter()
-        .map(|input| wrt!(val_ident, input))
+        .map(|input| wrt!(local_ident, input))
         .intersperse(String::from(","))
         .collect::<String>();
 
@@ -415,25 +360,11 @@ pub fn forward_cbrt<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String
 /// Forward deriative of [`exp`](https://doc.rust-lang.org/std/primitive.f32.html#method.exp).
 pub fn forward_exp<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("forward_exp: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("forward_exp: not method");
-
-    let val_ident = local
-        .pat
-        .ident()
-        .expect("forward_exp: not ident")
-        .ident
-        .to_string();
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
 
     let idents = function_inputs
         .iter()
-        .map(|input| wrt!(val_ident, input))
+        .map(|input| wrt!(local_ident, input))
         .intersperse(String::from(","))
         .collect::<String>();
 
@@ -455,25 +386,11 @@ pub fn forward_exp<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]
 /// Forward deriative of [`exp2`](https://doc.rust-lang.org/std/primitive.f32.html#method.exp2).
 pub fn forward_exp2<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("forward_exp2: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("forward_exp2: not method");
-
-    let val_ident = local
-        .pat
-        .ident()
-        .expect("forward_exp2: not ident")
-        .ident
-        .to_string();
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
 
     let idents = function_inputs
         .iter()
-        .map(|input| wrt!(val_ident, input))
+        .map(|input| wrt!(local_ident, input))
         .intersperse(String::from(","))
         .collect::<String>();
 
@@ -495,25 +412,11 @@ pub fn forward_exp2<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String
 /// Forward deriative of [`exp_m1`](https://doc.rust-lang.org/std/primitive.f32.html#method.exp_m1).
 pub fn forward_exp_m1<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("forward_exp_m1: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("forward_exp_m1: not method");
-
-    let val_ident = local
-        .pat
-        .ident()
-        .expect("forward_exp_m1: not ident")
-        .ident
-        .to_string();
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
 
     let idents = function_inputs
         .iter()
-        .map(|input| wrt!(val_ident, input))
+        .map(|input| wrt!(local_ident, input))
         .intersperse(String::from(","))
         .collect::<String>();
 
@@ -539,25 +442,11 @@ pub fn forward_exp_m1<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[Stri
 /// Forward deriative of [`ln`](https://doc.rust-lang.org/std/primitive.f32.html#method.ln).
 pub fn forward_ln<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("forward_ln: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("forward_ln: not method");
-
-    let val_ident = local
-        .pat
-        .ident()
-        .expect("forward_ln: not ident")
-        .ident
-        .to_string();
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
 
     let idents = function_inputs
         .iter()
-        .map(|input| wrt!(val_ident, input))
+        .map(|input| wrt!(local_ident, input))
         .intersperse(String::from(","))
         .collect::<String>();
 
@@ -583,25 +472,11 @@ pub fn forward_ln<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String])
 /// Forward deriative of [`ln_1p`](https://doc.rust-lang.org/std/primitive.f32.html#method.ln_1p).
 pub fn forward_ln_1p<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("forward_ln_1p: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("forward_ln_1p: not method");
-
-    let val_ident = local
-        .pat
-        .ident()
-        .expect("forward_ln_1p: not ident")
-        .ident
-        .to_string();
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
 
     let idents = function_inputs
         .iter()
-        .map(|input| wrt!(val_ident, input))
+        .map(|input| wrt!(local_ident, input))
         .intersperse(String::from(","))
         .collect::<String>();
 
@@ -627,25 +502,11 @@ pub fn forward_ln_1p<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[Strin
 /// Forward deriative of [`log`](https://doc.rust-lang.org/std/primitive.f32.html#method.log).
 pub fn forward_log<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("forward_log: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("forward_log: not method");
-
-    let val_ident = local
-        .pat
-        .ident()
-        .expect("forward_log: not ident")
-        .ident
-        .to_string();
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
 
     let idents = function_inputs
         .iter()
-        .map(|input| wrt!(val_ident, input))
+        .map(|input| wrt!(local_ident, input))
         .intersperse(String::from(","))
         .collect::<String>();
 
@@ -681,25 +542,11 @@ pub fn forward_log<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]
 /// Forward deriative of [`log10`](https://doc.rust-lang.org/std/primitive.f32.html#method.log10).
 pub fn forward_log10<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("forward_log10: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("forward_log10: not method");
-
-    let val_ident = local
-        .pat
-        .ident()
-        .expect("forward_log10: not ident")
-        .ident
-        .to_string();
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
 
     let idents = function_inputs
         .iter()
-        .map(|input| wrt!(val_ident, input))
+        .map(|input| wrt!(local_ident, input))
         .intersperse(String::from(","))
         .collect::<String>();
 
@@ -725,25 +572,11 @@ pub fn forward_log10<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[Strin
 /// Forward deriative of [`log2`](https://doc.rust-lang.org/std/primitive.f32.html#method.log2).
 pub fn forward_log2<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("forward_log2: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("forward_log2: not method");
-
-    let val_ident = local
-        .pat
-        .ident()
-        .expect("forward_log2: not ident")
-        .ident
-        .to_string();
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
 
     let idents = function_inputs
         .iter()
-        .map(|input| wrt!(val_ident, input))
+        .map(|input| wrt!(local_ident, input))
         .intersperse(String::from(","))
         .collect::<String>();
 
@@ -773,25 +606,11 @@ pub fn forward_log2<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String
 /// Forward deriative of [`acos`](https://doc.rust-lang.org/std/primitive.f32.html#method.acos).
 pub fn forward_acos<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("forward_acos: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("forward_acos: not method");
-
-    let val_ident = local
-        .pat
-        .ident()
-        .expect("forward_acos: not ident")
-        .ident
-        .to_string();
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
 
     let idents = function_inputs
         .iter()
-        .map(|input| wrt!(val_ident, input))
+        .map(|input| wrt!(local_ident, input))
         .intersperse(String::from(","))
         .collect::<String>();
 
@@ -817,25 +636,11 @@ pub fn forward_acos<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String
 /// Forward deriative of [`acosh`](https://doc.rust-lang.org/std/primitive.f32.html#method.acosh).
 pub fn forward_acosh<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("forward_acosh: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("forward_acosh: not method");
-
-    let val_ident = local
-        .pat
-        .ident()
-        .expect("forward_acosh: not ident")
-        .ident
-        .to_string();
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
 
     let idents = function_inputs
         .iter()
-        .map(|input| wrt!(val_ident, input))
+        .map(|input| wrt!(local_ident, input))
         .intersperse(String::from(","))
         .collect::<String>();
 
@@ -861,25 +666,11 @@ pub fn forward_acosh<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[Strin
 /// Forward deriative of [`asin`](https://doc.rust-lang.org/std/primitive.f32.html#method.asin).
 pub fn forward_asin<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("forward_asin: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("forward_asin: not method");
-
-    let val_ident = local
-        .pat
-        .ident()
-        .expect("forward_asin: not ident")
-        .ident
-        .to_string();
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
 
     let idents = function_inputs
         .iter()
-        .map(|input| wrt!(val_ident, input))
+        .map(|input| wrt!(local_ident, input))
         .intersperse(String::from(","))
         .collect::<String>();
 
@@ -905,25 +696,11 @@ pub fn forward_asin<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String
 /// Forward deriative of [`asinh`](https://doc.rust-lang.org/std/primitive.f32.html#method.asinh).
 pub fn forward_asinh<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("forward_asinh: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("forward_asinh: not method");
-
-    let val_ident = local
-        .pat
-        .ident()
-        .expect("forward_asinh: not ident")
-        .ident
-        .to_string();
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
 
     let idents = function_inputs
         .iter()
-        .map(|input| wrt!(val_ident, input))
+        .map(|input| wrt!(local_ident, input))
         .intersperse(String::from(","))
         .collect::<String>();
 
@@ -949,25 +726,11 @@ pub fn forward_asinh<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[Strin
 /// Forward deriative of [`atan`](https://doc.rust-lang.org/std/primitive.f32.html#method.atan).
 pub fn forward_atan<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("forward_atan: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("forward_atan: not method");
-
-    let val_ident = local
-        .pat
-        .ident()
-        .expect("forward_atan: not ident")
-        .ident
-        .to_string();
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
 
     let idents = function_inputs
         .iter()
-        .map(|input| wrt!(val_ident, input))
+        .map(|input| wrt!(local_ident, input))
         .intersperse(String::from(","))
         .collect::<String>();
 
@@ -993,25 +756,11 @@ pub fn forward_atan<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String
 /// Forward deriative of [`sin`](https://doc.rust-lang.org/std/primitive.f32.html#method.sin).
 pub fn forward_sin<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("forward_sin: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("forward_sin: not method");
-
-    let val_ident = local
-        .pat
-        .ident()
-        .expect("forward_sin: not ident")
-        .ident
-        .to_string();
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
 
     let idents = function_inputs
         .iter()
-        .map(|input| wrt!(val_ident, input))
+        .map(|input| wrt!(local_ident, input))
         .intersperse(String::from(","))
         .collect::<String>();
 
@@ -1033,25 +782,11 @@ pub fn forward_sin<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]
 /// Forward deriative of [`atanh`](https://doc.rust-lang.org/std/primitive.f32.html#method.atanh).
 pub fn forward_atanh<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("forward_atanh: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("forward_atanh: not method");
-
-    let val_ident = local
-        .pat
-        .ident()
-        .expect("forward_atanh: not ident")
-        .ident
-        .to_string();
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
 
     let idents = function_inputs
         .iter()
-        .map(|input| wrt!(val_ident, input))
+        .map(|input| wrt!(local_ident, input))
         .intersperse(String::from(","))
         .collect::<String>();
 
@@ -1077,25 +812,11 @@ pub fn forward_atanh<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[Strin
 /// Forward deriative of [`cos`](https://doc.rust-lang.org/std/primitive.f32.html#method.cos).
 pub fn forward_cos<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("forward_cos: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("forward_cos: not method");
-
-    let val_ident = local
-        .pat
-        .ident()
-        .expect("forward_cos: not ident")
-        .ident
-        .to_string();
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
 
     let idents = function_inputs
         .iter()
-        .map(|input| wrt!(val_ident, input))
+        .map(|input| wrt!(local_ident, input))
         .intersperse(String::from(","))
         .collect::<String>();
 
@@ -1117,25 +838,11 @@ pub fn forward_cos<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]
 /// Forward deriative of [`cosh`](https://doc.rust-lang.org/std/primitive.f32.html#method.cosh).
 pub fn forward_cosh<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("forward_cosh: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("forward_cosh: not method");
-
-    let val_ident = local
-        .pat
-        .ident()
-        .expect("forward_cosh: not ident")
-        .ident
-        .to_string();
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
 
     let idents = function_inputs
         .iter()
-        .map(|input| wrt!(val_ident, input))
+        .map(|input| wrt!(local_ident, input))
         .intersperse(String::from(","))
         .collect::<String>();
 
@@ -1157,25 +864,11 @@ pub fn forward_cosh<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String
 /// Forward deriative of [`sinh`](https://doc.rust-lang.org/std/primitive.f32.html#method.sinh).
 pub fn forward_sinh<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("forward_sinh: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("forward_sinh: not method");
-
-    let val_ident = local
-        .pat
-        .ident()
-        .expect("forward_sinh: not ident")
-        .ident
-        .to_string();
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
 
     let idents = function_inputs
         .iter()
-        .map(|input| wrt!(val_ident, input))
+        .map(|input| wrt!(local_ident, input))
         .intersperse(String::from(","))
         .collect::<String>();
 
@@ -1197,25 +890,11 @@ pub fn forward_sinh<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String
 /// Forward deriative of [`tan`](https://doc.rust-lang.org/std/primitive.f32.html#method.tan).
 pub fn forward_tan<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("forward_tan: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("forward_tan: not method");
-
-    let val_ident = local
-        .pat
-        .ident()
-        .expect("forward_tan: not ident")
-        .ident
-        .to_string();
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
 
     let idents = function_inputs
         .iter()
-        .map(|input| wrt!(val_ident, input))
+        .map(|input| wrt!(local_ident, input))
         .intersperse(String::from(","))
         .collect::<String>();
 
@@ -1241,25 +920,11 @@ pub fn forward_tan<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]
 /// Forward deriative of [`tanh`](https://doc.rust-lang.org/std/primitive.f32.html#method.tanh).
 pub fn forward_tanh<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("forward_tanh: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("forward_tanh: not method");
-
-    let val_ident = local
-        .pat
-        .ident()
-        .expect("forward_tanh: not ident")
-        .ident
-        .to_string();
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
 
     let idents = function_inputs
         .iter()
-        .map(|input| wrt!(val_ident, input))
+        .map(|input| wrt!(local_ident, input))
         .intersperse(String::from(","))
         .collect::<String>();
 
@@ -1291,25 +956,11 @@ pub fn forward_tanh<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String
 
 /// Forward deriative of [`sqrt`](https://doc.rust-lang.org/std/primitive.f32.html#method.sqrt).
 pub fn forward_abs<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
-    let local = stmt.local().expect("forward_abs: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("forward_abs: not method");
-
-    let val_ident = local
-        .pat
-        .ident()
-        .expect("forward_abs: not ident")
-        .ident
-        .to_string();
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
 
     let idents = function_inputs
         .iter()
-        .map(|input| wrt!(val_ident, input))
+        .map(|input| wrt!(local_ident, input))
         .intersperse(String::from(","))
         .collect::<String>();
 
@@ -1317,7 +968,7 @@ pub fn forward_abs<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]
     let deriatives = function_inputs
         .iter()
         .map(|input| {
-            // If base>0 then as it rises, so does lis, thus 1 derivative, inversly, if base<0, then -1 deriative
+            // If base>0 then as it rises, so does local_ident, thus 1 derivative, inversly, if base<0, then -1 deriative
             // x/x.abs() == if x >= 0 { 1 } else { -1 }
             if *input == base {
                 format!("{base} / {base}.abs()", base = base,)
@@ -1334,25 +985,11 @@ pub fn forward_abs<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]
 // TODO Is this derivative for `ceil` right?
 /// Forward deriative of [`ceil`](https://doc.rust-lang.org/std/primitive.f32.html#method.ceil).
 pub fn forward_ceil<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
-    let local = stmt.local().expect("forward_ceil: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("forward_ceil: not method");
-
-    let val_ident = local
-        .pat
-        .ident()
-        .expect("forward_ceil: not ident")
-        .ident
-        .to_string();
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
 
     let idents = function_inputs
         .iter()
-        .map(|input| wrt!(val_ident, input))
+        .map(|input| wrt!(local_ident, input))
         .intersperse(String::from(","))
         .collect::<String>();
 
@@ -1375,25 +1012,11 @@ pub fn forward_ceil<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String
 // TODO Is this derivative for `floor` right?
 /// Forward deriative of [`floor`](https://doc.rust-lang.org/std/primitive.f32.html#method.floor).
 pub fn forward_floor<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
-    let local = stmt.local().expect("forward_floor: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("forward_floor: not method");
-
-    let val_ident = local
-        .pat
-        .ident()
-        .expect("forward_floor: not ident")
-        .ident
-        .to_string();
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
 
     let idents = function_inputs
         .iter()
-        .map(|input| wrt!(val_ident, input))
+        .map(|input| wrt!(local_ident, input))
         .intersperse(String::from(","))
         .collect::<String>();
 
@@ -1416,25 +1039,11 @@ pub fn forward_floor<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[Strin
 // TODO Is this derivative for `fract` right?
 /// Forward deriative of [`fract`](https://doc.rust-lang.org/std/primitive.f32.html#method.fract).
 pub fn forward_fract<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
-    let local = stmt.local().expect("forward_fract: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("forward_fract: not method");
-
-    let val_ident = local
-        .pat
-        .ident()
-        .expect("forward_fract: not ident")
-        .ident
-        .to_string();
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
 
     let idents = function_inputs
         .iter()
-        .map(|input| wrt!(val_ident, input))
+        .map(|input| wrt!(local_ident, input))
         .intersperse(String::from(","))
         .collect::<String>();
 
@@ -1457,25 +1066,11 @@ pub fn forward_fract<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[Strin
 // TODO Is this derivative for `recip` right?
 /// Forward deriative of [`recip`](https://doc.rust-lang.org/std/primitive.f32.html#method.recip).
 pub fn forward_recip<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
-    let local = stmt.local().expect("forward_recip: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("forward_recip: not method");
-
-    let val_ident = local
-        .pat
-        .ident()
-        .expect("forward_recip: not ident")
-        .ident
-        .to_string();
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
 
     let idents = function_inputs
         .iter()
-        .map(|input| wrt!(val_ident, input))
+        .map(|input| wrt!(local_ident, input))
         .intersperse(String::from(","))
         .collect::<String>();
 
@@ -1501,25 +1096,11 @@ pub fn forward_recip<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[Strin
 // TODO Is this derivative for `round` right?
 /// Forward deriative of [`round`](https://doc.rust-lang.org/std/primitive.f32.html#method.round).
 pub fn forward_round<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
-    let local = stmt.local().expect("forward_round: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("forward_round: not method");
-
-    let val_ident = local
-        .pat
-        .ident()
-        .expect("forward_round: not ident")
-        .ident
-        .to_string();
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
 
     let idents = function_inputs
         .iter()
-        .map(|input| wrt!(val_ident, input))
+        .map(|input| wrt!(local_ident, input))
         .intersperse(String::from(","))
         .collect::<String>();
 

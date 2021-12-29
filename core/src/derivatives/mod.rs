@@ -6,6 +6,26 @@ pub use forward::*;
 mod reverse;
 pub use reverse::*;
 
+/// Local identifier and method identifier
+pub fn lm_identifiers(stmt: &syn::Stmt) -> (String, &syn::ExprMethodCall) {
+    let local = stmt.local().expect("lm_identifiers: not local");
+    let init = &local.init;
+    let method_expr = init
+        .as_ref()
+        .unwrap()
+        .1
+        .method_call()
+        .expect("lm_identifiers: not method");
+
+    let local_ident = local
+        .pat
+        .ident()
+        .expect("lm_identifiers: not ident")
+        .ident
+        .to_string();
+    (local_ident, method_expr)
+}
+
 /// Gets cumulative derivative for given expression for a given input variable (only supports literals and paths).
 ///
 /// See `cumulative_derivative_wrt` for more documentation

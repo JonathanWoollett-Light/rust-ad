@@ -1,4 +1,4 @@
-use crate::append_insert;
+use super::lm_identifiers;
 use crate::*;
 use crate::{traits::*, utils::*};
 
@@ -14,7 +14,7 @@ pub fn reverse_add<const OUT: Type>(
     let init = local.init.as_ref().unwrap();
     let init_expr = &*init.1;
     let bin_expr = init_expr.binary().expect("reverse_add: not binary");
-    let lis = local
+    let local_ident = local
         .pat
         .ident()
         .expect("reverse_add: not ident")
@@ -27,24 +27,30 @@ pub fn reverse_add<const OUT: Type>(
                 expr_path_l.path.segments[0].ident.to_string(),
                 expr_path_r.path.segments[0].ident.to_string(),
             );
-            append_insert(&l, lis.clone(), component_map);
-            append_insert(&r, lis.clone(), component_map);
-            (wrt!(l, lis), wrt!(r, lis))
+            append_insert(&l, local_ident.clone(), component_map);
+            append_insert(&r, local_ident.clone(), component_map);
+            (wrt!(l, local_ident), wrt!(r, local_ident))
         }
         (syn::Expr::Path(expr_path_l), syn::Expr::Lit(_)) => {
             let l = expr_path_l.path.segments[0].ident.to_string();
-            append_insert(&l, lis.clone(), component_map);
-            (wrt!(l, lis), String::from("_"))
+            append_insert(&l, local_ident.clone(), component_map);
+            (wrt!(l, local_ident), String::from("_"))
         }
         (syn::Expr::Lit(_), syn::Expr::Path(expr_path_r)) => {
             let r = expr_path_r.path.segments[0].ident.to_string();
-            append_insert(&r, lis.clone(), component_map);
-            (String::from("_"), wrt!(r, lis))
+            append_insert(&r, local_ident.clone(), component_map);
+            (String::from("_"), wrt!(r, local_ident))
         }
         (syn::Expr::Lit(_), syn::Expr::Lit(_)) => return None,
         _ => panic!("reverse_add: Unsupported bin expr"),
     };
-    let stmt_str = format!("let ({},{}) = ({},{});", a, b, der!(lis), der!(lis));
+    let stmt_str = format!(
+        "let ({},{}) = ({},{});",
+        a,
+        b,
+        der!(local_ident),
+        der!(local_ident)
+    );
     let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_add: parse fail");
     Some(new_stmt)
 }
@@ -57,7 +63,7 @@ pub fn reverse_sub<const OUT: Type>(
     let init = local.init.as_ref().unwrap();
     let init_expr = &*init.1;
     let bin_expr = init_expr.binary().expect("reverse_sub: not binary");
-    let lis = local
+    let local_ident = local
         .pat
         .ident()
         .expect("reverse_sub: not ident")
@@ -70,24 +76,30 @@ pub fn reverse_sub<const OUT: Type>(
                 expr_path_l.path.segments[0].ident.to_string(),
                 expr_path_r.path.segments[0].ident.to_string(),
             );
-            append_insert(&l, lis.clone(), component_map);
-            append_insert(&r, lis.clone(), component_map);
-            (wrt!(l, lis), wrt!(r, lis))
+            append_insert(&l, local_ident.clone(), component_map);
+            append_insert(&r, local_ident.clone(), component_map);
+            (wrt!(l, local_ident), wrt!(r, local_ident))
         }
         (syn::Expr::Path(expr_path_l), syn::Expr::Lit(_)) => {
             let l = expr_path_l.path.segments[0].ident.to_string();
-            append_insert(&l, lis.clone(), component_map);
-            (wrt!(l, lis), String::from("_"))
+            append_insert(&l, local_ident.clone(), component_map);
+            (wrt!(l, local_ident), String::from("_"))
         }
         (syn::Expr::Lit(_), syn::Expr::Path(expr_path_r)) => {
             let r = expr_path_r.path.segments[0].ident.to_string();
-            append_insert(&r, lis.clone(), component_map);
-            (String::from("_"), wrt!(r, lis))
+            append_insert(&r, local_ident.clone(), component_map);
+            (String::from("_"), wrt!(r, local_ident))
         }
         (syn::Expr::Lit(_), syn::Expr::Lit(_)) => return None,
         _ => panic!("reverse_sub: Unsupported bin expr"),
     };
-    let stmt_str = format!("let ({},{}) = ({},-{});", a, b, der!(lis), der!(lis));
+    let stmt_str = format!(
+        "let ({},{}) = ({},-{});",
+        a,
+        b,
+        der!(local_ident),
+        der!(local_ident)
+    );
     let new_stmt: syn::Stmt = syn::parse_str(&stmt_str).expect("reverse_sub: parse fail");
     Some(new_stmt)
 }
@@ -100,7 +112,7 @@ pub fn reverse_mul<const OUT: Type>(
     let init = local.init.as_ref().unwrap();
     let init_expr = &*init.1;
     let bin_expr = init_expr.binary().expect("reverse_mul: not binary");
-    let lis = local
+    let local_ident = local
         .pat
         .ident()
         .expect("reverse_mul: not ident")
@@ -113,16 +125,16 @@ pub fn reverse_mul<const OUT: Type>(
                 expr_path_l.path.segments[0].ident.to_string(),
                 expr_path_r.path.segments[0].ident.to_string(),
             );
-            append_insert(&l, lis.clone(), component_map);
-            append_insert(&r, lis.clone(), component_map);
+            append_insert(&l, local_ident.clone(), component_map);
+            append_insert(&r, local_ident.clone(), component_map);
             format!(
                 "let ({},{}) = ({}*{},{}*{});",
-                wrt!(l, lis),
-                wrt!(r, lis),
+                wrt!(l, local_ident),
+                wrt!(r, local_ident),
                 r,
-                der!(lis),
+                der!(local_ident),
                 l,
-                der!(lis)
+                der!(local_ident)
             )
         }
         (syn::Expr::Path(expr_path_l), syn::Expr::Lit(expr_lit_r)) => {
@@ -130,16 +142,26 @@ pub fn reverse_mul<const OUT: Type>(
                 expr_path_l.path.segments[0].ident.to_string(),
                 lit_str(expr_lit_r),
             );
-            append_insert(&l, lis.clone(), component_map);
-            format!("let {} = {}*{};", wrt!(l, lis), r, der!(lis))
+            append_insert(&l, local_ident.clone(), component_map);
+            format!(
+                "let {} = {}*{};",
+                wrt!(l, local_ident),
+                r,
+                der!(local_ident)
+            )
         }
         (syn::Expr::Lit(expr_lit_l), syn::Expr::Path(expr_path_r)) => {
             let (l, r) = (
                 lit_str(expr_lit_l),
                 expr_path_r.path.segments[0].ident.to_string(),
             );
-            append_insert(&r, lis.clone(), component_map);
-            format!("let {} = {}*{};", wrt!(r, lis), l, der!(lis))
+            append_insert(&r, local_ident.clone(), component_map);
+            format!(
+                "let {} = {}*{};",
+                wrt!(r, local_ident),
+                l,
+                der!(local_ident)
+            )
         }
         (syn::Expr::Lit(_), syn::Expr::Lit(_)) => return None,
         _ => panic!("reverse_mul: Unsupported bin expr"),
@@ -156,7 +178,7 @@ pub fn reverse_div<const OUT: Type>(
     let init = local.init.as_ref().unwrap();
     let init_expr = &*init.1;
     let bin_expr = init_expr.binary().expect("reverse_div: not binary");
-    let lis = local
+    let local_ident = local
         .pat
         .ident()
         .expect("reverse_div: not ident")
@@ -169,16 +191,16 @@ pub fn reverse_div<const OUT: Type>(
                 expr_path_l.path.segments[0].ident.to_string(),
                 expr_path_r.path.segments[0].ident.to_string(),
             );
-            append_insert(&numerator, lis.clone(), component_map);
-            append_insert(&denominator, lis.clone(), component_map);
+            append_insert(&numerator, local_ident.clone(), component_map);
+            append_insert(&denominator, local_ident.clone(), component_map);
             format!(
                 "let ({},{}) = ({dx} * (1{}/{denominator}), {dx} * (-{numerator} / ({denominator}*{denominator})));",
-                wrt!(numerator,lis),
-                wrt!(denominator,lis),
+                wrt!(numerator,local_ident),
+                wrt!(denominator,local_ident),
                 OUT.to_string(),
                 numerator=numerator,
                 denominator=denominator,
-                dx = der!(lis),
+                dx = der!(local_ident),
             )
         }
         (syn::Expr::Path(expr_path_l), syn::Expr::Lit(expr_lit_r)) => {
@@ -186,11 +208,11 @@ pub fn reverse_div<const OUT: Type>(
                 expr_path_l.path.segments[0].ident.to_string(),
                 lit_str(expr_lit_r),
             );
-            append_insert(&numerator, lis.clone(), component_map);
+            append_insert(&numerator, local_ident.clone(), component_map);
             format!(
                 "let {} = {} * (1{}/{});",
-                wrt!(numerator, lis),
-                der!(lis),
+                wrt!(numerator, local_ident),
+                der!(local_ident),
                 OUT.to_string(),
                 denominator
             )
@@ -200,11 +222,11 @@ pub fn reverse_div<const OUT: Type>(
                 lit_str(expr_lit_l),
                 expr_path_r.path.segments[0].ident.to_string(),
             );
-            append_insert(&denominator, lis.clone(), component_map);
+            append_insert(&denominator, local_ident.clone(), component_map);
             format!(
                 "let {} = {} * (-{}/({}*{}));",
-                wrt!(denominator, lis),
-                der!(lis),
+                wrt!(denominator, local_ident),
+                der!(local_ident),
                 numerator,
                 denominator,
                 denominator
@@ -226,22 +248,7 @@ pub fn reverse_powi<const OUT: Type>(
     component_map: &mut HashMap<String, Vec<String>>,
 ) -> Option<syn::Stmt> {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("reverse_powi: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("reverse_powi: not method");
-
-    let lis = local
-        .pat
-        .ident()
-        .expect("reverse_powi: not ident")
-        .ident
-        .to_string();
-
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
     let (base, exponent) = (&*method_expr.receiver, &method_expr.args[0]);
 
     let stmt_str = match (base, exponent) {
@@ -250,15 +257,15 @@ pub fn reverse_powi<const OUT: Type>(
                 expr_path_l.path.segments[0].ident.to_string(),
                 expr_path_r.path.segments[0].ident.to_string(),
             );
-            append_insert(&base, lis.clone(), component_map);
-            append_insert(&exponent, lis.clone(), component_map);
+            append_insert(&base, local_ident.clone(), component_map);
+            append_insert(&exponent, local_ident.clone(), component_map);
             format!(
                 "let ({},{}) = ({dx} * ({exponent} as {val_type} * {base}.powi({exponent}-1i32)), {dx} * ({base}.powi({exponent}) * {base}.ln() ) );",
-                wrt!(base,lis),
-                wrt!(exponent,lis),
+                wrt!(base,local_ident),
+                wrt!(exponent,local_ident),
                 base = base,
                 exponent = exponent,
-                dx = der!(lis),
+                dx = der!(local_ident),
                 val_type = OUT.to_string()
             )
         }
@@ -267,11 +274,11 @@ pub fn reverse_powi<const OUT: Type>(
                 expr_path_l.path.segments[0].ident.to_string(),
                 lit_str(expr_lit_r),
             );
-            append_insert(&base, lis.clone(), component_map);
+            append_insert(&base, local_ident.clone(), component_map);
             format!(
                 "let {} = {} * ({exponent} as {val_type} * {base}.powi({exponent}-1i32));",
-                wrt!(base, lis),
-                der!(lis),
+                wrt!(base, local_ident),
+                der!(local_ident),
                 base = base,
                 exponent = exponent,
                 val_type = OUT.to_string()
@@ -282,11 +289,11 @@ pub fn reverse_powi<const OUT: Type>(
                 lit_str(expr_lit_l),
                 expr_path_r.path.segments[0].ident.to_string(),
             );
-            append_insert(&exponent, lis.clone(), component_map);
+            append_insert(&exponent, local_ident.clone(), component_map);
             format!(
                 "let {} = {} * ({base}.powi({exponent}) * {base}.ln() );",
-                wrt!(exponent, lis),
-                der!(lis),
+                wrt!(exponent, local_ident),
+                der!(local_ident),
                 base = base,
                 exponent = exponent,
             )
@@ -303,22 +310,7 @@ pub fn reverse_powf<const OUT: Type>(
     component_map: &mut HashMap<String, Vec<String>>,
 ) -> Option<syn::Stmt> {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("reverse_powf: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("reverse_powf: not method");
-
-    let lis = local
-        .pat
-        .ident()
-        .expect("reverse_powf: not ident")
-        .ident
-        .to_string();
-
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
     let (base, exponent) = (&*method_expr.receiver, &method_expr.args[0]);
 
     let stmt_str = match (base, exponent) {
@@ -327,15 +319,15 @@ pub fn reverse_powf<const OUT: Type>(
                 expr_path_l.path.segments[0].ident.to_string(),
                 expr_path_r.path.segments[0].ident.to_string(),
             );
-            append_insert(&base, lis.clone(), component_map);
-            append_insert(&exponent, lis.clone(), component_map);
+            append_insert(&base, local_ident.clone(), component_map);
+            append_insert(&exponent, local_ident.clone(), component_map);
             format!(
                 "let ({},{}) = ({dx} * ({exponent} * {base}.powf({exponent}-1{val_type})), {dx} * ({base}.powf({exponent}) * {base}.ln() ) );",
-                wrt!(base,lis),
-                wrt!(exponent,lis),
+                wrt!(base,local_ident),
+                wrt!(exponent,local_ident),
                 base = base,
                 exponent = exponent,
-                dx = der!(lis),
+                dx = der!(local_ident),
                 val_type = OUT.to_string()
             )
         }
@@ -344,11 +336,11 @@ pub fn reverse_powf<const OUT: Type>(
                 expr_path_l.path.segments[0].ident.to_string(),
                 lit_str(expr_lit_r),
             );
-            append_insert(&base, lis.clone(), component_map);
+            append_insert(&base, local_ident.clone(), component_map);
             format!(
                 "let {} = {} * ({exponent} * {base}.powf({exponent}-1{val_type}));",
-                wrt!(base, lis),
-                der!(lis),
+                wrt!(base, local_ident),
+                der!(local_ident),
                 base = base,
                 exponent = exponent,
                 val_type = OUT.to_string()
@@ -359,11 +351,11 @@ pub fn reverse_powf<const OUT: Type>(
                 lit_str(expr_lit_l),
                 expr_path_r.path.segments[0].ident.to_string(),
             );
-            append_insert(&exponent, lis.clone(), component_map);
+            append_insert(&exponent, local_ident.clone(), component_map);
             format!(
                 "let {} = {} * ({base}.powf({exponent}) * {base}.ln() );",
-                wrt!(exponent, lis),
-                der!(lis),
+                wrt!(exponent, local_ident),
+                der!(local_ident),
                 base = base,
                 exponent = exponent,
             )
@@ -380,33 +372,18 @@ pub fn reverse_sqrt<const OUT: Type>(
     component_map: &mut HashMap<String, Vec<String>>,
 ) -> Option<syn::Stmt> {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("reverse_sqrt: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("reverse_sqrt: not method");
-
-    let lis = local
-        .pat
-        .ident()
-        .expect("reverse_sqrt: not ident")
-        .ident
-        .to_string();
-
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
     let base = &*method_expr.receiver;
 
     let stmt_str = match base {
         syn::Expr::Path(expr_path) => {
             let base = expr_path.path.segments[0].ident.to_string();
-            append_insert(&base, lis.clone(), component_map);
+            append_insert(&base, local_ident.clone(), component_map);
             format!(
                 "let {} = {dx} * ( 1{val_type} / ( 2{val_type} * {base}.sqrt() ) );",
-                wrt!(base, lis),
+                wrt!(base, local_ident),
                 base = base,
-                dx = der!(lis),
+                dx = der!(local_ident),
                 val_type = OUT.to_string()
             )
         }
@@ -421,33 +398,18 @@ pub fn reverse_cbrt<const OUT: Type>(
     stmt: &syn::Stmt,
     component_map: &mut HashMap<String, Vec<String>>,
 ) -> Option<syn::Stmt> {
-    let local = stmt.local().expect("reverse_cbrt: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("reverse_cbrt: not method");
-
-    let lis = local
-        .pat
-        .ident()
-        .expect("reverse_cbrt: not ident")
-        .ident
-        .to_string();
-
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
     let base = &*method_expr.receiver;
 
     let stmt_str = match base {
         syn::Expr::Path(expr_path) => {
             let base = expr_path.path.segments[0].ident.to_string();
-            append_insert(&base, lis.clone(), component_map);
+            append_insert(&base, local_ident.clone(), component_map);
             format!(
                 "let {} = {dx} * ( 1{val_type} / (3{val_type}*{base}.powf(2f32/3f32)) );",
-                wrt!(base, lis),
+                wrt!(base, local_ident),
                 base = base,
-                dx = der!(lis),
+                dx = der!(local_ident),
                 val_type = OUT.to_string()
             )
         }
@@ -463,33 +425,18 @@ pub fn reverse_exp<const OUT: Type>(
     component_map: &mut HashMap<String, Vec<String>>,
 ) -> Option<syn::Stmt> {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("reverse_exp: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("reverse_exp: not method");
-
-    let lis = local
-        .pat
-        .ident()
-        .expect("reverse_exp: not ident")
-        .ident
-        .to_string();
-
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
     let exponent = &*method_expr.receiver;
 
     let stmt_str = match exponent {
         syn::Expr::Path(expr_path) => {
             let exponent = expr_path.path.segments[0].ident.to_string();
-            append_insert(&exponent, lis.clone(), component_map);
+            append_insert(&exponent, local_ident.clone(), component_map);
             format!(
                 "let {} = {dx} * ( {exponent}.exp() );",
-                wrt!(exponent, lis),
+                wrt!(exponent, local_ident),
                 exponent = exponent,
-                dx = der!(lis),
+                dx = der!(local_ident),
             )
         }
         syn::Expr::Lit(_) => return None,
@@ -504,33 +451,18 @@ pub fn reverse_exp2<const OUT: Type>(
     component_map: &mut HashMap<String, Vec<String>>,
 ) -> Option<syn::Stmt> {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("reverse_exp2: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("reverse_exp2: not method");
-
-    let lis = local
-        .pat
-        .ident()
-        .expect("reverse_exp2: not ident")
-        .ident
-        .to_string();
-
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
     let exponent = &*method_expr.receiver;
 
     let stmt_str = match exponent {
         syn::Expr::Path(expr_path) => {
             let exponent = expr_path.path.segments[0].ident.to_string();
-            append_insert(&exponent, lis.clone(), component_map);
+            append_insert(&exponent, local_ident.clone(), component_map);
             format!(
                 "let {} = {dx} * ( {exponent}.exp2() * (2f32).ln() );",
-                wrt!(exponent, lis),
+                wrt!(exponent, local_ident),
                 exponent = exponent,
-                dx = der!(lis),
+                dx = der!(local_ident),
             )
         }
         syn::Expr::Lit(_) => return None,
@@ -545,33 +477,18 @@ pub fn reverse_exp_m1<const OUT: Type>(
     component_map: &mut HashMap<String, Vec<String>>,
 ) -> Option<syn::Stmt> {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("reverse_exp_m1: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("reverse_exp_m1: not method");
-
-    let lis = local
-        .pat
-        .ident()
-        .expect("reverse_exp_m1: not ident")
-        .ident
-        .to_string();
-
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
     let exponent = &*method_expr.receiver;
 
     let stmt_str = match exponent {
         syn::Expr::Path(expr_path) => {
             let exponent = expr_path.path.segments[0].ident.to_string();
-            append_insert(&exponent, lis.clone(), component_map);
+            append_insert(&exponent, local_ident.clone(), component_map);
             format!(
                 "let {} = {dx} * ( {exponent}.exp() );",
-                wrt!(exponent, lis),
+                wrt!(exponent, local_ident),
                 exponent = exponent,
-                dx = der!(lis),
+                dx = der!(local_ident),
             )
         }
         syn::Expr::Lit(_) => return None,
@@ -590,33 +507,18 @@ pub fn reverse_ln<const OUT: Type>(
     component_map: &mut HashMap<String, Vec<String>>,
 ) -> Option<syn::Stmt> {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("reverse_ln: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("reverse_ln: not method");
-
-    let lis = local
-        .pat
-        .ident()
-        .expect("reverse_ln: not ident")
-        .ident
-        .to_string();
-
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
     let base = &*method_expr.receiver;
 
     let stmt_str = match base {
         syn::Expr::Path(expr_path) => {
             let base = expr_path.path.segments[0].ident.to_string();
-            append_insert(&base, lis.clone(), component_map);
+            append_insert(&base, local_ident.clone(), component_map);
             format!(
                 "let {} = {dx} * ( 1{val_type} / {base} );",
-                wrt!(base, lis),
+                wrt!(base, local_ident),
                 base = base,
-                dx = der!(lis),
+                dx = der!(local_ident),
                 val_type = OUT.to_string()
             )
         }
@@ -632,33 +534,18 @@ pub fn reverse_ln_1p<const OUT: Type>(
     component_map: &mut HashMap<String, Vec<String>>,
 ) -> Option<syn::Stmt> {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("reverse_ln_1p: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("reverse_ln_1p: not method");
-
-    let lis = local
-        .pat
-        .ident()
-        .expect("reverse_ln_1p: not ident")
-        .ident
-        .to_string();
-
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
     let base = &*method_expr.receiver;
 
     let stmt_str = match base {
         syn::Expr::Path(expr_path) => {
             let base = expr_path.path.segments[0].ident.to_string();
-            append_insert(&base, lis.clone(), component_map);
+            append_insert(&base, local_ident.clone(), component_map);
             format!(
                 "let {} = {dx} * ( 1{val_type} / (1{val_type}+{base}) );",
-                wrt!(base, lis),
+                wrt!(base, local_ident),
                 base = base,
-                dx = der!(lis),
+                dx = der!(local_ident),
                 val_type = OUT.to_string()
             )
         }
@@ -674,22 +561,7 @@ pub fn reverse_log<const OUT: Type>(
     component_map: &mut HashMap<String, Vec<String>>,
 ) -> Option<syn::Stmt> {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("reverse_log: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("reverse_log: not method");
-
-    let lis = local
-        .pat
-        .ident()
-        .expect("reverse_log: not ident")
-        .ident
-        .to_string();
-
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
     let (input, base) = (&*method_expr.receiver, &method_expr.args[0]);
 
     let stmt_str = match (input, base) {
@@ -698,15 +570,15 @@ pub fn reverse_log<const OUT: Type>(
                 expr_path_l.path.segments[0].ident.to_string(),
                 expr_path_r.path.segments[0].ident.to_string(),
             );
-            append_insert(&input, lis.clone(), component_map);
-            append_insert(&base, lis.clone(), component_map);
+            append_insert(&input, local_ident.clone(), component_map);
+            append_insert(&base, local_ident.clone(), component_map);
             format!(
                 "let ({},{}) = {dx} * ( 1{val_type} / ( {input} * {base}.ln() )), {dx} * (-{input}.ln() / ( {base} * {base}.ln() * {base}.ln() ));",
-                wrt!(input,lis),
-                wrt!(base,lis),
+                wrt!(input,local_ident),
+                wrt!(base,local_ident),
                 input = input,
                 base = base,
-                dx = der!(lis),
+                dx = der!(local_ident),
                 val_type = OUT.to_string()
             )
         }
@@ -715,11 +587,11 @@ pub fn reverse_log<const OUT: Type>(
                 expr_path_l.path.segments[0].ident.to_string(),
                 lit_str(expr_lit_r),
             );
-            append_insert(&input, lis.clone(), component_map);
+            append_insert(&input, local_ident.clone(), component_map);
             format!(
                 "let {} = {} * ( 1{val_type} / ( {input} * {base}.ln() ));",
-                wrt!(input, lis),
-                der!(lis),
+                wrt!(input, local_ident),
+                der!(local_ident),
                 base = base,
                 input = input,
                 val_type = OUT.to_string()
@@ -730,11 +602,11 @@ pub fn reverse_log<const OUT: Type>(
                 lit_str(expr_lit_l),
                 expr_path_r.path.segments[0].ident.to_string(),
             );
-            append_insert(&base, lis.clone(), component_map);
+            append_insert(&base, local_ident.clone(), component_map);
             format!(
                 "let {} = {} * (-{input}.ln() / ( {base} * {base}.ln() * {base}.ln() );",
-                wrt!(base, lis),
-                der!(lis),
+                wrt!(base, local_ident),
+                der!(local_ident),
                 input = input,
                 base = base,
             )
@@ -751,33 +623,18 @@ pub fn reverse_log10<const OUT: Type>(
     component_map: &mut HashMap<String, Vec<String>>,
 ) -> Option<syn::Stmt> {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("reverse_log10: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("reverse_log10: not method");
-
-    let lis = local
-        .pat
-        .ident()
-        .expect("reverse_log10: not ident")
-        .ident
-        .to_string();
-
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
     let base = &*method_expr.receiver;
 
     let stmt_str = match base {
         syn::Expr::Path(expr_path) => {
             let base = expr_path.path.segments[0].ident.to_string();
-            append_insert(&base, lis.clone(), component_map);
+            append_insert(&base, local_ident.clone(), component_map);
             format!(
                 "let {} = {dx} * ( 1{val_type} / ({base}*(10{val_type}).ln()) );",
-                wrt!(base, lis),
+                wrt!(base, local_ident),
                 base = base,
-                dx = der!(lis),
+                dx = der!(local_ident),
                 val_type = OUT.to_string()
             )
         }
@@ -793,33 +650,18 @@ pub fn reverse_log2<const OUT: Type>(
     component_map: &mut HashMap<String, Vec<String>>,
 ) -> Option<syn::Stmt> {
     assert!(OUT == Type::F32 || OUT == Type::F64);
-    let local = stmt.local().expect("reverse_log2: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("reverse_log2: not method");
-
-    let lis = local
-        .pat
-        .ident()
-        .expect("reverse_log2: not ident")
-        .ident
-        .to_string();
-
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
     let base = &*method_expr.receiver;
 
     let stmt_str = match base {
         syn::Expr::Path(expr_path) => {
             let base = expr_path.path.segments[0].ident.to_string();
-            append_insert(&base, lis.clone(), component_map);
+            append_insert(&base, local_ident.clone(), component_map);
             format!(
                 "let {} = {dx} * ( 1{val_type} / ({base}*(2{val_type}).ln()) );",
-                wrt!(base, lis),
+                wrt!(base, local_ident),
                 base = base,
-                dx = der!(lis),
+                dx = der!(local_ident),
                 val_type = OUT.to_string()
             )
         }
@@ -838,33 +680,18 @@ pub fn reverse_acos<const OUT: Type>(
     stmt: &syn::Stmt,
     component_map: &mut HashMap<String, Vec<String>>,
 ) -> Option<syn::Stmt> {
-    let local = stmt.local().expect("reverse_acos: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("reverse_acos: not method");
-
-    let lis = local
-        .pat
-        .ident()
-        .expect("reverse_acos: not ident")
-        .ident
-        .to_string();
-
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
     let base = &*method_expr.receiver;
 
     let stmt_str = match base {
         syn::Expr::Path(expr_path) => {
             let base = expr_path.path.segments[0].ident.to_string();
-            append_insert(&base, lis.clone(), component_map);
+            append_insert(&base, local_ident.clone(), component_map);
             format!(
                 "let {} = {dx} * ( -1{val_type} / (1{val_type}-{base}*{base}).sqrt() );",
-                wrt!(base, lis),
+                wrt!(base, local_ident),
                 base = base,
-                dx = der!(lis),
+                dx = der!(local_ident),
                 val_type = OUT.to_string()
             )
         }
@@ -879,33 +706,18 @@ pub fn reverse_acosh<const OUT: Type>(
     stmt: &syn::Stmt,
     component_map: &mut HashMap<String, Vec<String>>,
 ) -> Option<syn::Stmt> {
-    let local = stmt.local().expect("reverse_acosh: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("reverse_acosh: not method");
-
-    let lis = local
-        .pat
-        .ident()
-        .expect("reverse_acosh: not ident")
-        .ident
-        .to_string();
-
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
     let base = &*method_expr.receiver;
 
     let stmt_str = match base {
         syn::Expr::Path(expr_path) => {
             let base = expr_path.path.segments[0].ident.to_string();
-            append_insert(&base, lis.clone(), component_map);
+            append_insert(&base, local_ident.clone(), component_map);
             format!(
                 "let {} = {dx} * ( 1{val_type} / ( ({base}-1{val_type}).sqrt() * ({base}+1{val_type}).sqrt() ) );",
-                wrt!(base, lis),
+                wrt!(base, local_ident),
                 base = base,
-                dx = der!(lis),
+                dx = der!(local_ident),
                 val_type = OUT.to_string()
             )
         }
@@ -920,33 +732,18 @@ pub fn reverse_asin<const OUT: Type>(
     stmt: &syn::Stmt,
     component_map: &mut HashMap<String, Vec<String>>,
 ) -> Option<syn::Stmt> {
-    let local = stmt.local().expect("reverse_asin: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("reverse_asin: not method");
-
-    let lis = local
-        .pat
-        .ident()
-        .expect("reverse_asin: not ident")
-        .ident
-        .to_string();
-
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
     let base = &*method_expr.receiver;
 
     let stmt_str = match base {
         syn::Expr::Path(expr_path) => {
             let base = expr_path.path.segments[0].ident.to_string();
-            append_insert(&base, lis.clone(), component_map);
+            append_insert(&base, local_ident.clone(), component_map);
             format!(
                 "let {} = {dx} * ( 1{val_type} / (1{val_type}-{base}*{base}).sqrt() );",
-                wrt!(base, lis),
+                wrt!(base, local_ident),
                 base = base,
-                dx = der!(lis),
+                dx = der!(local_ident),
                 val_type = OUT.to_string()
             )
         }
@@ -961,33 +758,18 @@ pub fn reverse_asinh<const OUT: Type>(
     stmt: &syn::Stmt,
     component_map: &mut HashMap<String, Vec<String>>,
 ) -> Option<syn::Stmt> {
-    let local = stmt.local().expect("reverse_asinh: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("reverse_asinh: not method");
-
-    let lis = local
-        .pat
-        .ident()
-        .expect("reverse_asinh: not ident")
-        .ident
-        .to_string();
-
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
     let base = &*method_expr.receiver;
 
     let stmt_str = match base {
         syn::Expr::Path(expr_path) => {
             let base = expr_path.path.segments[0].ident.to_string();
-            append_insert(&base, lis.clone(), component_map);
+            append_insert(&base, local_ident.clone(), component_map);
             format!(
                 "let {} = {dx} * ( 1{val_type} / ({base}*{base}+1{val_type}).sqrt() );",
-                wrt!(base, lis),
+                wrt!(base, local_ident),
                 base = base,
-                dx = der!(lis),
+                dx = der!(local_ident),
                 val_type = OUT.to_string()
             )
         }
@@ -1002,33 +784,18 @@ pub fn reverse_atan<const OUT: Type>(
     stmt: &syn::Stmt,
     component_map: &mut HashMap<String, Vec<String>>,
 ) -> Option<syn::Stmt> {
-    let local = stmt.local().expect("reverse_atan: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("reverse_atan: not method");
-
-    let lis = local
-        .pat
-        .ident()
-        .expect("reverse_atan: not ident")
-        .ident
-        .to_string();
-
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
     let base = &*method_expr.receiver;
 
     let stmt_str = match base {
         syn::Expr::Path(expr_path) => {
             let base = expr_path.path.segments[0].ident.to_string();
-            append_insert(&base, lis.clone(), component_map);
+            append_insert(&base, local_ident.clone(), component_map);
             format!(
                 "let {} = {dx} * ( 1{val_type} / ({base}*{base}+1{val_type}) );",
-                wrt!(base, lis),
+                wrt!(base, local_ident),
                 base = base,
-                dx = der!(lis),
+                dx = der!(local_ident),
                 val_type = OUT.to_string()
             )
         }
@@ -1043,33 +810,18 @@ pub fn reverse_sin<const OUT: Type>(
     stmt: &syn::Stmt,
     component_map: &mut HashMap<String, Vec<String>>,
 ) -> Option<syn::Stmt> {
-    let local = stmt.local().expect("reverse_sin: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("reverse_sin: not method");
-
-    let lis = local
-        .pat
-        .ident()
-        .expect("reverse_sin: not ident")
-        .ident
-        .to_string();
-
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
     let base = &*method_expr.receiver;
 
     let stmt_str = match base {
         syn::Expr::Path(expr_path) => {
             let base = expr_path.path.segments[0].ident.to_string();
-            append_insert(&base, lis.clone(), component_map);
+            append_insert(&base, local_ident.clone(), component_map);
             format!(
                 "let {} = {dx} * ( {base}.cos() );",
-                wrt!(base, lis),
+                wrt!(base, local_ident),
                 base = base,
-                dx = der!(lis),
+                dx = der!(local_ident),
             )
         }
         syn::Expr::Lit(_) => return None,
@@ -1083,33 +835,18 @@ pub fn reverse_atanh<const OUT: Type>(
     stmt: &syn::Stmt,
     component_map: &mut HashMap<String, Vec<String>>,
 ) -> Option<syn::Stmt> {
-    let local = stmt.local().expect("reverse_atanh: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("reverse_atanh: not method");
-
-    let lis = local
-        .pat
-        .ident()
-        .expect("reverse_atanh: not ident")
-        .ident
-        .to_string();
-
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
     let base = &*method_expr.receiver;
 
     let stmt_str = match base {
         syn::Expr::Path(expr_path) => {
             let base = expr_path.path.segments[0].ident.to_string();
-            append_insert(&base, lis.clone(), component_map);
+            append_insert(&base, local_ident.clone(), component_map);
             format!(
                 "let {} = {dx} * ( 1{val_type} / (1{val_type}-{base}*{base}) );",
-                wrt!(base, lis),
+                wrt!(base, local_ident),
                 base = base,
-                dx = der!(lis),
+                dx = der!(local_ident),
                 val_type = OUT.to_string()
             )
         }
@@ -1124,33 +861,18 @@ pub fn reverse_cos<const OUT: Type>(
     stmt: &syn::Stmt,
     component_map: &mut HashMap<String, Vec<String>>,
 ) -> Option<syn::Stmt> {
-    let local = stmt.local().expect("reverse_cos: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("reverse_cos: not method");
-
-    let lis = local
-        .pat
-        .ident()
-        .expect("reverse_cos: not ident")
-        .ident
-        .to_string();
-
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
     let base = &*method_expr.receiver;
 
     let stmt_str = match base {
         syn::Expr::Path(expr_path) => {
             let base = expr_path.path.segments[0].ident.to_string();
-            append_insert(&base, lis.clone(), component_map);
+            append_insert(&base, local_ident.clone(), component_map);
             format!(
                 "let {} = {dx} * ( -{base}.sin() );",
-                wrt!(base, lis),
+                wrt!(base, local_ident),
                 base = base,
-                dx = der!(lis),
+                dx = der!(local_ident),
             )
         }
         syn::Expr::Lit(_) => return None,
@@ -1164,33 +886,18 @@ pub fn reverse_cosh<const OUT: Type>(
     stmt: &syn::Stmt,
     component_map: &mut HashMap<String, Vec<String>>,
 ) -> Option<syn::Stmt> {
-    let local = stmt.local().expect("reverse_cosh: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("reverse_cosh: not method");
-
-    let lis = local
-        .pat
-        .ident()
-        .expect("reverse_cosh: not ident")
-        .ident
-        .to_string();
-
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
     let base = &*method_expr.receiver;
 
     let stmt_str = match base {
         syn::Expr::Path(expr_path) => {
             let base = expr_path.path.segments[0].ident.to_string();
-            append_insert(&base, lis.clone(), component_map);
+            append_insert(&base, local_ident.clone(), component_map);
             format!(
                 "let {} = {dx} * ( {base}.sinh() );",
-                wrt!(base, lis),
+                wrt!(base, local_ident),
                 base = base,
-                dx = der!(lis),
+                dx = der!(local_ident),
             )
         }
         syn::Expr::Lit(_) => return None,
@@ -1204,33 +911,18 @@ pub fn reverse_sinh<const OUT: Type>(
     stmt: &syn::Stmt,
     component_map: &mut HashMap<String, Vec<String>>,
 ) -> Option<syn::Stmt> {
-    let local = stmt.local().expect("reverse_sinh: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("reverse_sinh: not method");
-
-    let lis = local
-        .pat
-        .ident()
-        .expect("reverse_sinh: not ident")
-        .ident
-        .to_string();
-
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
     let base = &*method_expr.receiver;
 
     let stmt_str = match base {
         syn::Expr::Path(expr_path) => {
             let base = expr_path.path.segments[0].ident.to_string();
-            append_insert(&base, lis.clone(), component_map);
+            append_insert(&base, local_ident.clone(), component_map);
             format!(
                 "let {} = {dx} * ( {base}.cosh() );",
-                wrt!(base, lis),
+                wrt!(base, local_ident),
                 base = base,
-                dx = der!(lis),
+                dx = der!(local_ident),
             )
         }
         syn::Expr::Lit(_) => return None,
@@ -1244,33 +936,18 @@ pub fn reverse_tan<const OUT: Type>(
     stmt: &syn::Stmt,
     component_map: &mut HashMap<String, Vec<String>>,
 ) -> Option<syn::Stmt> {
-    let local = stmt.local().expect("reverse_tan: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("reverse_tan: not method");
-
-    let lis = local
-        .pat
-        .ident()
-        .expect("reverse_tan: not ident")
-        .ident
-        .to_string();
-
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
     let base = &*method_expr.receiver;
 
     let stmt_str = match base {
         syn::Expr::Path(expr_path) => {
             let base = expr_path.path.segments[0].ident.to_string();
-            append_insert(&base, lis.clone(), component_map);
+            append_insert(&base, local_ident.clone(), component_map);
             format!(
                 "let {} = {dx} * ( 1{val_type} / ({base}.cos() * {base}.cos()) );",
-                wrt!(base, lis),
+                wrt!(base, local_ident),
                 base = base,
-                dx = der!(lis),
+                dx = der!(local_ident),
                 val_type = OUT.to_string()
             )
         }
@@ -1285,33 +962,18 @@ pub fn reverse_tanh<const OUT: Type>(
     stmt: &syn::Stmt,
     component_map: &mut HashMap<String, Vec<String>>,
 ) -> Option<syn::Stmt> {
-    let local = stmt.local().expect("reverse_tanh: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("reverse_tanh: not method");
-
-    let lis = local
-        .pat
-        .ident()
-        .expect("reverse_tanh: not ident")
-        .ident
-        .to_string();
-
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
     let base = &*method_expr.receiver;
 
     let stmt_str = match base {
         syn::Expr::Path(expr_path) => {
             let base = expr_path.path.segments[0].ident.to_string();
-            append_insert(&base, lis.clone(), component_map);
+            append_insert(&base, local_ident.clone(), component_map);
             format!(
                 "let {} = {dx} * ( 1{val_type} / ({base}.cosh()*{base}.cosh()) );",
-                wrt!(base, lis),
+                wrt!(base, local_ident),
                 base = base,
-                dx = der!(lis),
+                dx = der!(local_ident),
                 val_type = OUT.to_string()
             )
         }
@@ -1333,35 +995,20 @@ pub fn reverse_abs<const OUT: Type>(
     stmt: &syn::Stmt,
     component_map: &mut HashMap<String, Vec<String>>,
 ) -> Option<syn::Stmt> {
-    let local = stmt.local().expect("reverse_abs: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("reverse_abs: not method");
-
-    let lis = local
-        .pat
-        .ident()
-        .expect("reverse_abs: not ident")
-        .ident
-        .to_string();
-
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
     let base = &*method_expr.receiver;
 
     let stmt_str = match base {
         syn::Expr::Path(expr_path) => {
             let base = expr_path.path.segments[0].ident.to_string();
-            append_insert(&base, lis.clone(), component_map);
-            // If base>0 then as it rises, so does lis, thus 1 derivative, inversly, if base<0, then -1 deriative
+            append_insert(&base, local_ident.clone(), component_map);
+            // If base>0 then as it rises, so does local_ident, thus 1 derivative, inversly, if base<0, then -1 deriative
             // x/x.abs() == if x >= 0 { 1 } else { -1 } == x.signum()
             format!(
                 "let {} = {dx} * ( {base}.signum() );",
-                wrt!(base, lis),
+                wrt!(base, local_ident),
                 base = base,
-                dx = der!(lis),
+                dx = der!(local_ident),
             )
         }
         syn::Expr::Lit(_) => return None,
@@ -1377,32 +1024,17 @@ pub fn reverse_ceil<const OUT: Type>(
     stmt: &syn::Stmt,
     component_map: &mut HashMap<String, Vec<String>>,
 ) -> Option<syn::Stmt> {
-    let local = stmt.local().expect("reverse_ceil: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("reverse_ceil: not method");
-
-    let lis = local
-        .pat
-        .ident()
-        .expect("reverse_ceil: not ident")
-        .ident
-        .to_string();
-
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
     let base = &*method_expr.receiver;
 
     let stmt_str = match base {
         syn::Expr::Path(expr_path) => {
             let base = expr_path.path.segments[0].ident.to_string();
-            append_insert(&base, lis.clone(), component_map);
+            append_insert(&base, local_ident.clone(), component_map);
             format!(
                 "let {} = {dx} * ( 1{val_type} );",
-                wrt!(base, lis),
-                dx = der!(lis),
+                wrt!(base, local_ident),
+                dx = der!(local_ident),
                 val_type = OUT.to_string()
             )
         }
@@ -1419,32 +1051,17 @@ pub fn reverse_floor<const OUT: Type>(
     stmt: &syn::Stmt,
     component_map: &mut HashMap<String, Vec<String>>,
 ) -> Option<syn::Stmt> {
-    let local = stmt.local().expect("reverse_floor: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("reverse_floor: not method");
-
-    let lis = local
-        .pat
-        .ident()
-        .expect("reverse_floor: not ident")
-        .ident
-        .to_string();
-
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
     let base = &*method_expr.receiver;
 
     let stmt_str = match base {
         syn::Expr::Path(expr_path) => {
             let base = expr_path.path.segments[0].ident.to_string();
-            append_insert(&base, lis.clone(), component_map);
+            append_insert(&base, local_ident.clone(), component_map);
             format!(
                 "let {} = {dx} * ( 1{val_type} );",
-                wrt!(base, lis),
-                dx = der!(lis),
+                wrt!(base, local_ident),
+                dx = der!(local_ident),
                 val_type = OUT.to_string()
             )
         }
@@ -1461,32 +1078,17 @@ pub fn reverse_fract<const OUT: Type>(
     stmt: &syn::Stmt,
     component_map: &mut HashMap<String, Vec<String>>,
 ) -> Option<syn::Stmt> {
-    let local = stmt.local().expect("reverse_fract: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("reverse_fract: not method");
-
-    let lis = local
-        .pat
-        .ident()
-        .expect("reverse_fract: not ident")
-        .ident
-        .to_string();
-
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
     let base = &*method_expr.receiver;
 
     let stmt_str = match base {
         syn::Expr::Path(expr_path) => {
             let base = expr_path.path.segments[0].ident.to_string();
-            append_insert(&base, lis.clone(), component_map);
+            append_insert(&base, local_ident.clone(), component_map);
             format!(
                 "let {} = {dx} * ( 1{val_type} );",
-                wrt!(base, lis),
-                dx = der!(lis),
+                wrt!(base, local_ident),
+                dx = der!(local_ident),
                 val_type = OUT.to_string()
             )
         }
@@ -1502,33 +1104,18 @@ pub fn reverse_recip<const OUT: Type>(
     stmt: &syn::Stmt,
     component_map: &mut HashMap<String, Vec<String>>,
 ) -> Option<syn::Stmt> {
-    let local = stmt.local().expect("reverse_recip: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("reverse_recip: not method");
-
-    let lis = local
-        .pat
-        .ident()
-        .expect("reverse_recip: not ident")
-        .ident
-        .to_string();
-
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
     let base = &*method_expr.receiver;
 
     let stmt_str = match base {
         syn::Expr::Path(expr_path) => {
             let base = expr_path.path.segments[0].ident.to_string();
-            append_insert(&base, lis.clone(), component_map);
+            append_insert(&base, local_ident.clone(), component_map);
             format!(
                 "let {} = {dx} * ( -1{val_type} / ({base}*{base}) );",
-                wrt!(base, lis),
+                wrt!(base, local_ident),
                 base = base,
-                dx = der!(lis),
+                dx = der!(local_ident),
                 val_type = OUT.to_string(),
             )
         }
@@ -1545,32 +1132,17 @@ pub fn reverse_round<const OUT: Type>(
     stmt: &syn::Stmt,
     component_map: &mut HashMap<String, Vec<String>>,
 ) -> Option<syn::Stmt> {
-    let local = stmt.local().expect("reverse_round: not local");
-    let init = &local.init;
-    let method_expr = init
-        .as_ref()
-        .unwrap()
-        .1
-        .method_call()
-        .expect("reverse_round: not method");
-
-    let lis = local
-        .pat
-        .ident()
-        .expect("reverse_round: not ident")
-        .ident
-        .to_string();
-
+    let (local_ident, method_expr) = lm_identifiers(&stmt);
     let base = &*method_expr.receiver;
 
     let stmt_str = match base {
         syn::Expr::Path(expr_path) => {
             let base = expr_path.path.segments[0].ident.to_string();
-            append_insert(&base, lis.clone(), component_map);
+            append_insert(&base, local_ident.clone(), component_map);
             format!(
                 "let {} = {dx} * ( 1{val_type} );",
-                wrt!(base, lis),
-                dx = der!(lis),
+                wrt!(base, local_ident),
+                dx = der!(local_ident),
                 val_type = OUT.to_string()
             )
         }
