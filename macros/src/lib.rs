@@ -1,5 +1,6 @@
 #![feature(proc_macro_span)]
 #![feature(iter_intersperse)]
+#![feature(proc_macro_diagnostic)]
 
 //! **I do not recommend using this directly, please sea [rust-ad](https://crates.io/crates/rust-ad).**
 
@@ -7,9 +8,10 @@ use rust_ad_core::traits::*;
 use rust_ad_core::*;
 
 extern crate proc_macro;
-use proc_macro::TokenStream;
+use proc_macro::{TokenStream,Diagnostic};
 
 use std::collections::HashMap;
+use syn::spanned::Spanned;
 
 mod forward;
 use forward::*;
@@ -170,6 +172,7 @@ pub fn unweave(_attr: TokenStream, item: TokenStream) -> TokenStream {
 /// Much like a derive macro, this is appended to your code, the original `function_name` function remains unedited.
 #[proc_macro_attribute]
 pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let start_item = item.clone();
     let ast = syn::parse_macro_input!(item as syn::Item);
     // eprintln!("{:#?}",ast);
 
@@ -178,8 +181,6 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
         syn::Item::Fn(func) => func,
         _ => panic!("Only `fn` items are supported."),
     };
-
-    let function_holder = function.clone();
 
     // Updates signature
     // ---------------------------------------------------------------------------
@@ -221,6 +222,7 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     for input in sig_inputs.into_iter() {
         function.sig.inputs.push(input);
     }
+
     // Updates output signature
     // eprint!("function.sig.output: {:#?}", function.sig.output);
     let return_type = &function
@@ -246,29 +248,42 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     // Forward autodiff
     // ---------------------------------------------------------------------------
 
+    // Flattens statements
     function.block.stmts = function
         .block
         .stmts
         .iter()
         .flat_map(|statement| unwrap_statement(statement))
         .collect::<Vec<_>>();
-    // function.block.stmts = statements;
-    let type_map = propagate_types(&function);
+
+    // Propagates types through function
+    let type_map_res = propagate_types(&function);
+    let type_map = match type_map_res {
+        Ok(r) => r,
+        Err(_) => return start_item
+    };
 
     // Intersperses forward deriatives
-    function.block.stmts = interspese_succedding_stmts(
+    let derivative_stmts_res = interspese_succedding_stmts(
         function.block.stmts,
         (&type_map, function_inputs.as_slice()),
         forward_derivative,
     );
+    let derivative_stmts = match derivative_stmts_res {
+        Ok(r) => r,
+        Err(_) => return start_item
+    };
+    function.block.stmts = derivative_stmts;
     // Updates return statement
     update_forward_return(function.block.stmts.last_mut(), function_inputs.as_slice());
 
-    let new = quote::quote! {
-        #function_holder
-        #function
-    };
-    TokenStream::from(new)
+    let new = quote::quote! { #function };
+    let new_stream = TokenStream::from(new);
+    join_streams(start_item,new_stream)
+}
+fn join_streams(mut a: TokenStream, b: TokenStream) -> TokenStream {
+    a.extend(b.into_iter());
+    a
 }
 
 /// Returns a tuple of a given number of clones of a variable.
@@ -320,14 +335,13 @@ pub fn dup(_item: TokenStream) -> TokenStream {
 /// Much like a derive macro, this is appended to your code, the original `function_name` function remains unedited.
 #[proc_macro_attribute]
 pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let start_item = item.clone();
     let ast = syn::parse_macro_input!(item as syn::Item);
     // Checks item is function.
     let mut function = match ast {
         syn::Item::Fn(func) => func,
         _ => panic!("Only `fn` items are supported."),
     };
-
-    let function_holder = function.clone();
 
     let function_inputs = function
         .sig
@@ -359,7 +373,11 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Propagates types through function
     // ---------------------------------------------------------------------------
-    let type_map = propagate_types(&function);
+    let type_map_res = propagate_types(&function);
+    let type_map = match type_map_res {
+        Ok(r) => r,
+        Err(_) => return start_item
+    };
 
     // Generates reverse mode code
     // ---------------------------------------------------------------------------
@@ -407,10 +425,9 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
         function.sig.ident.span(),
     );
 
-    let new = quote::quote! { #function_holder #function };
-    let rtn = TokenStream::from(new);
-    // eprintln!("rtn:\n{}", rtn);
-    rtn
+    let new = quote::quote! { #function };
+    let new_stream = TokenStream::from(new);
+    join_streams(start_item,new_stream)
 }
 
 /// Unwraps nested expressions into seperate variable assignments.
@@ -696,7 +713,7 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
 /// Returns a hashmap of identifier->type.
 ///
 /// CURRENTLY DOES NOT SUPPORT PROCEDURES WHICH RETURN MULTIPLE DIFFERENT TYPES
-fn propagate_types(func: &syn::ItemFn) -> HashMap<String, String> {
+fn propagate_types(func: &syn::ItemFn) -> Result<HashMap<String, String>,()> {
     let mut map = HashMap::new();
 
     // Add input types
@@ -741,25 +758,38 @@ fn propagate_types(func: &syn::ItemFn) -> HashMap<String, String> {
                     // I think this is cleaner than embedding a `format!` within an `.expect`
                     let out_sig = match SUPPORTED_OPERATIONS.get(&operation_sig) {
                         Some(out_sig) => out_sig,
-                        None => panic!(
-                            "propagate_types: unsupported operation ({:?})",
-                            operation_sig
-                        ),
+                        None => {
+                            let error = format!("unsupported operation: {}",operation_sig);
+                            Diagnostic::spanned(bin_expr.span().unwrap(), proc_macro::Level::Error, error).emit();
+                            return Err(());
+                        }
                     };
                     Some(out_sig.output_type.clone())
                 } else if let syn::Expr::Call(call_expr) = &*init.1 {
                     let function_sig = function_signature(call_expr, &map);
-                    let func_out_type = SUPPORTED_FUNCTIONS
-                        .get(&function_sig)
-                        .expect("propagate_types: unsupported function");
+                    let func_out_type = match SUPPORTED_FUNCTIONS
+                        .get(&function_sig) {
+                            Some(out_sig) => out_sig,
+                            None => {
+                                let error = format!("unsupported function: {}",function_sig);
+                                Diagnostic::spanned(call_expr.span().unwrap(), proc_macro::Level::Error, error).emit();
+                                return Err(());
+                            }
+                        };
                     // Sets result type
                     Some(func_out_type.output_type.clone())
                 } else if let syn::Expr::MethodCall(method_expr) = &*init.1 {
                     let method_sig = method_signature(method_expr, &map);
                     // Searches for supported function signature by function identifier and argument types.
-                    let method_out_type = SUPPORTED_METHODS
-                        .get(&method_sig)
-                        .expect("propagate_types: unsupported method");
+                    let method_out_type = match SUPPORTED_METHODS
+                        .get(&method_sig) {
+                            Some(out_sig) => out_sig,
+                            None => {
+                                let error = format!("unsupported method: {}",method_sig);
+                                Diagnostic::spanned(method_expr.span().unwrap(), proc_macro::Level::Error, error).emit();
+                                return Err(());
+                            }
+                        };
                     // Sets result type
                     Some(method_out_type.output_type.clone())
                 } else if let syn::Expr::Macro(macro_expr) = &*init.1 {
@@ -802,5 +832,5 @@ fn propagate_types(func: &syn::ItemFn) -> HashMap<String, String> {
         }
     }
     // eprintln!("final map: {:?}", map);
-    map
+    Ok(map)
 }

@@ -1,6 +1,8 @@
 use crate::derivatives::*;
 use std::collections::HashMap;
 
+
+use std::fmt;
 /// Signature infomation to refer to specific method.
 #[derive(Hash, PartialEq, Eq, Debug)]
 pub struct MethodSignature {
@@ -34,6 +36,11 @@ impl<const N: usize> From<(&'static str, &'static str, &'static [&'static str; N
         }
     }
 }
+impl fmt::Display for MethodSignature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}.{}({})", self.reciever_type,self.name,self.input_types.iter().cloned().intersperse(String::from(",")).collect::<String>())
+    }
+}
 /// A map of method signatures to useful data (output type, etc.).
 type MethodMap = HashMap<MethodSignature, ProcedureOutputs>;
 /// Signature infomation to refer to specific function.
@@ -53,6 +60,11 @@ impl<const N: usize> From<(&'static str, &'static [&'static str; N])> for Functi
             name: String::from(name),
             input_types: input_types.iter().map(|s| String::from(*s)).collect(),
         }
+    }
+}
+impl fmt::Display for FunctionSignature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}({})", self.name,self.input_types.iter().cloned().intersperse(String::from(",")).collect::<String>())
     }
 }
 /// A map of function signatures to useful data (output type, etc.).
@@ -135,6 +147,16 @@ impl TryFrom<syn::BinOp> for BinOp {
         }
     }
 }
+impl fmt::Display for BinOp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Add => write!(f,"+"),
+            Self::Sub => write!(f,"-"),
+            Self::Mul => write!(f,"*"),
+            Self::Div => write!(f,"/")
+        }
+    }
+}
 
 /// Signature infomation to refer to specific binary operation.
 #[derive(Hash, PartialEq, Eq, Debug)]
@@ -162,6 +184,11 @@ impl From<(String, syn::BinOp, String)> for OperationSignature {
             op: BinOp::try_from(op).expect("No op"),
             rhs,
         }
+    }
+}
+impl fmt::Display for OperationSignature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}{}{}", self.lhs,self.op,self.rhs)
     }
 }
 /// A map of binary operation signatures to useful data (output type, etc.).
