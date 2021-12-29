@@ -1,6 +1,6 @@
 [package]
-name = "rust-ad-core"
-version = "0.4.1"
+name = "rust-ad-core-macros"
+version = "0.1.0"
 edition = "2021"
 
 description = "Rust Auto-Differentiation."
@@ -11,6 +11,6 @@ documentation = "https://docs.rs/rust-ad/"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-syn = { version="1.0.82", features=["full","extra-traits"] }
-lazy_static = "1.4.0"
-rust-ad-core-macros = { version = "0.1.0", path = "../core-macros" }
+
+[lib]
+proc-macro = true

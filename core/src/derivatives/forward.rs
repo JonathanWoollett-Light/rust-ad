@@ -1,6 +1,9 @@
 use super::lm_identifiers;
 use crate::*;
 use crate::{traits::*, utils::*};
+use rust_ad_core_macros::{forward_derivative_macro,compose};
+
+extern crate proc_macro;
 
 // Utils
 // -------------------------------------------------------------------
@@ -55,10 +58,91 @@ fn cumulative_derivative_wrt<const OUT_TYPE: Type>(
     }
 }
 
+pub enum Arg {
+    /// e.g. `a`
+    Variable(String),
+    /// e.g. `7.3f32`
+    Literal(String),
+}
+impl std::fmt::Display for Arg {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Variable(s) => write!(f, "{}", s),
+            Self::Literal(s) => write!(f, "{}", s),
+        }
+    }
+}
+/// Forward General Derivative type
+pub type FgdType = fn(&[String], String, &[Arg]) -> syn::Stmt;
+/// Derivative function type
+pub type DFn = fn(&[Arg]) -> String;
+/// Forward general deriviative
+/// ```ignore
+/// static outer_test: FgdType = {
+///     const base_fn: DFn = |args:&[String]| -> String { format!("{0}-{1}",args[0],args[1]) };
+///     const exponent_fn: DFn = |args:&[String]| -> String { format!("{0}*{1}+{0}",args[0],args[1]) };
+///     fgd::<"0f32",{&[base_fn, exponent_fn]}>
+/// };
+/// ```
+/// Is equivalent to
+/// ```ignore
+/// forward_derivative_macro!(outer_test,"0f32","{0}-{1}","{0}*{1}+{0}");
+/// ```
+pub fn fgd<const DEFAULT: &'static str, const TRANSLATION_FUNCTIONS: &'static [DFn]>(
+    outer_fn_args: &[String],
+    local_ident: String,
+    args: &[Arg],
+) -> syn::Stmt {
+    assert_eq!(args.len(), TRANSLATION_FUNCTIONS.len());
+
+    let (idents, deriatives) = outer_fn_args
+        .iter()
+        .map(|outer_fn_input| {
+            let acc = args
+                .iter()
+                .zip(TRANSLATION_FUNCTIONS.iter())
+                .filter_map(|(arg,t)|
+                // See the docs for cumulative (these if's accomplish the same-ish thing)
+                // TODO Improve docs here directly
+                match arg {
+                    Arg::Literal(_) => None,
+                    Arg::Variable(v) => Some(format!("({})*{}",
+                        t(args),
+                        if v == outer_fn_input {
+                            der!(outer_fn_input)
+                        } else if outer_fn_args.contains(v) {
+                            DEFAULT.to_string()
+                        } else {
+                            wrt!(arg,outer_fn_input)
+                        }
+                    ))
+                })
+                .intersperse(String::from("+"))
+                .collect::<String>();
+
+            (wrt!(local_ident, outer_fn_input), acc)
+        })
+        .unzip::<_, _, Vec<_>, Vec<_>>();
+    let (idents, deriatives) = (
+        idents
+            .into_iter()
+            .intersperse(String::from(","))
+            .collect::<String>(),
+        deriatives
+            .into_iter()
+            .intersperse(String::from(","))
+            .collect::<String>(),
+    );
+    let stmt_str = format!("let ({}) = ({});", idents, deriatives);
+    syn::parse_str(&stmt_str).expect("fgd: parse fail")
+}
+
 // Primitive procedures
 // -------------------------------------------------------------------
 
-/// Forward deriative of [std::ops::Add].
+// forward_derivative_macro!(add_f32,"0f32","1f32","1f32");
+
+// Forward deriative of [std::ops::Add].
 pub fn forward_add<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     let local = stmt.local().expect("forward_add: not local");
     let bin_expr = &local
@@ -94,6 +178,7 @@ pub fn forward_add<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]
     let stmt_str = format!("let ({}) = ({});", idents, deriatives);
     syn::parse_str(&stmt_str).expect("forward_add: parse fail")
 }
+
 /// Forward deriative of [std::ops::Sub].
 pub fn forward_sub<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     let local = stmt.local().expect("forward_sub: not local");
@@ -217,452 +302,61 @@ pub fn forward_div<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]
 // Exponent procedures
 // -------------------------------------------------------------------
 
-/// Forward deriative of [`powi`](https://doc.rust-lang.org/std/primitive.f32.html#method.powi).
-pub fn forward_powi<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
-    assert!(OUT == Type::F32 || OUT == Type::F64);
-    let (local_ident, method_expr) = lm_identifiers(&stmt);
+// Forward deriative of [`powi`](https://doc.rust-lang.org/std/primitive.f32.html#method.powi).
+// forward_derivative_macro!(
+//     powi_f32,
+//     "0f32",
+//     "{1} * {0}.powi({1} - 1i32)",
+//     "{0}.powi({1}) * {0}.ln()"
+// );
+// // Forward deriative of [`powf`](https://doc.rust-lang.org/std/primitive.f32.html#method.powf)
+// forward_derivative_macro!(
+//     powf_f32,
+//     "0f32",
+//     "{1} * {0}.powf({1} - 1f32)",
+//     "{0}.powf({1}) * {0}.ln()"
+// );
+// // Forward deriative of [`sqrt`](https://doc.rust-lang.org/std/primitive.f32.html#method.sqrt).
+// forward_derivative_macro!(sqrt_f32, "0f32", "1f32 / (2f32 * {0}.sqrt())");
+// // Forward deriative of [`cbrt`](https://doc.rust-lang.org/std/primitive.f32.html#method.cbrt).
+// forward_derivative_macro!(cbrt_f32, "0f32", "1f32 / (3f32*{0}.powf(2f32/3f32))");
+// // Forward deriative of [`exp`](https://doc.rust-lang.org/std/primitive.f32.html#method.exp).
+// forward_derivative_macro!(exp_f32, "0f32", "{0}.exp()");
+// // Forward deriative of [`exp2`](https://doc.rust-lang.org/std/primitive.f32.html#method.exp2).
+// forward_derivative_macro!(exp2_f32, "0f32", "{0}.exp2() * (2f32).ln()");
+// // Forward deriative of [`exp_m1`](https://doc.rust-lang.org/std/primitive.f32.html#method.exp_m1).
+// forward_derivative_macro!(exp_m1_f32, "0f32", "{0}.exp()");
 
-    let idents = function_inputs
-        .iter()
-        .map(|input| wrt!(local_ident, input))
-        .intersperse(String::from(","))
-        .collect::<String>();
+// // Log procedures
+// // -------------------------------------------------------------------
 
-    let (base, exponent) = (
-        expr_str(&*method_expr.receiver),
-        expr_str(&method_expr.args[0]),
-    );
-    let deriatives = function_inputs
-        .iter()
-        .map(|input| {
-            if *input == base {
-                format!(
-                    "{exponent} as {type_str} * {base}.powi({exponent} - 1i32)",
-                    exponent = exponent,
-                    base = base,
-                    type_str = OUT.to_string()
-                )
-            } else if *input == exponent {
-                format!(
-                    "{base}.powi({exponent}) * {base}.ln()",
-                    exponent = exponent,
-                    base = base
-                )
-            } else {
-                OUT.zero()
-            }
-        })
-        .intersperse(String::from(","))
-        .collect::<String>();
-    let stmt_str = format!("let ({}) = ({});", idents, deriatives);
-    syn::parse_str(&stmt_str).expect("forward_powi: parse fail")
-}
-/// Forward deriative of [`powf`](https://doc.rust-lang.org/std/primitive.f32.html#method.powf).
-pub fn forward_powf<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
-    assert!(OUT == Type::F32 || OUT == Type::F64);
-    let (local_ident, method_expr) = lm_identifiers(&stmt);
+// // Forward deriative of [`ln`](https://doc.rust-lang.org/std/primitive.f32.html#method.ln).
+// forward_derivative_macro!(ln_f32, "0f32", "1f32 / {0}");
+// // Forward deriative of [`ln_1p`](https://doc.rust-lang.org/std/primitive.f32.html#method.ln_1p).
+// forward_derivative_macro!(ln_1p_f32, "0f32", "1f32 / (1f32+{0})");
+// // Forward deriative of [`log`](https://doc.rust-lang.org/std/primitive.f32.html#method.log).
+// forward_derivative_macro!(
+//     log_f32,
+//     "0f32",
+//     "1f32 / ({0}*{1}.ln())",
+//     "-{0}.ln() / ({1} *{1}.ln()*{1}.ln())"
+// );
+// // Forward deriative of [`log10`](https://doc.rust-lang.org/std/primitive.f32.html#method.log10).
+// forward_derivative_macro!(log10_f32, "0f32", "1f32 / ({0}*(10f32).ln())");
+// // Forward deriative of [`log2`](https://doc.rust-lang.org/std/primitive.f32.html#method.log2).
+// forward_derivative_macro!(log2_f32, "0f32", "1f32 / ({0}*(2f32).ln())");
 
-    let idents = function_inputs
-        .iter()
-        .map(|input| wrt!(local_ident, input))
-        .intersperse(String::from(","))
-        .collect::<String>();
+// // Trig procedures
+// // -------------------------------------------------------------------
 
-    let (base, exponent) = (
-        expr_str(&*method_expr.receiver),
-        expr_str(&method_expr.args[0]),
-    );
-    let deriatives = function_inputs
-        .iter()
-        .map(|input| {
-            if *input == base {
-                format!(
-                    "{exponent} * {base}.powf({exponent} - 1{type_str})",
-                    exponent = exponent,
-                    base = base,
-                    type_str = OUT.to_string()
-                )
-            } else if *input == exponent {
-                format!(
-                    "{base}.powf({exponent}) * {base}.ln()",
-                    exponent = exponent,
-                    base = base
-                )
-            } else {
-                OUT.zero()
-            }
-        })
-        .intersperse(String::from(","))
-        .collect::<String>();
-    let stmt_str = format!("let ({}) = ({});", idents, deriatives);
-    syn::parse_str(&stmt_str).expect("forward_powf: parse fail")
-}
-/// Forward deriative of [`sqrt`](https://doc.rust-lang.org/std/primitive.f32.html#method.sqrt).
-pub fn forward_sqrt<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
-    assert!(OUT == Type::F32 || OUT == Type::F64);
-    let (local_ident, method_expr) = lm_identifiers(&stmt);
-
-    let idents = function_inputs
-        .iter()
-        .map(|input| wrt!(local_ident, input))
-        .intersperse(String::from(","))
-        .collect::<String>();
-
-    let base = expr_str(&*method_expr.receiver);
-    let deriatives = function_inputs
-        .iter()
-        .map(|input| {
-            if *input == base {
-                format!(
-                    "1{type_str} / (2{type_str} * {base}.sqrt())",
-                    base = base,
-                    type_str = OUT.to_string()
-                )
-            } else {
-                OUT.zero()
-            }
-        })
-        .intersperse(String::from(","))
-        .collect::<String>();
-    let stmt_str = format!("let ({}) = ({});", idents, deriatives);
-    syn::parse_str(&stmt_str).expect("forward_powf: parse fail")
-}
-/// Forward deriative of [`cbrt`](https://doc.rust-lang.org/std/primitive.f32.html#method.cbrt).
-pub fn forward_cbrt<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
-    assert!(OUT == Type::F32 || OUT == Type::F64);
-    let (local_ident, method_expr) = lm_identifiers(&stmt);
-
-    let idents = function_inputs
-        .iter()
-        .map(|input| wrt!(local_ident, input))
-        .intersperse(String::from(","))
-        .collect::<String>();
-
-    let base = expr_str(&*method_expr.receiver);
-    let deriatives = function_inputs
-        .iter()
-        .map(|input| {
-            if *input == base {
-                format!(
-                    "1{val_type} / (3{val_type}*{base}.powf(2f32/3f32))",
-                    base = base,
-                    val_type = OUT.to_string()
-                )
-            } else {
-                OUT.zero()
-            }
-        })
-        .intersperse(String::from(","))
-        .collect::<String>();
-    let stmt_str = format!("let ({}) = ({});", idents, deriatives);
-    syn::parse_str(&stmt_str).expect("forward_cbrt: parse fail")
-}
-/// Forward deriative of [`exp`](https://doc.rust-lang.org/std/primitive.f32.html#method.exp).
-pub fn forward_exp<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
-    assert!(OUT == Type::F32 || OUT == Type::F64);
-    let (local_ident, method_expr) = lm_identifiers(&stmt);
-
-    let idents = function_inputs
-        .iter()
-        .map(|input| wrt!(local_ident, input))
-        .intersperse(String::from(","))
-        .collect::<String>();
-
-    let exponent = expr_str(&*method_expr.receiver);
-    let deriatives = function_inputs
-        .iter()
-        .map(|input| {
-            if *input == exponent {
-                format!("{exponent}.exp()", exponent = exponent,)
-            } else {
-                OUT.zero()
-            }
-        })
-        .intersperse(String::from(","))
-        .collect::<String>();
-    let stmt_str = format!("let ({}) = ({});", idents, deriatives);
-    syn::parse_str(&stmt_str).expect("forward_exp: parse fail")
-}
-/// Forward deriative of [`exp2`](https://doc.rust-lang.org/std/primitive.f32.html#method.exp2).
-pub fn forward_exp2<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
-    assert!(OUT == Type::F32 || OUT == Type::F64);
-    let (local_ident, method_expr) = lm_identifiers(&stmt);
-
-    let idents = function_inputs
-        .iter()
-        .map(|input| wrt!(local_ident, input))
-        .intersperse(String::from(","))
-        .collect::<String>();
-
-    let exponent = expr_str(&*method_expr.receiver);
-    let deriatives = function_inputs
-        .iter()
-        .map(|input| {
-            if *input == exponent {
-                format!("{exponent}.exp2() * (2f32).ln()", exponent = exponent,)
-            } else {
-                OUT.zero()
-            }
-        })
-        .intersperse(String::from(","))
-        .collect::<String>();
-    let stmt_str = format!("let ({}) = ({});", idents, deriatives);
-    syn::parse_str(&stmt_str).expect("forward_exp2: parse fail")
-}
-/// Forward deriative of [`exp_m1`](https://doc.rust-lang.org/std/primitive.f32.html#method.exp_m1).
-pub fn forward_exp_m1<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
-    assert!(OUT == Type::F32 || OUT == Type::F64);
-    let (local_ident, method_expr) = lm_identifiers(&stmt);
-
-    let idents = function_inputs
-        .iter()
-        .map(|input| wrt!(local_ident, input))
-        .intersperse(String::from(","))
-        .collect::<String>();
-
-    let exponent = expr_str(&*method_expr.receiver);
-    let deriatives = function_inputs
-        .iter()
-        .map(|input| {
-            if *input == exponent {
-                format!("{exponent}.exp()", exponent = exponent,)
-            } else {
-                OUT.zero()
-            }
-        })
-        .intersperse(String::from(","))
-        .collect::<String>();
-    let stmt_str = format!("let ({}) = ({});", idents, deriatives);
-    syn::parse_str(&stmt_str).expect("forward_exp_m1: parse fail")
-}
-
-// Log procedures
-// -------------------------------------------------------------------
-
-/// Forward deriative of [`ln`](https://doc.rust-lang.org/std/primitive.f32.html#method.ln).
-pub fn forward_ln<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
-    assert!(OUT == Type::F32 || OUT == Type::F64);
-    let (local_ident, method_expr) = lm_identifiers(&stmt);
-
-    let idents = function_inputs
-        .iter()
-        .map(|input| wrt!(local_ident, input))
-        .intersperse(String::from(","))
-        .collect::<String>();
-
-    let base = expr_str(&*method_expr.receiver);
-    let deriatives = function_inputs
-        .iter()
-        .map(|input| {
-            if *input == base {
-                format!(
-                    "1{type_str} / {base}",
-                    base = base,
-                    type_str = OUT.to_string()
-                )
-            } else {
-                OUT.zero()
-            }
-        })
-        .intersperse(String::from(","))
-        .collect::<String>();
-    let stmt_str = format!("let ({}) = ({});", idents, deriatives);
-    syn::parse_str(&stmt_str).expect("forward_ln: parse fail")
-}
-/// Forward deriative of [`ln_1p`](https://doc.rust-lang.org/std/primitive.f32.html#method.ln_1p).
-pub fn forward_ln_1p<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
-    assert!(OUT == Type::F32 || OUT == Type::F64);
-    let (local_ident, method_expr) = lm_identifiers(&stmt);
-
-    let idents = function_inputs
-        .iter()
-        .map(|input| wrt!(local_ident, input))
-        .intersperse(String::from(","))
-        .collect::<String>();
-
-    let base = expr_str(&*method_expr.receiver);
-    let deriatives = function_inputs
-        .iter()
-        .map(|input| {
-            if *input == base {
-                format!(
-                    "1{val_type} / (1{val_type}+{base})",
-                    base = base,
-                    val_type = OUT.to_string()
-                )
-            } else {
-                OUT.zero()
-            }
-        })
-        .intersperse(String::from(","))
-        .collect::<String>();
-    let stmt_str = format!("let ({}) = ({});", idents, deriatives);
-    syn::parse_str(&stmt_str).expect("forward_ln_1p: parse fail")
-}
-/// Forward deriative of [`log`](https://doc.rust-lang.org/std/primitive.f32.html#method.log).
-pub fn forward_log<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
-    assert!(OUT == Type::F32 || OUT == Type::F64);
-    let (local_ident, method_expr) = lm_identifiers(&stmt);
-
-    let idents = function_inputs
-        .iter()
-        .map(|input| wrt!(local_ident, input))
-        .intersperse(String::from(","))
-        .collect::<String>();
-
-    let (log_input, base) = (
-        expr_str(&*method_expr.receiver),
-        expr_str(&method_expr.args[0]),
-    );
-    let deriatives = function_inputs
-        .iter()
-        .map(|input| {
-            if *input == log_input {
-                format!(
-                    "1{val_type} / ( {log_input} * {base}.ln() )",
-                    log_input = log_input,
-                    base = base,
-                    val_type = OUT.to_string()
-                )
-            } else if *input == base {
-                format!(
-                    "-{log_input}.ln() / ( {base} * {base}.ln() * {base}.ln() )",
-                    log_input = log_input,
-                    base = base,
-                )
-            } else {
-                OUT.zero()
-            }
-        })
-        .intersperse(String::from(","))
-        .collect::<String>();
-    let stmt_str = format!("let ({}) = ({});", idents, deriatives);
-    syn::parse_str(&stmt_str).expect("forward_log: parse fail")
-}
-/// Forward deriative of [`log10`](https://doc.rust-lang.org/std/primitive.f32.html#method.log10).
-pub fn forward_log10<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
-    assert!(OUT == Type::F32 || OUT == Type::F64);
-    let (local_ident, method_expr) = lm_identifiers(&stmt);
-
-    let idents = function_inputs
-        .iter()
-        .map(|input| wrt!(local_ident, input))
-        .intersperse(String::from(","))
-        .collect::<String>();
-
-    let base = expr_str(&*method_expr.receiver);
-    let deriatives = function_inputs
-        .iter()
-        .map(|input| {
-            if *input == base {
-                format!(
-                    "1{val_type} / ({base}*(10{val_type}).ln())",
-                    base = base,
-                    val_type = OUT.to_string()
-                )
-            } else {
-                OUT.zero()
-            }
-        })
-        .intersperse(String::from(","))
-        .collect::<String>();
-    let stmt_str = format!("let ({}) = ({});", idents, deriatives);
-    syn::parse_str(&stmt_str).expect("forward_log10: parse fail")
-}
-/// Forward deriative of [`log2`](https://doc.rust-lang.org/std/primitive.f32.html#method.log2).
-pub fn forward_log2<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
-    assert!(OUT == Type::F32 || OUT == Type::F64);
-    let (local_ident, method_expr) = lm_identifiers(&stmt);
-
-    let idents = function_inputs
-        .iter()
-        .map(|input| wrt!(local_ident, input))
-        .intersperse(String::from(","))
-        .collect::<String>();
-
-    let base = expr_str(&*method_expr.receiver);
-    let deriatives = function_inputs
-        .iter()
-        .map(|input| {
-            if *input == base {
-                format!(
-                    "1{val_type} / ({base}*(2{val_type}).ln())",
-                    base = base,
-                    val_type = OUT.to_string()
-                )
-            } else {
-                OUT.zero()
-            }
-        })
-        .intersperse(String::from(","))
-        .collect::<String>();
-    let stmt_str = format!("let ({}) = ({});", idents, deriatives);
-    syn::parse_str(&stmt_str).expect("forward_log2: parse fail")
-}
-
-// Trig procedures
-// -------------------------------------------------------------------
-
-/// Forward deriative of [`acos`](https://doc.rust-lang.org/std/primitive.f32.html#method.acos).
-pub fn forward_acos<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
-    assert!(OUT == Type::F32 || OUT == Type::F64);
-    let (local_ident, method_expr) = lm_identifiers(&stmt);
-
-    let idents = function_inputs
-        .iter()
-        .map(|input| wrt!(local_ident, input))
-        .intersperse(String::from(","))
-        .collect::<String>();
-
-    let base = expr_str(&*method_expr.receiver);
-    let deriatives = function_inputs
-        .iter()
-        .map(|input| {
-            if *input == base {
-                format!(
-                    "-1{val_type} / (1{val_type}-{base}*{base}).sqrt())",
-                    base = base,
-                    val_type = OUT.to_string()
-                )
-            } else {
-                OUT.zero()
-            }
-        })
-        .intersperse(String::from(","))
-        .collect::<String>();
-    let stmt_str = format!("let ({}) = ({});", idents, deriatives);
-    syn::parse_str(&stmt_str).expect("forward_acos: parse fail")
-}
-/// Forward deriative of [`acosh`](https://doc.rust-lang.org/std/primitive.f32.html#method.acosh).
-pub fn forward_acosh<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
-    assert!(OUT == Type::F32 || OUT == Type::F64);
-    let (local_ident, method_expr) = lm_identifiers(&stmt);
-
-    let idents = function_inputs
-        .iter()
-        .map(|input| wrt!(local_ident, input))
-        .intersperse(String::from(","))
-        .collect::<String>();
-
-    let base = expr_str(&*method_expr.receiver);
-    let deriatives = function_inputs
-        .iter()
-        .map(|input| {
-            if *input == base {
-                format!(
-                    "1{val_type} / ( ({base}-1{val_type}).sqrt() * ({base}+1{val_type}).sqrt() )",
-                    base = base,
-                    val_type = OUT.to_string()
-                )
-            } else {
-                OUT.zero()
-            }
-        })
-        .intersperse(String::from(","))
-        .collect::<String>();
-    let stmt_str = format!("let ({}) = ({});", idents, deriatives);
-    syn::parse_str(&stmt_str).expect("forward_acosh: parse fail")
-}
+// // Forward deriative of [`acos`](https://doc.rust-lang.org/std/primitive.f32.html#method.acos).
+// forward_derivative_macro!(acos_f32, "0f32", "-1f32 / (1f32-{0}*{0}).sqrt())");
+// // Forward deriative of [`acosh`](https://doc.rust-lang.org/std/primitive.f32.html#method.acosh).
+// forward_derivative_macro!(
+//     acosh_f32,
+//     "0f32",
+//     "1f32 / ( ({0}-1f32).sqrt() * ({0}+1f32).sqrt() )"
+// );
 /// Forward deriative of [`asin`](https://doc.rust-lang.org/std/primitive.f32.html#method.asin).
 pub fn forward_asin<const OUT: Type>(stmt: &syn::Stmt, function_inputs: &[String]) -> syn::Stmt {
     assert!(OUT == Type::F32 || OUT == Type::F64);

@@ -225,22 +225,22 @@ lazy_static::lazy_static! {
         // f32
         // ----------------------------
         // Exponents
-        map.insert(("powi","f32",&["i32"]).into(),ProcedureOutputs::new("f32",forward_powi::<{Type::F32}>,reverse_powi::<{Type::F32}>));
-        map.insert(("powf","f32",&["f32"]).into(),ProcedureOutputs::new("f32",forward_powf::<{Type::F32}>,reverse_powf::<{Type::F32}>));
-        map.insert(("sqrt","f32",&[]).into(),ProcedureOutputs::new("f32",forward_sqrt::<{Type::F32}>,reverse_sqrt::<{Type::F32}>));
-        map.insert(("cbrt","f32",&[]).into(),ProcedureOutputs::new("f32",forward_cbrt::<{Type::F32}>,reverse_cbrt::<{Type::F32}>));
-        map.insert(("exp","f32",&[]).into(),ProcedureOutputs::new("f32",forward_exp::<{Type::F32}>,reverse_exp::<{Type::F32}>));
-        map.insert(("exp2","f32",&[]).into(),ProcedureOutputs::new("f32",forward_exp2::<{Type::F32}>,reverse_exp2::<{Type::F32}>));
-        map.insert(("exp_m1","f32",&[]).into(),ProcedureOutputs::new("f32",forward_exp_m1::<{Type::F32}>,reverse_exp_m1::<{Type::F32}>));
-        // Logs
-        map.insert(("ln","f32",&[]).into(),ProcedureOutputs::new("f32",forward_ln::<{Type::F32}>,reverse_ln::<{Type::F32}>));
-        map.insert(("ln_1p","f32",&[]).into(),ProcedureOutputs::new("f32",forward_ln_1p::<{Type::F32}>,reverse_ln_1p::<{Type::F32}>));
-        map.insert(("log","f32",&["f32"]).into(),ProcedureOutputs::new("f32",forward_log::<{Type::F32}>,reverse_log::<{Type::F32}>));
-        map.insert(("log10","f32",&[]).into(),ProcedureOutputs::new("f32",forward_log10::<{Type::F32}>,reverse_log10::<{Type::F32}>));
-        map.insert(("log2","f32",&[]).into(),ProcedureOutputs::new("f32",forward_log2::<{Type::F32}>,reverse_log2::<{Type::F32}>));
-        // Trig
-        map.insert(("acos","f32",&[]).into(),ProcedureOutputs::new("f32",forward_acos::<{Type::F32}>,reverse_acos::<{Type::F32}>));
-        map.insert(("acosh","f32",&[]).into(),ProcedureOutputs::new("f32",forward_acosh::<{Type::F32}>,reverse_acosh::<{Type::F32}>));
+        // map.insert(("powi","f32",&["i32"]).into(),ProcedureOutputs::new("f32",forward_powi,reverse_powi::<{Type::F32}>));
+        // map.insert(("powf","f32",&["f32"]).into(),ProcedureOutputs::new("f32",forward_powf::<{Type::F32}>,reverse_powf::<{Type::F32}>));
+        // map.insert(("sqrt","f32",&[]).into(),ProcedureOutputs::new("f32",forward_sqrt::<{Type::F32}>,reverse_sqrt::<{Type::F32}>));
+        // map.insert(("cbrt","f32",&[]).into(),ProcedureOutputs::new("f32",forward_cbrt::<{Type::F32}>,reverse_cbrt::<{Type::F32}>));
+        // map.insert(("exp","f32",&[]).into(),ProcedureOutputs::new("f32",forward_exp::<{Type::F32}>,reverse_exp::<{Type::F32}>));
+        // map.insert(("exp2","f32",&[]).into(),ProcedureOutputs::new("f32",forward_exp2::<{Type::F32}>,reverse_exp2::<{Type::F32}>));
+        // map.insert(("exp_m1","f32",&[]).into(),ProcedureOutputs::new("f32",forward_exp_m1::<{Type::F32}>,reverse_exp_m1::<{Type::F32}>));
+        // // Logs
+        // map.insert(("ln","f32",&[]).into(),ProcedureOutputs::new("f32",forward_ln::<{Type::F32}>,reverse_ln::<{Type::F32}>));
+        // map.insert(("ln_1p","f32",&[]).into(),ProcedureOutputs::new("f32",forward_ln_1p::<{Type::F32}>,reverse_ln_1p::<{Type::F32}>));
+        // map.insert(("log","f32",&["f32"]).into(),ProcedureOutputs::new("f32",forward_log::<{Type::F32}>,reverse_log::<{Type::F32}>));
+        // map.insert(("log10","f32",&[]).into(),ProcedureOutputs::new("f32",forward_log10::<{Type::F32}>,reverse_log10::<{Type::F32}>));
+        // map.insert(("log2","f32",&[]).into(),ProcedureOutputs::new("f32",forward_log2::<{Type::F32}>,reverse_log2::<{Type::F32}>));
+        // // Trig
+        // map.insert(("acos","f32",&[]).into(),ProcedureOutputs::new("f32",forward_acos::<{Type::F32}>,reverse_acos::<{Type::F32}>));
+        // map.insert(("acosh","f32",&[]).into(),ProcedureOutputs::new("f32",forward_acosh::<{Type::F32}>,reverse_acosh::<{Type::F32}>));
         map.insert(("asin","f32",&[]).into(),ProcedureOutputs::new("f32",forward_asin::<{Type::F32}>,reverse_asin::<{Type::F32}>));
         map.insert(("asinh","f32",&[]).into(),ProcedureOutputs::new("f32",forward_asinh::<{Type::F32}>,reverse_asinh::<{Type::F32}>));
         map.insert(("atan","f32",&[]).into(),ProcedureOutputs::new("f32",forward_atan::<{Type::F32}>,reverse_atan::<{Type::F32}>));
@@ -262,22 +262,22 @@ lazy_static::lazy_static! {
         // f64
         // ----------------------------
         // Exponents
-        map.insert(("powi","f64",&["i32"]).into(),ProcedureOutputs::new("f64",forward_powi::<{Type::F64}>,reverse_powi::<{Type::F64}>));
-        map.insert(("powf","f64",&["f64"]).into(),ProcedureOutputs::new("f64",forward_powf::<{Type::F64}>,reverse_powf::<{Type::F64}>));
-        map.insert(("sqrt","f64",&[]).into(),ProcedureOutputs::new("f64",forward_sqrt::<{Type::F64}>,reverse_sqrt::<{Type::F64}>));
-        map.insert(("cbrt","f64",&[]).into(),ProcedureOutputs::new("f64",forward_cbrt::<{Type::F64}>,reverse_cbrt::<{Type::F64}>));
-        map.insert(("exp","f64",&[]).into(),ProcedureOutputs::new("f64",forward_exp::<{Type::F64}>,reverse_exp::<{Type::F64}>));
-        map.insert(("exp2","f64",&[]).into(),ProcedureOutputs::new("f64",forward_exp2::<{Type::F64}>,reverse_exp2::<{Type::F64}>));
-        map.insert(("exp_m1","f64",&[]).into(),ProcedureOutputs::new("f64",forward_exp_m1::<{Type::F64}>,reverse_exp_m1::<{Type::F64}>));
-        // Logs
-        map.insert(("ln","f64",&[]).into(),ProcedureOutputs::new("f64",forward_ln::<{Type::F64}>,reverse_ln::<{Type::F64}>));
-        map.insert(("ln_1p","f64",&[]).into(),ProcedureOutputs::new("f64",forward_ln_1p::<{Type::F64}>,reverse_ln_1p::<{Type::F64}>));
-        map.insert(("log","f64",&["f64"]).into(),ProcedureOutputs::new("f64",forward_log::<{Type::F64}>,reverse_log::<{Type::F64}>));
-        map.insert(("log10","f64",&[]).into(),ProcedureOutputs::new("f64",forward_log10::<{Type::F64}>,reverse_log10::<{Type::F64}>));
-        map.insert(("log2","f64",&[]).into(),ProcedureOutputs::new("f64",forward_log2::<{Type::F64}>,reverse_log2::<{Type::F64}>));
-        // Trig
-        map.insert(("acos","f64",&[]).into(),ProcedureOutputs::new("f64",forward_acos::<{Type::F64}>,reverse_acos::<{Type::F64}>));
-        map.insert(("acosh","f64",&[]).into(),ProcedureOutputs::new("f64",forward_acosh::<{Type::F64}>,reverse_acosh::<{Type::F64}>));
+        // map.insert(("powi","f64",&["i32"]).into(),ProcedureOutputs::new("f64",forward_powi::<{Type::F64}>,reverse_powi::<{Type::F64}>));
+        // map.insert(("powf","f64",&["f64"]).into(),ProcedureOutputs::new("f64",forward_powf::<{Type::F64}>,reverse_powf::<{Type::F64}>));
+        // map.insert(("sqrt","f64",&[]).into(),ProcedureOutputs::new("f64",forward_sqrt::<{Type::F64}>,reverse_sqrt::<{Type::F64}>));
+        // map.insert(("cbrt","f64",&[]).into(),ProcedureOutputs::new("f64",forward_cbrt::<{Type::F64}>,reverse_cbrt::<{Type::F64}>));
+        // map.insert(("exp","f64",&[]).into(),ProcedureOutputs::new("f64",forward_exp::<{Type::F64}>,reverse_exp::<{Type::F64}>));
+        // map.insert(("exp2","f64",&[]).into(),ProcedureOutputs::new("f64",forward_exp2::<{Type::F64}>,reverse_exp2::<{Type::F64}>));
+        // map.insert(("exp_m1","f64",&[]).into(),ProcedureOutputs::new("f64",forward_exp_m1::<{Type::F64}>,reverse_exp_m1::<{Type::F64}>));
+        // // Logs
+        // map.insert(("ln","f64",&[]).into(),ProcedureOutputs::new("f64",forward_ln::<{Type::F64}>,reverse_ln::<{Type::F64}>));
+        // map.insert(("ln_1p","f64",&[]).into(),ProcedureOutputs::new("f64",forward_ln_1p::<{Type::F64}>,reverse_ln_1p::<{Type::F64}>));
+        // map.insert(("log","f64",&["f64"]).into(),ProcedureOutputs::new("f64",forward_log::<{Type::F64}>,reverse_log::<{Type::F64}>));
+        // map.insert(("log10","f64",&[]).into(),ProcedureOutputs::new("f64",forward_log10::<{Type::F64}>,reverse_log10::<{Type::F64}>));
+        // map.insert(("log2","f64",&[]).into(),ProcedureOutputs::new("f64",forward_log2::<{Type::F64}>,reverse_log2::<{Type::F64}>));
+        // // Trig
+        // map.insert(("acos","f64",&[]).into(),ProcedureOutputs::new("f64",forward_acos::<{Type::F64}>,reverse_acos::<{Type::F64}>));
+        // map.insert(("acosh","f64",&[]).into(),ProcedureOutputs::new("f64",forward_acosh::<{Type::F64}>,reverse_acosh::<{Type::F64}>));
         map.insert(("asin","f64",&[]).into(),ProcedureOutputs::new("f64",forward_asin::<{Type::F64}>,reverse_asin::<{Type::F64}>));
         map.insert(("asinh","f64",&[]).into(),ProcedureOutputs::new("f64",forward_asinh::<{Type::F64}>,reverse_asinh::<{Type::F64}>));
         map.insert(("atan","f64",&[]).into(),ProcedureOutputs::new("f64",forward_atan::<{Type::F64}>,reverse_atan::<{Type::F64}>));

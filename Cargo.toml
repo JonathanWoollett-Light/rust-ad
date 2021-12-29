@@ -15,7 +15,9 @@ exclude = ["/src/main.rs","/tests"]
 [dependencies]
 syn = { version="1.0.82", features=["full","extra-traits"] }
 rust-ad-macros = { version = "0.4.1", path = "macros" }
-rust-ad-core = { version = "0.4.1", path = "core" }
+
+rust-ad-core-macros = { version = "0.1.0", path = "./core-macros" } # TEMP
+rust-ad-core = { version = "0.4.1", path = "./core" } # TEMP
 
 [workspace]
-members = ["./macros","./core"]
+members = ["./macros","./core","./core-macros"]
