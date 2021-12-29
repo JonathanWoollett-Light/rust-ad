@@ -1,5 +1,5 @@
 extern crate proc_macro;
-use proc_macro::TokenStream;
+use proc_macro::{Diagnostic, TokenStream};
 
 use rust_ad_core::traits::*;
 use rust_ad_core::*;
@@ -77,7 +77,7 @@ pub fn reverse_derivative(
     stmt: &syn::Stmt,
     type_map: &HashMap<String, String>,
     component_map: &mut HashMap<String, Vec<String>>,
-) -> Option<syn::Stmt> {
+) -> Result<Option<syn::Stmt>, ()> {
     if let syn::Stmt::Local(local) = stmt {
         if let Some(init) = &local.init {
             let init_expr = &*init.1;
@@ -85,29 +85,59 @@ pub fn reverse_derivative(
                 // Creates operation signature struct
                 let operation_sig = operation_signature(bin_expr, type_map);
                 // Looks up operation with the given lhs type and rhs type and BinOp.
-                let operation_out_signature = SUPPORTED_OPERATIONS
-                    .get(&operation_sig)
-                    .expect("reverse_derivative: unsupported operation");
+                let operation_out_signature = match SUPPORTED_OPERATIONS.get(&operation_sig) {
+                    Some(sig) => sig,
+                    None => {
+                        let error = format!("unsupported derivative for {}", operation_sig);
+                        Diagnostic::spanned(
+                            bin_expr.span().unwrap(),
+                            proc_macro::Level::Error,
+                            error,
+                        )
+                        .emit();
+                        return Err(());
+                    }
+                };
                 // Applies the forward deriative function for the found operation.
                 let new_stmt = (operation_out_signature.reverse_derivative)(&stmt, component_map);
-                return new_stmt;
+                return Ok(new_stmt);
             } else if let syn::Expr::Call(call_expr) = &*init.1 {
                 // Create function in signature
                 let function_in_signature = function_signature(call_expr, type_map);
                 // Gets function out signature
-                let function_out_signature = SUPPORTED_FUNCTIONS
-                    .get(&function_in_signature)
-                    .expect("reverse_derivative: unsupported function");
+                let function_out_signature = match SUPPORTED_FUNCTIONS.get(&function_in_signature) {
+                    Some(sig) => sig,
+                    None => {
+                        let error = format!("unsupported derivative for {}", function_in_signature);
+                        Diagnostic::spanned(
+                            call_expr.span().unwrap(),
+                            proc_macro::Level::Error,
+                            error,
+                        )
+                        .emit();
+                        return Err(());
+                    }
+                };
                 // Gets new stmt
                 let new_stmt = (function_out_signature.reverse_derivative)(&stmt, component_map);
-                return new_stmt;
+                return Ok(new_stmt);
             } else if let syn::Expr::MethodCall(method_expr) = &*init.1 {
                 let method_sig = method_signature(method_expr, type_map);
-                let method_out = SUPPORTED_METHODS
-                    .get(&method_sig)
-                    .expect("reverse_derivative: unsupported method");
+                let method_out = match SUPPORTED_METHODS.get(&method_sig) {
+                    Some(sig) => sig,
+                    None => {
+                        let error = format!("unsupported derivative for {}", method_sig);
+                        Diagnostic::spanned(
+                            method_expr.span().unwrap(),
+                            proc_macro::Level::Error,
+                            error,
+                        )
+                        .emit();
+                        return Err(());
+                    }
+                };
                 let new_stmt = (method_out.reverse_derivative)(&stmt, component_map);
-                return new_stmt;
+                return Ok(new_stmt);
             } else if let syn::Expr::Path(expr_path) = &*init.1 {
                 // Variable identifier
                 let out_ident = local
@@ -124,7 +154,7 @@ pub fn reverse_derivative(
                 let new_stmt: syn::Stmt =
                     syn::parse_str(&stmt_str).expect("reverse_derivative: parse fail");
 
-                return Some(new_stmt);
+                return Ok(Some(new_stmt));
             } else if let syn::Expr::Lit(expr_lit) = &*init.1 {
                 let out_type = literal_type(expr_lit).expect("reverse_derivative: bad lit type");
                 let return_type = rust_ad_core::Type::try_from(out_type.as_str())
@@ -140,11 +170,11 @@ pub fn reverse_derivative(
                 let new_stmt: syn::Stmt =
                     syn::parse_str(&stmt_str).expect("reverse_derivative: parse fail");
 
-                return Some(new_stmt);
+                return Ok(Some(new_stmt));
             }
         }
     }
-    None
+    Ok(None)
 }
 /// Validates and updates function signature.
 pub fn reverse_update_signature(function: &mut syn::ItemFn) -> Result<syn::Stmt, TokenStream> {

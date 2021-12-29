@@ -387,7 +387,11 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let mut reverse_stmts = Vec::new();
     if let Some(first) = rev_iter.next() {
-        if let Some(der) = reverse_derivative(first, &type_map, &mut component_map) {
+        let der_opt = match reverse_derivative(first, &type_map, &mut component_map) {
+            Ok(r) => r,
+            Err(_) => return start_item,
+        };
+        if let Some(der) = der_opt {
             reverse_stmts.push(der);
         }
     }
@@ -395,7 +399,12 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
         if let Some(acc) = reverse_accumulate_derivative(next, &component_map) {
             reverse_stmts.push(acc);
         }
-        if let Some(der) = reverse_derivative(next, &type_map, &mut component_map) {
+
+        let der_opt = match reverse_derivative(next, &type_map, &mut component_map) {
+            Ok(r) => r,
+            Err(_) => return start_item,
+        };
+        if let Some(der) = der_opt {
             reverse_stmts.push(der);
         }
     }
