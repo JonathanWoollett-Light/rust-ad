@@ -1,7 +1,6 @@
 use crate::derivatives::*;
 use std::collections::HashMap;
 
-
 use std::fmt;
 /// Signature infomation to refer to specific method.
 #[derive(Hash, PartialEq, Eq, Debug)]
@@ -38,7 +37,17 @@ impl<const N: usize> From<(&'static str, &'static str, &'static [&'static str; N
 }
 impl fmt::Display for MethodSignature {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}.{}({})", self.reciever_type,self.name,self.input_types.iter().cloned().intersperse(String::from(",")).collect::<String>())
+        write!(
+            f,
+            "{}.{}({})",
+            self.reciever_type,
+            self.name,
+            self.input_types
+                .iter()
+                .cloned()
+                .intersperse(String::from(","))
+                .collect::<String>()
+        )
     }
 }
 /// A map of method signatures to useful data (output type, etc.).
@@ -64,7 +73,16 @@ impl<const N: usize> From<(&'static str, &'static [&'static str; N])> for Functi
 }
 impl fmt::Display for FunctionSignature {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}({})", self.name,self.input_types.iter().cloned().intersperse(String::from(",")).collect::<String>())
+        write!(
+            f,
+            "{}({})",
+            self.name,
+            self.input_types
+                .iter()
+                .cloned()
+                .intersperse(String::from(","))
+                .collect::<String>()
+        )
     }
 }
 /// A map of function signatures to useful data (output type, etc.).
@@ -150,10 +168,10 @@ impl TryFrom<syn::BinOp> for BinOp {
 impl fmt::Display for BinOp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Add => write!(f,"+"),
-            Self::Sub => write!(f,"-"),
-            Self::Mul => write!(f,"*"),
-            Self::Div => write!(f,"/")
+            Self::Add => write!(f, "+"),
+            Self::Sub => write!(f, "-"),
+            Self::Mul => write!(f, "*"),
+            Self::Div => write!(f, "/"),
         }
     }
 }
@@ -188,7 +206,7 @@ impl From<(String, syn::BinOp, String)> for OperationSignature {
 }
 impl fmt::Display for OperationSignature {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}{}{}", self.lhs,self.op,self.rhs)
+        write!(f, "{}{}{}", self.lhs, self.op, self.rhs)
     }
 }
 /// A map of binary operation signatures to useful data (output type, etc.).

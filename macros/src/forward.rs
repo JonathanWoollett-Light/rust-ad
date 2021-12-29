@@ -1,8 +1,8 @@
+use proc_macro::Diagnostic;
 use rust_ad_core::traits::*;
 use rust_ad_core::*;
 use std::collections::HashMap;
 use syn::spanned::Spanned;
-use proc_macro::Diagnostic;
 
 pub fn update_forward_return(s: Option<&mut syn::Stmt>, function_inputs: &[String]) {
     *s.unwrap() = match s {
@@ -36,11 +36,11 @@ pub fn update_forward_return(s: Option<&mut syn::Stmt>, function_inputs: &[Strin
 }
 
 /// Insperses values with respect to the preceding values.
-pub fn interspese_succedding_stmts<K,R>(
+pub fn interspese_succedding_stmts<K, R>(
     x: Vec<syn::Stmt>,
     extra: K,
-    f: fn(&syn::Stmt, &K) -> Result<Option<syn::Stmt>,R>,
-) -> Result<Vec<syn::Stmt>,R> {
+    f: fn(&syn::Stmt, &K) -> Result<Option<syn::Stmt>, R>,
+) -> Result<Vec<syn::Stmt>, R> {
     let len = x.len();
     let new_len = len * 2 - 1;
     let mut y = Vec::with_capacity(new_len);
@@ -52,7 +52,7 @@ pub fn interspese_succedding_stmts<K,R>(
         let res = f(&a, &extra);
         let opt = match res {
             Ok(r) => r,
-            Err(e) => return Err(e)
+            Err(e) => return Err(e),
         };
         if let Some(b) = opt {
             // for c in crate::unwrap_statement(&b).into_iter() {
@@ -61,7 +61,6 @@ pub fn interspese_succedding_stmts<K,R>(
             y.push(b);
         }
         y.push(a);
-        
     }
     Ok(y.into_iter().rev().collect())
 }
@@ -70,7 +69,7 @@ pub fn interspese_succedding_stmts<K,R>(
 pub fn forward_derivative(
     stmt: &syn::Stmt,
     (type_map, function_inputs): &(&HashMap<String, String>, &[String]),
-) -> Result<Option<syn::Stmt>,()> {
+) -> Result<Option<syn::Stmt>, ()> {
     if let syn::Stmt::Local(local) = stmt {
         if let Some(init) = &local.init {
             // eprintln!("init: {:#?}",init);
@@ -81,8 +80,13 @@ pub fn forward_derivative(
                 let operation_out_signature = match SUPPORTED_OPERATIONS.get(&operation_sig) {
                     Some(sig) => sig,
                     None => {
-                        let error = format!("unsupported derivative for {}",operation_sig);
-                        Diagnostic::spanned(bin_expr.span().unwrap(), proc_macro::Level::Error, error).emit();
+                        let error = format!("unsupported derivative for {}", operation_sig);
+                        Diagnostic::spanned(
+                            bin_expr.span().unwrap(),
+                            proc_macro::Level::Error,
+                            error,
+                        )
+                        .emit();
                         return Err(());
                     }
                 };
@@ -93,30 +97,38 @@ pub fn forward_derivative(
                 // Create function in signature
                 let function_in_signature = function_signature(call_expr, type_map);
                 // Gets function out signature
-                let function_out_signature = match SUPPORTED_FUNCTIONS
-                    .get(&function_in_signature){
-                        Some(sig) => sig,
-                        None => {
-                            let error = format!("unsupported derivative for {}",function_in_signature);
-                            Diagnostic::spanned(call_expr.span().unwrap(), proc_macro::Level::Error, error).emit();
-                            return Err(());
-                        }
-                    };
+                let function_out_signature = match SUPPORTED_FUNCTIONS.get(&function_in_signature) {
+                    Some(sig) => sig,
+                    None => {
+                        let error = format!("unsupported derivative for {}", function_in_signature);
+                        Diagnostic::spanned(
+                            call_expr.span().unwrap(),
+                            proc_macro::Level::Error,
+                            error,
+                        )
+                        .emit();
+                        return Err(());
+                    }
+                };
                 // Gets new stmt
                 let new_stmt = (function_out_signature.forward_derivative)(&stmt, function_inputs);
 
                 return Ok(Some(new_stmt));
             } else if let syn::Expr::MethodCall(method_expr) = &*init.1 {
                 let method_sig = method_signature(method_expr, type_map);
-                let method_out = match SUPPORTED_METHODS
-                    .get(&method_sig) {
-                        Some(sig) => sig,
-                        None => {
-                            let error = format!("unsupported derivative for {}",method_sig);
-                            Diagnostic::spanned(method_expr.span().unwrap(), proc_macro::Level::Error, error).emit();
-                            return Err(());
-                        }
-                    };
+                let method_out = match SUPPORTED_METHODS.get(&method_sig) {
+                    Some(sig) => sig,
+                    None => {
+                        let error = format!("unsupported derivative for {}", method_sig);
+                        Diagnostic::spanned(
+                            method_expr.span().unwrap(),
+                            proc_macro::Level::Error,
+                            error,
+                        )
+                        .emit();
+                        return Err(());
+                    }
+                };
                 let new_stmt = (method_out.forward_derivative)(&stmt, function_inputs);
                 return Ok(Some(new_stmt));
             } else if let syn::Expr::Path(expr_path) = &*init.1 {

@@ -8,7 +8,7 @@ use rust_ad_core::traits::*;
 use rust_ad_core::*;
 
 extern crate proc_macro;
-use proc_macro::{TokenStream,Diagnostic};
+use proc_macro::{Diagnostic, TokenStream};
 
 use std::collections::HashMap;
 use syn::spanned::Spanned;
@@ -260,7 +260,7 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let type_map_res = propagate_types(&function);
     let type_map = match type_map_res {
         Ok(r) => r,
-        Err(_) => return start_item
+        Err(_) => return start_item,
     };
 
     // Intersperses forward deriatives
@@ -271,7 +271,7 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     );
     let derivative_stmts = match derivative_stmts_res {
         Ok(r) => r,
-        Err(_) => return start_item
+        Err(_) => return start_item,
     };
     function.block.stmts = derivative_stmts;
     // Updates return statement
@@ -279,7 +279,7 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let new = quote::quote! { #function };
     let new_stream = TokenStream::from(new);
-    join_streams(start_item,new_stream)
+    join_streams(start_item, new_stream)
 }
 fn join_streams(mut a: TokenStream, b: TokenStream) -> TokenStream {
     a.extend(b.into_iter());
@@ -376,7 +376,7 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let type_map_res = propagate_types(&function);
     let type_map = match type_map_res {
         Ok(r) => r,
-        Err(_) => return start_item
+        Err(_) => return start_item,
     };
 
     // Generates reverse mode code
@@ -427,7 +427,7 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let new = quote::quote! { #function };
     let new_stream = TokenStream::from(new);
-    join_streams(start_item,new_stream)
+    join_streams(start_item, new_stream)
 }
 
 /// Unwraps nested expressions into seperate variable assignments.
@@ -713,7 +713,7 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
 /// Returns a hashmap of identifier->type.
 ///
 /// CURRENTLY DOES NOT SUPPORT PROCEDURES WHICH RETURN MULTIPLE DIFFERENT TYPES
-fn propagate_types(func: &syn::ItemFn) -> Result<HashMap<String, String>,()> {
+fn propagate_types(func: &syn::ItemFn) -> Result<HashMap<String, String>, ()> {
     let mut map = HashMap::new();
 
     // Add input types
@@ -759,37 +759,50 @@ fn propagate_types(func: &syn::ItemFn) -> Result<HashMap<String, String>,()> {
                     let out_sig = match SUPPORTED_OPERATIONS.get(&operation_sig) {
                         Some(out_sig) => out_sig,
                         None => {
-                            let error = format!("unsupported operation: {}",operation_sig);
-                            Diagnostic::spanned(bin_expr.span().unwrap(), proc_macro::Level::Error, error).emit();
+                            let error = format!("unsupported operation: {}", operation_sig);
+                            Diagnostic::spanned(
+                                bin_expr.span().unwrap(),
+                                proc_macro::Level::Error,
+                                error,
+                            )
+                            .emit();
                             return Err(());
                         }
                     };
                     Some(out_sig.output_type.clone())
                 } else if let syn::Expr::Call(call_expr) = &*init.1 {
                     let function_sig = function_signature(call_expr, &map);
-                    let func_out_type = match SUPPORTED_FUNCTIONS
-                        .get(&function_sig) {
-                            Some(out_sig) => out_sig,
-                            None => {
-                                let error = format!("unsupported function: {}",function_sig);
-                                Diagnostic::spanned(call_expr.span().unwrap(), proc_macro::Level::Error, error).emit();
-                                return Err(());
-                            }
-                        };
+                    let func_out_type = match SUPPORTED_FUNCTIONS.get(&function_sig) {
+                        Some(out_sig) => out_sig,
+                        None => {
+                            let error = format!("unsupported function: {}", function_sig);
+                            Diagnostic::spanned(
+                                call_expr.span().unwrap(),
+                                proc_macro::Level::Error,
+                                error,
+                            )
+                            .emit();
+                            return Err(());
+                        }
+                    };
                     // Sets result type
                     Some(func_out_type.output_type.clone())
                 } else if let syn::Expr::MethodCall(method_expr) = &*init.1 {
                     let method_sig = method_signature(method_expr, &map);
                     // Searches for supported function signature by function identifier and argument types.
-                    let method_out_type = match SUPPORTED_METHODS
-                        .get(&method_sig) {
-                            Some(out_sig) => out_sig,
-                            None => {
-                                let error = format!("unsupported method: {}",method_sig);
-                                Diagnostic::spanned(method_expr.span().unwrap(), proc_macro::Level::Error, error).emit();
-                                return Err(());
-                            }
-                        };
+                    let method_out_type = match SUPPORTED_METHODS.get(&method_sig) {
+                        Some(out_sig) => out_sig,
+                        None => {
+                            let error = format!("unsupported method: {}", method_sig);
+                            Diagnostic::spanned(
+                                method_expr.span().unwrap(),
+                                proc_macro::Level::Error,
+                                error,
+                            )
+                            .emit();
+                            return Err(());
+                        }
+                    };
                     // Sets result type
                     Some(method_out_type.output_type.clone())
                 } else if let syn::Expr::Macro(macro_expr) = &*init.1 {
