@@ -63,6 +63,9 @@ pub fn forward_derivative_macro(item: TokenStream) -> TokenStream {
     out_str.parse().unwrap()
 }
 
+/// `format!()` but:
+/// 1. only allows positional arguments e.g. `{0}`, `{1}`, etc.
+/// 2. allows unused arguments.
 #[proc_macro]
 pub fn compose(item: TokenStream) -> TokenStream {
     // eprintln!("\nitem:\n{:?}\n",item);
@@ -71,49 +74,45 @@ pub fn compose(item: TokenStream) -> TokenStream {
         Some(TokenTree::Literal(l)) => l.to_string(),
         _ => panic!("No fmt str"),
     };
-    let vec = iter.collect::<Vec<_>>();
-
-    let components = vec
-        .chunks_exact(2)
-        .map(|item| {
-            eprintln!("item: {:?}",item);
-            let (punc, lit) = (&item[0], &item[1]);
-            match (punc, lit) {
-                (TokenTree::Punct(_), TokenTree::Literal(l)) => l.to_string(),
-                (TokenTree::Punct(_), TokenTree::Ident(i)) => i.to_string(),
-                _ => panic!("Bad component"),
-            }
+    let vec = iter.skip(1).collect::<Vec<_>>();
+    let component_iter = vec.split(|t| match t {
+        TokenTree::Punct(p) => p.as_char() == ',',
+        _ => false,
+    });
+    let components = component_iter
+        .map(|component_slice| {
+            component_slice
+                .iter()
+                .map(|c| c.to_string())
+                .collect::<String>()
         })
         .collect::<Vec<_>>();
 
     let bstr = &fmt_str.as_bytes()[1..fmt_str.len() - 1];
     let mut inside = false;
-    let mut i = 0;
-    let mut j = 0;
+    let (mut i, mut j) = (0, 0);
     let mut out_str = String::from("let mut temp = String::new();");
     while i + 1 < bstr.len() {
         // eprintln!("i: {}",i);
         if inside {
             if bstr[i] == b'}' && bstr[i + 1] != b'}' {
                 let index_str = String::from_utf8(bstr[j..i].to_vec()).expect("compose: utf8");
-                // eprintln!("index_str: {}",index_str);
                 let index: usize = index_str.parse().expect("compose: parse");
-
                 if i != j {
-                    out_str.push_str(&format!("\n\ttemp.push_str({});", components[index]));
+                    out_str.push_str(&format!(
+                        "\n\ttemp.push_str(&{}.to_string());",
+                        components[index]
+                    ));
                 }
-
                 j = i + 1;
                 inside = false
             }
         } else {
             if bstr[i] == b'{' && bstr[i + 1] != b'{' {
                 let segment = String::from_utf8(bstr[j..i].to_vec()).expect("compose: utf8");
-                // eprintln!("segment: {}",segment);
                 if i != j {
                     out_str.push_str(&format!("\n\ttemp.push_str(\"{}\");", segment));
                 }
-
                 j = i + 1;
                 inside = true
             }
@@ -122,20 +121,20 @@ pub fn compose(item: TokenStream) -> TokenStream {
     }
     if inside {
         let index_str = String::from_utf8(bstr[j..bstr.len() - 1].to_vec()).expect("compose: utf8");
-        // eprintln!("index_str: {}",index_str);
         let index: usize = index_str.parse().expect("compose: parse");
         if i != j {
-            out_str.push_str(&format!("\n\ttemp.push_str({});", components[index]));
+            out_str.push_str(&format!(
+                "\n\ttemp.push_str(&{}.to_string());",
+                components[index]
+            ));
         }
     } else {
         let segment = String::from_utf8(bstr[j..].to_vec()).expect("compose: utf8");
-        // eprintln!("segment: {}",segment);
         if i != j {
             out_str.push_str(&format!("\n\ttemp.push_str(\"{}\");", segment));
         }
     }
-    // eprintln!("end: i: {}, j: {}",i,j);
+
     let out_str = format!("{{\n\t{}\n\ttemp\n}}", out_str);
-    // eprintln!("out_str: \n{}\n",out_str);
     out_str.parse().unwrap()
 }

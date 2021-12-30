@@ -6,11 +6,3 @@ pub fn lit_str(lit: &syn::ExprLit) -> String {
         _ => panic!("lit_str: unsupported lit"),
     }
 }
-/// Gets given expression as string (only supports literals and paths)
-pub fn expr_str(expr: &syn::Expr) -> String {
-    match expr {
-        syn::Expr::Lit(lit_expr) => lit_str(lit_expr),
-        syn::Expr::Path(path_expr) => path_expr.path.segments[0].ident.to_string(),
-        _ => panic!("expr_str: unsupported expr"),
-    }
-}

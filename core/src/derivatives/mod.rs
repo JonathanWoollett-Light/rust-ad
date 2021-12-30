@@ -1,10 +1,7 @@
 use crate::*;
 
-mod forward;
-pub use forward::*;
-
-mod reverse;
-pub use reverse::*;
+pub mod forward;
+pub mod reverse;
 
 /// Local identifier and method identifier
 pub fn lm_identifiers(stmt: &syn::Stmt) -> (String, &syn::ExprMethodCall) {

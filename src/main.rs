@@ -2,8 +2,8 @@
 
 extern crate rust_ad;
 
-use rust_ad_core_macros::*;
 use rust_ad_core::*;
+use rust_ad_core_macros::*;
 
 // File for testing.
 
@@ -21,15 +21,21 @@ use rust_ad_core::*;
 //     return f;
 // }
 
-forward_derivative_macro!(add_f32,"0f32","1f32","1f32");
+// forward_derivative_macro!(add_f32, "0f32", "1f32", "1f32");
+
+forward_derivative_macro!(
+    powi_f32,
+    "0f32",
+    "{1} * {0}.powi({1} - 1i32)",
+    "{0}.powi({1}) * {0}.ln()"
+);
 
 fn main() {
-    // let temp_str = "whatever";
-    // let temp2 = String::from("yu boi");
+    // let args = ["whatever", "yu boi"];
     // compose!(
-    //     "{0} hello {1} goodbye {2} bruh",
-    //     "we starting",
-    //     temp_str,
-    //     temp2
+    //     "hello {0} goodbye {1} someboi {2}",
+    //     args[0],
+    //     "testing this",
+    //     args[1]
     // );
 }
