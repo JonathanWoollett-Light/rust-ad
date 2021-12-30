@@ -68,15 +68,15 @@ impl std::fmt::Display for Arg {
 }
 impl TryFrom<&syn::Expr> for Arg {
     type Error = &'static str;
-    fn try_from(expr: &syn::Expr) -> Result<Self,Self::Error> {
+    fn try_from(expr: &syn::Expr) -> Result<Self, Self::Error> {
         match expr {
             syn::Expr::Lit(l) => match &l.lit {
                 syn::Lit::Int(int) => Ok(Self::Literal(int.to_string())),
                 syn::Lit::Float(float) => Ok(Self::Literal(float.to_string())),
-                _ => Err("Unsupported literal type argument")
+                _ => Err("Unsupported literal type argument"),
             },
             syn::Expr::Path(p) => Ok(Self::Variable(p.path.segments[0].ident.to_string())),
-            _ => Err("Non literal or path argument")
+            _ => Err("Non literal or path argument"),
         }
     }
 }
@@ -103,6 +103,7 @@ pub fn fgd<const DEFAULT: &'static str, const TRANSLATION_FUNCTIONS: &'static [D
 ) -> syn::Stmt {
     assert_eq!(args.len(), TRANSLATION_FUNCTIONS.len());
 
+    // Gets vec of deriative idents and derivative functions
     let (idents, deriatives) = outer_fn_args
         .iter()
         .map(|outer_fn_input| {
@@ -114,16 +115,19 @@ pub fn fgd<const DEFAULT: &'static str, const TRANSLATION_FUNCTIONS: &'static [D
                 // TODO Improve docs here directly
                 match arg {
                     Arg::Literal(_) => DEFAULT.to_string(),
-                    Arg::Variable(v) => format!("({})*{}",
-                        t(args),
+                    Arg::Variable(v) => {
+                        let (a,b) = (
+                            t(args),
                         if v == outer_fn_input {
                             der!(outer_fn_input)
                         } else if outer_fn_args.contains(v) {
                             DEFAULT.to_string()
                         } else {
                             wrt!(arg,outer_fn_input)
-                        }
-                    )
+                        });
+                        // eprintln!("a: {}, b: {}",a,b);
+                        format!("({})*{}",a,b)
+                    }
                 })
                 .intersperse(String::from("+"))
                 .collect::<String>();
@@ -131,6 +135,10 @@ pub fn fgd<const DEFAULT: &'static str, const TRANSLATION_FUNCTIONS: &'static [D
             (wrt!(local_ident, outer_fn_input), acc)
         })
         .unzip::<_, _, Vec<_>, Vec<_>>();
+    // eprintln!("idents: {:?}",idents);
+    // eprintln!("deriatives: {:?}",deriatives);
+
+    // Converts vec's to strings
     let (idents, deriatives) = (
         idents
             .into_iter()
@@ -141,6 +149,10 @@ pub fn fgd<const DEFAULT: &'static str, const TRANSLATION_FUNCTIONS: &'static [D
             .intersperse(String::from(","))
             .collect::<String>(),
     );
+    // eprintln!("idents: {}",idents);
+    // eprintln!("deriatives: {}",deriatives);
+
     let stmt_str = format!("let ({}) = ({});", idents, deriatives);
+    // eprintln!("stmt_str: {}",stmt_str);
     syn::parse_str(&stmt_str).expect("fgd: parse fail")
 }

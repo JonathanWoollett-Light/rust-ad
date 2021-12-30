@@ -68,7 +68,7 @@ pub fn forward_derivative_macro(item: TokenStream) -> TokenStream {
 /// 2. allows unused arguments.
 #[proc_macro]
 pub fn compose(item: TokenStream) -> TokenStream {
-    // eprintln!("\nitem:\n{:?}\n",item);
+    // eprintln!("item: {}",item);
     let mut iter = item.into_iter();
     let fmt_str = match iter.next() {
         Some(TokenTree::Literal(l)) => l.to_string(),
@@ -88,53 +88,37 @@ pub fn compose(item: TokenStream) -> TokenStream {
         })
         .collect::<Vec<_>>();
 
-    let bstr = &fmt_str.as_bytes()[1..fmt_str.len() - 1];
-    let mut inside = false;
-    let (mut i, mut j) = (0, 0);
+    let mut bstr = Vec::from(&fmt_str.as_bytes()[1..fmt_str.len() - 1]);
+    let mut i = 0;
     let mut out_str = String::from("let mut temp = String::new();");
-    while i + 1 < bstr.len() {
-        // eprintln!("i: {}",i);
-        if inside {
-            if bstr[i] == b'}' && bstr[i + 1] != b'}' {
-                let index_str = String::from_utf8(bstr[j..i].to_vec()).expect("compose: utf8");
-                let index: usize = index_str.parse().expect("compose: parse");
-                if i != j {
-                    out_str.push_str(&format!(
-                        "\n\ttemp.push_str(&{}.to_string());",
-                        components[index]
-                    ));
-                }
-                j = i + 1;
-                inside = false
-            }
-        } else {
-            if bstr[i] == b'{' && bstr[i + 1] != b'{' {
-                let segment = String::from_utf8(bstr[j..i].to_vec()).expect("compose: utf8");
-                if i != j {
-                    out_str.push_str(&format!("\n\ttemp.push_str(\"{}\");", segment));
-                }
-                j = i + 1;
-                inside = true
-            }
-        }
-        i += 1;
-    }
-    if inside {
-        let index_str = String::from_utf8(bstr[j..bstr.len() - 1].to_vec()).expect("compose: utf8");
-        let index: usize = index_str.parse().expect("compose: parse");
-        if i != j {
+    while i < bstr.len() {
+        if bstr[i] == b'}' {
+            // Removes opening '}'
+            let index_str =
+                String::from_utf8(bstr.drain(0..i).collect::<Vec<_>>()).expect("compose: utf8");
+            let index: usize = index_str.parse().expect("compose: parse");
             out_str.push_str(&format!(
                 "\n\ttemp.push_str(&{}.to_string());",
                 components[index]
             ));
-        }
-    } else {
-        let segment = String::from_utf8(bstr[j..].to_vec()).expect("compose: utf8");
-        if i != j {
+            // Removes'}'
+            bstr.remove(0);
+            i = 0;
+        } else if bstr[i] == b'{' {
+            let segment =
+                String::from_utf8(bstr.drain(0..i).collect::<Vec<_>>()).expect("compose: utf8");
             out_str.push_str(&format!("\n\ttemp.push_str(\"{}\");", segment));
+            // Removes '{'
+            bstr.remove(0);
+            i = 0;
+        } else {
+            i += 1;
         }
     }
+    let segment = String::from_utf8(bstr).expect("compose: utf8");
+    out_str.push_str(&format!("\n\ttemp.push_str(\"{}\");", segment));
 
     let out_str = format!("{{\n\t{}\n\ttemp\n}}", out_str);
+    // eprintln!("out_str: {}",out_str);
     out_str.parse().unwrap()
 }

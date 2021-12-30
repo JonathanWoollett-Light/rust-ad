@@ -1,20 +1,17 @@
 #![allow(dead_code)]
-
 extern crate rust_ad;
-
-use rust_ad::{forward_autodiff,forward};
+#[allow(unused_imports)]
+use rust_ad::{forward, forward_autodiff};
+#[allow(unused_imports)]
+use rust_ad_core_macros::compose;
 
 #[forward_autodiff]
-fn quad(x: f32) -> f32 {
-    let a = x.powi(2i32);
-    let b = x * 2f32;
-    let c = 2f32;
-    let f = a + b + c;
+fn log_fn(x: f32, y: f32) -> f32 {
+    let c = 2f32 / y;
+    let f = x + c;
     return f;
 }
-
 fn main() {
-    let (x, der_x) = forward!(quad, 3f32);
-    assert_eq!(x, 17f32);
-    assert_eq!(der_x, 8f32);
+    // let test = compose!("-{0}/({1}*{1})","one","two");
+    let (_x, _der_x, _der_y) = forward!(log_fn, 3f32, 2f32);
 }
