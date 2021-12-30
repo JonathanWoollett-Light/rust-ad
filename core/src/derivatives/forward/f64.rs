@@ -100,24 +100,17 @@ forward_derivative_macro!(tan_f64, "0f32", "1f64 / ({0}.cos() * {0}.cos())");
 
 // Forward deriative of [`abs`](https://doc.rust-lang.org/std/primitive.f64.html#method.abs).
 forward_derivative_macro!(abs_f64, "0f32", "{0}.signum()");
-
-// TODO Is this derivative for `ceil` right?
-// Forward deriative of [`ceil`](https://doc.rust-lang.org/std/primitive.f64.html#method.ceil).
-forward_derivative_macro!(ceil_f64, "0f32", "1f64");
-
-// TODO Is this derivative for `floor` right?
-// Forward deriative of [`floor`](https://doc.rust-lang.org/std/primitive.f64.html#method.floor).
-forward_derivative_macro!(floor_f64, "0f32", "1f64");
-
-// TODO Is this derivative for `fract` right?
-// Forward deriative of [`fract`](https://doc.rust-lang.org/std/primitive.f64.html#method.fract).
-forward_derivative_macro!(fract_f64, "0f32", "1f64");
-
-// TODO Is this derivative for `recip` right?
 // Forward deriative of [`recip`](https://doc.rust-lang.org/std/primitive.f64.html#method.recip).
 forward_derivative_macro!(recip_f64, "0f32", "-1f64 / ({0}{0})");
 
-// TODO Is this derivative for `round` right?
+// TODO For the below functions, I do not think the given derivatives are entirely accurate.
+
+// Forward deriative of [`ceil`](https://doc.rust-lang.org/std/primitive.f64.html#method.ceil).
+forward_derivative_macro!(ceil_f64, "0f32", "1f64");
+// Forward deriative of [`floor`](https://doc.rust-lang.org/std/primitive.f64.html#method.floor).
+forward_derivative_macro!(floor_f64, "0f32", "1f64");
+// Forward deriative of [`fract`](https://doc.rust-lang.org/std/primitive.f64.html#method.fract).
+forward_derivative_macro!(fract_f64, "0f32", "1f64");
 // Forward deriative of [`round`](https://doc.rust-lang.org/std/primitive.f64.html#method.round).
 forward_derivative_macro!(round_f64, "0f32", "1f64");
 
