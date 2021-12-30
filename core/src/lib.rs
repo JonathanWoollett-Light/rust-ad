@@ -1,3 +1,4 @@
+#![allow(incomplete_features)]
 #![feature(iter_intersperse)]
 #![feature(adt_const_params)]
 
