@@ -11,7 +11,7 @@ use proc_macro::{TokenStream, TokenTree};
 /// ```
 /// Is equivilant to
 /// ```ignore
-/// forward_derivative_macro!(outer_test,"{0}-{1}","{0}*{1}+{0}");
+/// forward_derivative_macro!(outer_test,"0f32","{0}-{1}","{0}*{1}+{0}");
 /// ```
 #[proc_macro]
 pub fn forward_derivative_macro(item: TokenStream) -> TokenStream {
