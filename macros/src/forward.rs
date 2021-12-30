@@ -3,6 +3,7 @@ use rust_ad_core::traits::*;
 use rust_ad_core::*;
 use std::collections::HashMap;
 use syn::spanned::Spanned;
+use rust_ad_core::forward::Arg;
 
 pub fn update_forward_return(s: Option<&mut syn::Stmt>, function_inputs: &[String]) {
     *s.unwrap() = match s {
@@ -71,6 +72,7 @@ pub fn forward_derivative(
     (type_map, function_inputs): &(&HashMap<String, String>, &[String]),
 ) -> Result<Option<syn::Stmt>, ()> {
     if let syn::Stmt::Local(local) = stmt {
+        let local_ident = local.pat.ident().expect("forward_derivative: not ident").ident.to_string();
         if let Some(init) = &local.init {
             // eprintln!("init: {:#?}",init);
             if let syn::Expr::Binary(bin_expr) = &*init.1 {
@@ -91,7 +93,14 @@ pub fn forward_derivative(
                     }
                 };
                 // Applies the forward deriative function for the found operation.
-                let new_stmt = (operation_out_signature.forward_derivative)(&stmt, function_inputs);
+                let new_stmt = (operation_out_signature.forward_derivative)(
+                    function_inputs, 
+                    local_ident,
+                    &[
+                        Arg::try_from(&*bin_expr.left).expect("forward_derivative: bin left"),
+                        Arg::try_from(&*bin_expr.right).expect("forward_derivative: bin right")
+                    ]
+                );
                 return Ok(Some(new_stmt));
             } else if let syn::Expr::Call(call_expr) = &*init.1 {
                 // Create function in signature
@@ -110,8 +119,9 @@ pub fn forward_derivative(
                         return Err(());
                     }
                 };
+                let args = call_expr.args.iter().map(|a|Arg::try_from(a).expect("forward_derivative: call arg")).collect::<Vec<_>>();
                 // Gets new stmt
-                let new_stmt = (function_out_signature.forward_derivative)(&stmt, function_inputs);
+                let new_stmt = (function_out_signature.forward_derivative)(function_inputs,local_ident,args.as_slice());
 
                 return Ok(Some(new_stmt));
             } else if let syn::Expr::MethodCall(method_expr) = &*init.1 {
@@ -129,7 +139,17 @@ pub fn forward_derivative(
                         return Err(());
                     }
                 };
-                let new_stmt = (method_out.forward_derivative)(&stmt, function_inputs);
+                let args = {
+                    let mut base = Vec::new();
+                    let receiver = Arg::try_from(&*method_expr.receiver).expect("forward_derivative: method receiver");
+                    base.push(receiver);
+                    let mut args = method_expr.args.iter().map(|a|Arg::try_from(a).expect("forward_derivative: method arg")).collect::<Vec<_>>();
+                    base.append(&mut args);
+                    base
+                };
+                
+                
+                let new_stmt = (method_out.forward_derivative)(function_inputs,local_ident,args.as_slice());
                 return Ok(Some(new_stmt));
             } else if let syn::Expr::Path(expr_path) = &*init.1 {
                 // Given `let x = y;`

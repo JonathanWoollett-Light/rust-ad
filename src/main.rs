@@ -2,8 +2,8 @@
 
 extern crate rust_ad;
 
-use rust_ad_core::*;
-use rust_ad_core_macros::*;
+// use rust_ad_core::*;
+// use rust_ad_core_macros::*;
 
 // File for testing.
 
@@ -23,12 +23,12 @@ use rust_ad_core_macros::*;
 
 // forward_derivative_macro!(add_f32, "0f32", "1f32", "1f32");
 
-forward_derivative_macro!(
-    powi_f32,
-    "0f32",
-    "{1} * {0}.powi({1} - 1i32)",
-    "{0}.powi({1}) * {0}.ln()"
-);
+// forward_derivative_macro!(
+//     powi_f32,
+//     "0f32",
+//     "{1} * {0}.powi({1} - 1i32)",
+//     "{0}.powi({1}) * {0}.ln()"
+// );
 
 fn main() {
     // let args = ["whatever", "yu boi"];

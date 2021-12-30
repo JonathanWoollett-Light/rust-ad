@@ -66,6 +66,20 @@ impl std::fmt::Display for Arg {
         }
     }
 }
+impl TryFrom<&syn::Expr> for Arg {
+    type Error = &'static str;
+    fn try_from(expr: &syn::Expr) -> Result<Self,Self::Error> {
+        match expr {
+            syn::Expr::Lit(l) => match &l.lit {
+                syn::Lit::Int(int) => Ok(Self::Literal(int.to_string())),
+                syn::Lit::Float(float) => Ok(Self::Literal(float.to_string())),
+                _ => Err("Unsupported literal type argument")
+            },
+            syn::Expr::Path(p) => Ok(Self::Variable(p.path.segments[0].ident.to_string())),
+            _ => Err("Non literal or path argument")
+        }
+    }
+}
 /// Forward General Derivative type
 pub type FgdType = fn(&[String], String, &[Arg]) -> syn::Stmt;
 /// Derivative function type

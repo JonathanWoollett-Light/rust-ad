@@ -250,7 +250,7 @@ lazy_static::lazy_static! {
         map.insert(("cosh","f32",&[]).into(),ProcedureOutputs::new("f32",forward::cosh_f32,reverse_cosh::<{Type::F32}>));
         map.insert(("sinh","f32",&[]).into(),ProcedureOutputs::new("f32",forward::sinh_f32,reverse_sinh::<{Type::F32}>));
         map.insert(("tan","f32",&[]).into(),ProcedureOutputs::new("f32",forward::tan_f32,reverse_tan::<{Type::F32}>));
-        map.insert(("tanh","f32",&[]).into(),ProcedureOutputs::new("f32",forward::tanh_f32,reverse_tanh::<{Type::F32}>));
+        // map.insert(("tanh","f32",&[]).into(),ProcedureOutputs::new("f32",forward::tanh_f32,reverse_tanh::<{Type::F32}>));
         // Misc
         map.insert(("abs","f32",&[]).into(),ProcedureOutputs::new("f32",forward::abs_f32,reverse_abs::<{Type::F32}>));
         map.insert(("ceil","f32",&[]).into(),ProcedureOutputs::new("f32",forward::ceil_f32,reverse_ceil::<{Type::F32}>));
@@ -287,7 +287,7 @@ lazy_static::lazy_static! {
         map.insert(("cosh","f64",&[]).into(),ProcedureOutputs::new("f64",forward::cosh_f64,reverse_cosh::<{Type::F32}>));
         map.insert(("sinh","f64",&[]).into(),ProcedureOutputs::new("f64",forward::sinh_f64,reverse_sinh::<{Type::F32}>));
         map.insert(("tan","f64",&[]).into(),ProcedureOutputs::new("f64",forward::tan_f64,reverse_tan::<{Type::F32}>));
-        map.insert(("tanh","f64",&[]).into(),ProcedureOutputs::new("f64",forward::tanh_f64,reverse_tanh::<{Type::F32}>));
+        // map.insert(("tanh","f64",&[]).into(),ProcedureOutputs::new("f64",forward::tanh_f64,reverse_tanh::<{Type::F32}>));
         // Misc
         map.insert(("abs","f64",&[]).into(),ProcedureOutputs::new("f64",forward::abs_f64,reverse_abs::<{Type::F32}>));
         map.insert(("ceil","f64",&[]).into(),ProcedureOutputs::new("f64",forward::ceil_f64,reverse_ceil::<{Type::F32}>));
