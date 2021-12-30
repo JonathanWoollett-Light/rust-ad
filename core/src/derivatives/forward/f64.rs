@@ -20,14 +20,14 @@ forward_derivative_macro!(div_f64, "0f64", "1f64/{1}", "-{0}/({1}*{1})");
 forward_derivative_macro!(
     powi_f64,
     "0f64",
-    "{1} * {0}.powi({1} - 1i32)",
+    "{1} as f64 * {0}.powi({1} - 1i32)",
     "{0}.powi({1}) * {0}.ln()"
 );
 // Forward deriative of [`powf`](https://doc.rust-lang.org/std/primitive.f64.html#method.powf)
 forward_derivative_macro!(
     powf_f64,
     "0f64",
-    "{1} * {0}.powf({1} - 1f64)",
+    "{1} as f64 * {0}.powf({1} - 1f64)",
     "{0}.powf({1}) * {0}.ln()"
 );
 // Forward deriative of [`sqrt`](https://doc.rust-lang.org/std/primitive.f64.html#method.sqrt).
