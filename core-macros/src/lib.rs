@@ -1,5 +1,6 @@
 //! **I do not recommend using this directly, please sea [rust-ad](https://crates.io/crates/rust-ad).**
-
+//!
+//! Internal proc-macro functionality.
 use proc_macro::{TokenStream, TokenTree};
 use rust_ad_consts::{INTERNAL_FORWARD_PREFIX, INTERNAL_REVERSE_PREFIX};
 

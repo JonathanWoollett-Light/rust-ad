@@ -1,6 +1,6 @@
 [package]
 name = "rust-ad-core"
-version = "0.4.2"
+version = "0.7.0"
 edition = "2021"
 
 description = "Rust Auto-Differentiation."
@@ -13,4 +13,4 @@ documentation = "https://docs.rs/rust-ad/"
 [dependencies]
 syn = { version="1.0.82", features=["full","extra-traits"] }
 lazy_static = "1.4.0"
-rust-ad-core-macros = { version = "0.1.0", path = "../core-macros" }
+rust-ad-core-macros = { version = "0.7.0", path = "../core-macros" }

@@ -3,6 +3,8 @@
 #![feature(proc_macro_diagnostic)]
 
 //! **I do not recommend using this directly, please sea [rust-ad](https://crates.io/crates/rust-ad).**
+//!
+//! External proc-macro functionality.
 
 use rust_ad_core::traits::*;
 use rust_ad_core::*;

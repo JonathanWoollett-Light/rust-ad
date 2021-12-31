@@ -1,6 +1,8 @@
 //! **I do not recommend using this directly, please sea [rust-ad](https://crates.io/crates/rust-ad).**
 //!
-//! Contains constants used internally.
+//! Internal constants.
+//! 
+//! Lowest level of dependency.
 
 use const_format::concatcp;
 

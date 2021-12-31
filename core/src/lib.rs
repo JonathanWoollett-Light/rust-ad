@@ -3,6 +3,8 @@
 #![feature(adt_const_params)]
 
 //! **I do not recommend using this directly, please sea [rust-ad](https://crates.io/crates/rust-ad).**
+//! 
+//! Internal non-proc-macro functionality.
 
 use std::collections::HashMap;
 
