@@ -30,21 +30,33 @@ Auto-differentiation is implemented via 2 attribute procedural macros, e.g.
 
 ```rust
 #[rust_ad::forward_autodiff]
-fn function_name(x: f32, y: f32) -> f32 {
-    let p = 7.0f32 * x;
-    let r = 10f32 - y;
-    let q = p * x * 5.f32;
-    let v = 2f32 * p * q + 3f32 * r;
-    return v;
+fn multi(x: f32, y: f32) -> f32 {
+    let a = x.powi(2i32);
+    let b = x * 2f32;
+    let c = 2f32 / y;
+    let f = a + b + c;
+    return f;
+}
+fn main() {
+    let (f, der_x, der_y) = rust_ad::forward!(multi, 3f32, 5f32);
+    assert_eq!(f, 15.4f32);
+    assert_eq!(der_x, 8f32); // 2(x+1)
+    assert_eq!(der_y, -0.08f32); // -2/y^2
 }
 ```
 ```rust
 #[rust_ad::reverse_autodiff]
-fn function_name(x: f32, y: f32) -> f32 {
-    let a = 7f32 * x;
-    let b = 3.0f32 * x;
-    let c = x + b;
-    let d = y + b + c;
-    return d;
+fn multi(x: f32, y: f32) -> f32 {
+    let a = x.powi(2i32);
+    let b = x * 2f32;
+    let c = 2f32 / y;
+    let f = a + b + c;
+    return f;
+}
+fn main() {
+    let (f, der_x, der_y) = rust_ad::reverse!(multi, 3f32, 5f32);
+    assert_eq!(f, 15.4f32);
+    assert_eq!(der_x, 8f32); // 2(x+1)
+    assert_eq!(der_y, -0.08f32); // -2/y^2
 }
 ```
