@@ -40,8 +40,8 @@ fn multi(x: f32, y: f32) -> f32 {
 fn main() {
     let (f, der_x, der_y) = rust_ad::forward!(multi, 3f32, 5f32);
     assert_eq!(f, 15.4f32);
-    assert_eq!(der_x, 8f32); // 2(x+1)
-    assert_eq!(der_y, -0.08f32); // -2/y^2
+    assert_eq!(der_x, 8f32);
+    assert_eq!(der_y, -0.08f32);
 }
 ```
 ```rust
@@ -56,7 +56,7 @@ fn multi(x: f32, y: f32) -> f32 {
 fn main() {
     let (f, der_x, der_y) = rust_ad::reverse!(multi, 3f32, 5f32);
     assert_eq!(f, 15.4f32);
-    assert_eq!(der_x, 8f32); // 2(x+1)
-    assert_eq!(der_y, -0.08f32); // -2/y^2
+    assert_eq!(der_x, 8f32);
+    assert_eq!(der_y, -0.08f32);
 }
 ```
