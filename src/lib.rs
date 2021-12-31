@@ -17,11 +17,11 @@
 //! Type/s | Support
 //! --- | ---
 //! Floats: `f32` & `f64` | `+`, `-`, `*`, `/` and most methods (e.g. `powf`).
-//! Intgers: `u16`, `i16` etc. | `+`, `-`, `*` and `/`
+//! Integers: `u16`, `i16` etc. | `+`, `-`, `*` and `/`
 //!
 //! For the specifics of operation support see the [rust-ad-core docs](https://docs.rs/rust-ad-core/).
 //!
 //! ### Resources
-//! - [Automatic Differentation in Rust](https://github.com/JonathanWoollett-Light/autodiff-book)
+//! - [Automatic Differentiation in Rust](https://github.com/JonathanWoollett-Light/autodiff-book)
 //! - [automatic-differentiation-worked-examples](http://h2.jaguarpaw.co.uk/posts/automatic-differentiation-worked-examples/)
 pub use rust_ad_macros::*;

@@ -24,10 +24,10 @@ pub const FORWARD_MODE_PREFIX: &'static str = "__for_";
 /// Prefix used to for the reverse differentiation function.
 pub const REVERSE_MODE_PREFIX: &'static str = "__rev_";
 /// Prefix used for flattening binary expressions in function arguments.
-pub const FUNCTION_PREFFIX: &'static str = "f";
-/// Prefix used for flattening binary expressions as a reciever for a method.
+pub const FUNCTION_PREFIX: &'static str = "f";
+/// Prefix used for flattening binary expressions as a receiver for a method.
 pub const RECEIVER_PREFIX: &'static str = "r";
-/// Prefix used for flattening retrn statements;
+/// Prefix used for flattening return statements;
 pub const RETURN_SUFFIX: &'static str = "rtn";
 
 /// Insert key into map with initial value element or append to existing value
@@ -57,7 +57,7 @@ pub fn expr_type(expr: &syn::Expr, type_map: &HashMap<String, String>) -> Result
     }
 }
 
-/// Gets type of literal (only supproted numerical types)
+/// Gets type of literal (only supported numerical types)
 pub fn literal_type(expr_lit: &syn::ExprLit) -> Result<String, String> {
     match &expr_lit.lit {
         syn::Lit::Float(float_lit) => {
@@ -81,7 +81,7 @@ pub fn literal_type(expr_lit: &syn::ExprLit) -> Result<String, String> {
             Ok(String::from(float_type_str))
         }
         syn::Lit::Int(int_lit) => {
-            // Integer literall could be any of the numbers, `4f32`, `16u32` etc.
+            // Integer literal could be any of the numbers, `4f32`, `16u32` etc.
             let int_str = int_lit.to_string();
             let n = int_str.len();
 
@@ -187,7 +187,7 @@ pub fn function_signature(
     // Create function signature
     FunctionSignature::new(func_ident_str, arg_types)
 }
-/// Gets opertion signature for internal use
+/// Gets operation signature for internal use
 pub fn operation_signature(
     operation_expr: &syn::ExprBinary,
     type_map: &HashMap<String, String>,

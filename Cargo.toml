@@ -20,4 +20,4 @@ rust-ad-macros = { version = "0.4.2", path = "macros" }
 # rust-ad-core = { version = "0.4.1", path = "./core" } # TEMP
 
 [workspace]
-members = ["./macros","./core","./core-macros"]
+members = ["./macros","./core","./core-macros","./consts"]

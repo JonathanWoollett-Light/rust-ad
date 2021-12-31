@@ -1,5 +1,5 @@
 extern crate proc_macro;
-// TODO Make macro to minimise code duplication here.
+// TODO Make macro to minimize code duplication here.
 
 type UnwrapResult<'a, T> = Result<&'a T, &'static str>;
 type UnwrapResultMut<'a, T> = Result<&'a mut T, &'static str>;

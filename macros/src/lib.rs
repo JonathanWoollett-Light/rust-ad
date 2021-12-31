@@ -56,12 +56,12 @@ pub fn forward(_item: TokenStream) -> TokenStream {
             }
         })
         .collect::<Vec<String>>();
-    let input_deriatives = "1f32,".repeat(inputs.len());
+    let input_derivatives = "1f32,".repeat(inputs.len());
     let inputs_str = inputs.into_iter().collect::<String>();
 
     let call_str = format!(
         "{}{}({}{})",
-        FORWARD_MODE_PREFIX, function_ident, inputs_str, input_deriatives
+        FORWARD_MODE_PREFIX, function_ident, inputs_str, input_derivatives
     );
     call_str.parse().unwrap()
 }
@@ -196,7 +196,7 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
         .iter()
         .map(|fn_arg| {
             // eprintln!("fn_arg:\n{:#?}",fn_arg);
-            let typed = fn_arg.typed().expect("forward: signatre input not typed");
+            let typed = fn_arg.typed().expect("forward: signature input not typed");
             let val_type = typed
                 .ty
                 .path()
@@ -263,8 +263,8 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
         Err(_) => return start_item,
     };
 
-    // Intersperses forward deriatives
-    let derivative_stmts_res = interspese_succedding_stmts(
+    // Intersperses forward derivatives
+    let derivative_stmts_res = intersperse_succeeding_stmts(
         function.block.stmts,
         (&type_map, function_inputs.as_slice()),
         forward_derivative,
@@ -431,7 +431,7 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     join_streams(start_item, new_stream)
 }
 
-/// Unwraps nested expressions into seperate variable assignments.
+/// Unwraps nested expressions into separate variable assignments.
 ///
 /// E.g.
 /// ```ignore
@@ -558,7 +558,7 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
                             .local_mut()
                             .expect("unwrap: function statement not local");
                         let func_ident =
-                            format!("{}_{}", FUNCTION_PREFFIX.repeat(i + 1), local_ident);
+                            format!("{}_{}", FUNCTION_PREFIX.repeat(i + 1), local_ident);
                         func_local
                             .pat
                             .ident_mut()
@@ -572,7 +572,7 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
 
                         // Updates statement to contain reference to new variables
                         let arg_expr: syn::Expr =
-                            syn::parse_str(&func_ident).expect("unwrap: funtion parse fail");
+                            syn::parse_str(&func_ident).expect("unwrap: function parse fail");
                         base_statement
                             .local_mut()
                             .expect("unwrap: function local")
@@ -593,26 +593,26 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
                     // If method is called on value which is binary expression (e.g. `(x+y).method()`).
                     if let syn::Expr::Binary(bin_expr) = &*parenthesis.expr {
                         // Creates new statement.
-                        let mut reciver_stmt = stmt.clone();
-                        let reciver_local = reciver_stmt
+                        let mut receiver_stmt = stmt.clone();
+                        let receiver_local = receiver_stmt
                             .local_mut()
                             .expect("unwrap: receiver statement not local");
-                        let reciver_ident =
+                        let receiver_ident =
                             format!("{}_{}", RECEIVER_PREFIX, local_ident.to_string());
-                        reciver_local
+                        receiver_local
                             .pat
                             .ident_mut()
                             .expect("unwrap: receiver not ident")
-                            .ident = syn::parse_str(&reciver_ident)
+                            .ident = syn::parse_str(&receiver_ident)
                             .expect("unwrap: receiver ident parse fail");
-                        *reciver_local.init.as_mut().unwrap().1 =
+                        *receiver_local.init.as_mut().unwrap().1 =
                             syn::Expr::Binary(bin_expr.clone());
                         // Recurse
-                        statements.append(&mut unwrap_statement(&reciver_stmt));
+                        statements.append(&mut unwrap_statement(&receiver_stmt));
 
                         // Updates statement to contain variable referencing new statement.
                         let receiver_expr: syn::Expr =
-                            syn::parse_str(&reciver_ident).expect("unwrap: receiver parse fail");
+                            syn::parse_str(&receiver_ident).expect("unwrap: receiver parse fail");
                         *base_statement
                             .local_mut()
                             .expect("unwrap: 3a")
@@ -638,7 +638,7 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
                             .local_mut()
                             .expect("unwrap: method statement not local");
                         let func_ident =
-                            format!("{}_{}", FUNCTION_PREFFIX.repeat(i + 1), local_ident);
+                            format!("{}_{}", FUNCTION_PREFIX.repeat(i + 1), local_ident);
                         func_local
                             .pat
                             .ident_mut()

@@ -1,7 +1,34 @@
 use crate::*;
 
-pub mod forward;
-pub mod reverse;
+pub mod f32;
+pub use self::f32::*;
+pub mod f64;
+pub use self::f64::*;
+pub mod i8;
+pub use self::i8::*;
+pub mod i16;
+pub use self::i16::*;
+pub mod i32;
+pub use self::i32::*;
+pub mod i64;
+pub use self::i64::*;
+pub mod i128;
+pub use self::i128::*;
+pub mod u8;
+pub use self::u8::*;
+pub mod u16;
+pub use self::u16::*;
+pub mod u32;
+pub use self::u32::*;
+pub mod u64;
+pub use self::u64::*;
+pub mod u128;
+pub use self::u128::*;
+
+/// Forward General Derivative type
+pub type FgdType = fn(&[String], String, &[Arg]) -> syn::Stmt;
+/// Reverse General Derivative type
+pub type RgdType = fn(String, &[Arg], &mut HashMap<String, Vec<String>>) -> syn::Stmt;
 
 /// Function argument type
 pub enum Arg {
@@ -147,4 +174,118 @@ impl TryFrom<&str> for Type {
             _ => Err("Type::try_from unsupported type"),
         }
     }
+}
+
+/// Forward general derivative
+/// ```ignore
+/// static outer_test: FgdType = {
+///     const base_fn: DFn = |args:&[String]| -> String { format!("{0}-{1}",args[0],args[1]) };
+///     const exponent_fn: DFn = |args:&[String]| -> String { format!("{0}*{1}+{0}",args[0],args[1]) };
+///     fgd::<"0f32",{&[base_fn, exponent_fn]}>
+/// };
+/// ```
+/// Is equivalent to
+/// ```ignore
+/// forward_derivative_macro!(outer_test,"0f32","{0}-{1}","{0}*{1}+{0}");
+/// ```
+pub fn fgd<const DEFAULT: &'static str, const TRANSLATION_FUNCTIONS: &'static [DFn]>(
+    outer_fn_args: &[String],
+    local_ident: String,
+    args: &[Arg],
+) -> syn::Stmt {
+    assert_eq!(args.len(), TRANSLATION_FUNCTIONS.len());
+
+    // Gets vec of deriative idents and derivative functions
+    let (idents, deriatives) = outer_fn_args
+        .iter()
+        .map(|outer_fn_input| {
+            let acc = args
+                .iter()
+                .zip(TRANSLATION_FUNCTIONS.iter())
+                .map(|(arg,t)|
+                // See the docs for cumulative (these if's accomplish the same-ish thing)
+                // TODO Improve docs here directly
+                match arg {
+                    Arg::Literal(_) => DEFAULT.to_string(),
+                    Arg::Variable(v) => {
+                        let (a,b) = (
+                            t(args),
+                        if v == outer_fn_input {
+                            der!(outer_fn_input)
+                        } else if outer_fn_args.contains(v) {
+                            DEFAULT.to_string()
+                        } else {
+                            wrt!(arg,outer_fn_input)
+                        });
+                        // eprintln!("a: {}, b: {}",a,b);
+                        format!("({})*{}",a,b)
+                    }
+                })
+                .intersperse(String::from("+"))
+                .collect::<String>();
+
+            (wrt!(local_ident, outer_fn_input), acc)
+        })
+        .unzip::<_, _, Vec<_>, Vec<_>>();
+    // eprintln!("idents: {:?}",idents);
+    // eprintln!("deriatives: {:?}",deriatives);
+
+    // Converts vec's to strings
+    let (idents, deriatives) = (
+        idents
+            .into_iter()
+            .intersperse(String::from(","))
+            .collect::<String>(),
+        deriatives
+            .into_iter()
+            .intersperse(String::from(","))
+            .collect::<String>(),
+    );
+    // eprintln!("idents: {}",idents);
+    // eprintln!("deriatives: {}",deriatives);
+
+    let stmt_str = format!("let ({}) = ({});", idents, deriatives);
+    // eprintln!("stmt_str: {}",stmt_str);
+    syn::parse_str(&stmt_str).expect("fgd: parse fail")
+}
+
+/// Reverse General Derivative
+pub fn rgd<const DEFAULT: &'static str, const TRANSLATION_FUNCTIONS: &'static [DFn]>(
+    local_ident: String,
+    args: &[Arg],
+    component_map: &mut HashMap<String, Vec<String>>,
+) -> syn::Stmt {
+    assert_eq!(args.len(), TRANSLATION_FUNCTIONS.len());
+
+    let (idents, deriatives) = args
+        .iter()
+        .zip(TRANSLATION_FUNCTIONS.iter())
+        .filter_map(|(arg, t)| match arg {
+            Arg::Variable(v) => Some((v, t)),
+            Arg::Literal(_) => None,
+        })
+        .map(|(arg, t)| {
+            let der_ident = wrt!(arg, local_ident);
+            append_insert(arg, local_ident.clone(), component_map);
+
+            let (derivative, accumulator) = (t(args), der!(local_ident));
+            let full_der = format!("({})*{}", derivative, accumulator);
+            (der_ident, full_der)
+        })
+        .unzip::<_, _, Vec<_>, Vec<_>>();
+
+    let (idents, deriatives) = (
+        idents
+            .into_iter()
+            .intersperse(String::from(","))
+            .collect::<String>(),
+        deriatives
+            .into_iter()
+            .intersperse(String::from(","))
+            .collect::<String>(),
+    );
+
+    let stmt_str = format!("let ({}) = ({});", idents, deriatives);
+    // eprintln!("stmt_str: {}", stmt_str);
+    syn::parse_str(&stmt_str).expect("fgd: parse fail")
 }

@@ -32,12 +32,12 @@ pub fn update_forward_return(s: Option<&mut syn::Stmt>, function_inputs: &[Strin
             );
             syn::parse_str(&return_str).expect("update_forward_return: parse fail")
         }
-        _ => panic!("update_forward_return: No retun statement:\n{:#?}", s),
+        _ => panic!("update_forward_return: No return statement:\n{:#?}", s),
     }
 }
 
-/// Insperses values with respect to the preceding values.
-pub fn interspese_succedding_stmts<K, R>(
+/// Intersperses values with respect to the preceding values.
+pub fn intersperse_succeeding_stmts<K, R>(
     x: Vec<syn::Stmt>,
     extra: K,
     f: fn(&syn::Stmt, &K) -> Result<Option<syn::Stmt>, R>,
@@ -97,7 +97,7 @@ pub fn forward_derivative(
                         return Err(());
                     }
                 };
-                // Applies the forward deriative function for the found operation.
+                // Applies the forward derivative function for the found operation.
                 let new_stmt = (operation_out_signature.forward_derivative)(
                     function_inputs,
                     local_ident,
@@ -184,7 +184,7 @@ pub fn forward_derivative(
                 // This is type of `y`
                 let out_type = type_map
                     .get(&in_ident)
-                    .expect("forward_derivative: return unfound type");
+                    .expect("forward_derivative: return not found type");
                 let return_type = rust_ad_core::Type::try_from(out_type.as_str())
                     .expect("forward_derivative: unsupported return type");
 
@@ -193,14 +193,14 @@ pub fn forward_derivative(
                     .map(|input| wrt!(out_ident, input))
                     .intersperse(String::from(","))
                     .collect::<String>();
-                let deriatives = function_inputs
+                let derivatives = function_inputs
                     .iter()
                     .map(|input| {
                         cumulative_derivative_wrt_rt(&*init.1, input, function_inputs, &return_type)
                     })
                     .intersperse(String::from(","))
                     .collect::<String>();
-                let stmt_str = format!("let ({}) = ({});", idents, deriatives);
+                let stmt_str = format!("let ({}) = ({});", idents, derivatives);
                 let new_stmt: syn::Stmt =
                     syn::parse_str(&stmt_str).expect("forward_derivative: parse fail");
 
@@ -225,14 +225,14 @@ pub fn forward_derivative(
                     .map(|input| wrt!(out_ident, input))
                     .intersperse(String::from(","))
                     .collect::<String>();
-                let deriatives = function_inputs
+                let derivatives = function_inputs
                     .iter()
                     .map(|input| {
                         cumulative_derivative_wrt_rt(&*init.1, input, function_inputs, &return_type)
                     })
                     .intersperse(String::from(","))
                     .collect::<String>();
-                let stmt_str = format!("let ({}) = ({});", idents, deriatives);
+                let stmt_str = format!("let ({}) = ({});", idents, derivatives);
                 let new_stmt: syn::Stmt =
                     syn::parse_str(&stmt_str).expect("forward_derivative: parse fail");
 
