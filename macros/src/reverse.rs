@@ -3,9 +3,8 @@ use proc_macro::{Diagnostic, TokenStream};
 
 use rust_ad_core::traits::*;
 use rust_ad_core::*;
-use syn::spanned::Spanned;
-
 use std::collections::HashMap;
+use syn::spanned::Spanned;
 
 pub fn reverse_accumulate_inputs(
     function_inputs: &[String],
@@ -77,7 +76,7 @@ pub fn reverse_derivative(
     stmt: &syn::Stmt,
     type_map: &HashMap<String, String>,
     component_map: &mut HashMap<String, Vec<String>>,
-) -> Result<Option<syn::Stmt>, ()> {
+) -> Result<Option<syn::Stmt>, PassError> {
     if let syn::Stmt::Local(local) = stmt {
         let local_ident = local
             .pat
@@ -89,7 +88,10 @@ pub fn reverse_derivative(
             let init_expr = &*init.1;
             if let syn::Expr::Binary(bin_expr) = init_expr {
                 // Creates operation signature struct
-                let operation_sig = operation_signature(bin_expr, type_map);
+                let operation_sig = pass!(
+                    operation_signature(bin_expr, type_map),
+                    "reverse_derivative"
+                );
                 // Looks up operation with the given lhs type and rhs type and BinOp.
                 let operation_out_signature = match SUPPORTED_OPERATIONS.get(&operation_sig) {
                     Some(sig) => sig,
@@ -101,22 +103,25 @@ pub fn reverse_derivative(
                             error,
                         )
                         .emit();
-                        return Err(());
+                        return Err(String::from("reverse_derivative"));
                     }
                 };
-                // Applies the forward deriative function for the found operation.
+                // Applies the forward derivative function for the found operation.
                 let new_stmt = (operation_out_signature.reverse_derivative)(
                     local_ident,
                     &[
-                        Arg::try_from(&*bin_expr.left).expect("reverse_derivative: bin left"),
-                        Arg::try_from(&*bin_expr.right).expect("reverse_derivative: bin right"),
+                        pass!(Arg::try_from(&*bin_expr.left), "reverse_derivative"),
+                        pass!(Arg::try_from(&*bin_expr.right), "reverse_derivative"),
                     ],
                     component_map,
                 );
                 return Ok(Some(new_stmt));
             } else if let syn::Expr::Call(call_expr) = &*init.1 {
                 // Create function in signature
-                let function_in_signature = function_signature(call_expr, type_map);
+                let function_in_signature = pass!(
+                    function_signature(call_expr, type_map),
+                    "reverse_derivative"
+                );
                 // Gets function out signature
                 let function_out_signature = match SUPPORTED_FUNCTIONS.get(&function_in_signature) {
                     Some(sig) => sig,
@@ -128,7 +133,7 @@ pub fn reverse_derivative(
                             error,
                         )
                         .emit();
-                        return Err(());
+                        return Err(String::from("reverse_derivative"));
                     }
                 };
 
@@ -145,7 +150,10 @@ pub fn reverse_derivative(
                 );
                 return Ok(Some(new_stmt));
             } else if let syn::Expr::MethodCall(method_expr) = &*init.1 {
-                let method_sig = method_signature(method_expr, type_map);
+                let method_sig = pass!(
+                    method_signature(method_expr, type_map),
+                    "reverse_derivative"
+                );
                 let method_out = match SUPPORTED_METHODS.get(&method_sig) {
                     Some(sig) => sig,
                     None => {
@@ -156,7 +164,7 @@ pub fn reverse_derivative(
                             error,
                         )
                         .emit();
-                        return Err(());
+                        return Err(String::from("reverse_derivative"));
                     }
                 };
 

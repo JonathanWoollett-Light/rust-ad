@@ -6,14 +6,14 @@
 //!
 //! External proc-macro functionality.
 
+use quote::ToTokens;
 use rust_ad_core::traits::*;
 use rust_ad_core::*;
 
 extern crate proc_macro;
-use proc_macro::{Diagnostic, TokenStream};
+use proc_macro::TokenStream;
 
 use std::collections::HashMap;
-use syn::spanned::Spanned;
 
 mod forward;
 use forward::*;
@@ -271,22 +271,14 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
         .collect::<Vec<_>>();
 
     // Propagates types through function
-    let type_map_res = propagate_types(&function);
-    let type_map = match type_map_res {
-        Ok(r) => r,
-        Err(_) => return start_item,
-    };
-
+    let type_map = propagate_types(&function).expect("forward_autodiff 1");
     // Intersperses forward derivatives
-    let derivative_stmts_res = intersperse_succeeding_stmts(
+    let derivative_stmts = intersperse_succeeding_stmts(
         function.block.stmts,
         (&type_map, function_inputs.as_slice()),
         forward_derivative,
-    );
-    let derivative_stmts = match derivative_stmts_res {
-        Ok(r) => r,
-        Err(_) => return start_item,
-    };
+    )
+    .expect("forward_autodiff 2");
     function.block.stmts = derivative_stmts;
     // Updates return statement
     update_forward_return(function.block.stmts.last_mut(), function_inputs.as_slice());
@@ -378,33 +370,29 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
         .collect::<Vec<_>>();
     function.block.stmts = statements;
 
+    // eprintln!("function.block.stmts:");
+    // for stmt in function.block.stmts.iter() {
+    //     eprintln!("\t{}",stmt.to_token_stream().to_string());
+    // }
+
     // Add input derivatives to output signature & validates output signature.
     // ---------------------------------------------------------------------------
-    let return_stmt = match reverse_update_signature(&mut function) {
-        Ok(rtn_stmt) => rtn_stmt,
-        Err(rtn) => return rtn,
-    };
+    let return_stmt = reverse_update_signature(&mut function).expect("reverse_autodiff 1");
 
     // Propagates types through function
     // ---------------------------------------------------------------------------
-    let type_map_res = propagate_types(&function);
-    let type_map = match type_map_res {
-        Ok(r) => r,
-        Err(_) => return start_item,
-    };
+    let type_map = propagate_types(&function).expect("propagate_types: ");
+    // eprintln!("type_map: {:?}",type_map);
 
     // Generates reverse mode code
     // ---------------------------------------------------------------------------
     let mut component_map = HashMap::new();
 
     let mut rev_iter = function.block.stmts.iter().rev();
-
     let mut reverse_stmts = Vec::new();
     if let Some(first) = rev_iter.next() {
-        let der_opt = match reverse_derivative(first, &type_map, &mut component_map) {
-            Ok(r) => r,
-            Err(_) => return start_item,
-        };
+        let der_opt =
+            reverse_derivative(first, &type_map, &mut component_map).expect("reverse_autodiff 2");
         if let Some(der) = der_opt {
             reverse_stmts.push(der);
         }
@@ -414,10 +402,8 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
             reverse_stmts.push(acc);
         }
 
-        let der_opt = match reverse_derivative(next, &type_map, &mut component_map) {
-            Ok(r) => r,
-            Err(_) => return start_item,
-        };
+        let der_opt =
+            reverse_derivative(next, &type_map, &mut component_map).expect("reverse_autodiff 3");
         if let Some(der) = der_opt {
             reverse_stmts.push(der);
         }
@@ -492,23 +478,18 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
 
             // If initialization is a binary expression (e.g. `let a = b + c;`).
             if let syn::Expr::Binary(bin_expr) = init.1.as_ref() {
-                // If left side of expression is binary expression.
-                if let syn::Expr::Binary(left_bin_expr) = bin_expr.left.as_ref() {
+                // If left side is not
+
+                // If left is not a literal or path
+                if !(bin_expr.left.is_lit() || bin_expr.left.is_path()) {
                     // Creates new left statement.
-                    let mut left_stmt = stmt.clone();
-                    let left_local = left_stmt
-                        .local_mut()
-                        .expect("unwrap: left statement not local");
-                    let left_ident = format!("_{}", local_ident);
-                    left_local
-                        .pat
-                        .ident_mut()
-                        .expect("unwrap: left not ident")
-                        .ident =
-                        syn::parse_str(&left_ident).expect("unwrap: left ident parse fail");
-                    *left_local.init.as_mut().unwrap().1 = syn::Expr::Binary(left_bin_expr.clone());
+                    let left_ident = format!("{}_", local_ident);
+                    let new_stmt_str =
+                        format!("let {} = {};", left_ident, bin_expr.left.to_token_stream());
+                    let new_stmt: syn::Stmt =
+                        syn::parse_str(&new_stmt_str).expect("unwrap: left bad parse");
                     // Recurse
-                    statements.append(&mut unwrap_statement(&left_stmt));
+                    statements.append(&mut unwrap_statement(&new_stmt));
 
                     // Updates statement to contain variable referencing new statement.
                     let left_expr: syn::Expr =
@@ -524,24 +505,20 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
                         .expect("unwrap: 1b")
                         .left = left_expr;
                 }
-                // If right side of expression is binary expression.
-                if let syn::Expr::Binary(right_bin_expr) = bin_expr.right.as_ref() {
-                    // Creates new left statement.
-                    let mut right_stmt = stmt.clone();
-                    let right_local = right_stmt
-                        .local_mut()
-                        .expect("unwrap: right statement not local");
+                // If right is not a literal or path
+                if !(bin_expr.right.is_lit() || bin_expr.right.is_path()) {
+                    // eprintln!("this should trigger: {}",right_bin_expr.to_token_stream());
+                    // Creates new right statement.
                     let right_ident = format!("{}_", local_ident);
-                    right_local
-                        .pat
-                        .ident_mut()
-                        .expect("unwrap: right not ident")
-                        .ident =
-                        syn::parse_str(&right_ident).expect("unwrap: right ident parse fail");
-                    *right_local.init.as_mut().unwrap().1 =
-                        syn::Expr::Binary(right_bin_expr.clone());
+                    let new_stmt_str = format!(
+                        "let {} = {};",
+                        right_ident,
+                        bin_expr.right.to_token_stream()
+                    );
+                    let new_stmt: syn::Stmt =
+                        syn::parse_str(&new_stmt_str).expect("unwrap: right bad parse");
                     // Recurse
-                    statements.append(&mut unwrap_statement(&right_stmt));
+                    statements.append(&mut unwrap_statement(&new_stmt));
 
                     // Updates statement to contain variable referencing new statement.
                     let right_expr: syn::Expr =
@@ -683,13 +660,24 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
                             .args[i] = arg_expr;
                     }
                 }
+            } else if let syn::Expr::Paren(paren_expr) = init.1.as_ref() {
+                base_statement
+                    .local_mut()
+                    .expect("unwrap: 3a")
+                    .init
+                    .as_mut()
+                    .unwrap()
+                    .1 = paren_expr.expr.clone();
+                statements.append(&mut unwrap_statement(&base_statement));
+                // Skips adding base statement we already added.
+                return statements;
             }
         }
     } else if let syn::Stmt::Semi(semi_expr, _) = stmt {
         if let syn::Expr::Return(rtn_expr) = semi_expr {
             if let Some(rtn) = &rtn_expr.expr {
                 if let syn::Expr::Binary(_bin_expr) = &**rtn {
-                    let new_ident = format!("__{}", RETURN_SUFFIX);
+                    let new_ident = format!("_{}", RETURN_SUFFIX);
                     let new_stmt_str = format!("let {};", new_ident);
                     let mut new_stmt: syn::Stmt =
                         syn::parse_str(&new_stmt_str).expect("unwrap: return stmt parse fail");
@@ -719,7 +707,6 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
             }
         }
     }
-
     statements.push(base_statement);
     // eprintln!("statements.len(): {}", statements.len());
     statements
@@ -732,8 +719,8 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
 /// Returns a hashmap of identifier->type.
 ///
 /// CURRENTLY DOES NOT SUPPORT PROCEDURES WHICH RETURN MULTIPLE DIFFERENT TYPES
-fn propagate_types(func: &syn::ItemFn) -> Result<HashMap<String, String>, ()> {
-    let mut map = HashMap::new();
+fn propagate_types(func: &syn::ItemFn) -> Result<HashMap<String, String>, PassError> {
+    let mut type_map = HashMap::new();
 
     // Add input types
     for arg in func.sig.inputs.iter() {
@@ -747,12 +734,12 @@ fn propagate_types(func: &syn::ItemFn) -> Result<HashMap<String, String>, ()> {
             .path
             .segments[0]
             .ident;
-        map.insert(ident.to_string(), type_ident.to_string());
+        type_map.insert(ident.to_string(), type_ident.to_string());
     }
 
     // Propagates types through statements
     for stmt in func.block.stmts.iter() {
-        // eprintln!("map: {:?}", map);
+        // eprintln!("type_map: {:?}", type_map);
         // eprintln!("stmt:\n{:#?}\n", stmt);
         if let syn::Stmt::Local(local) = stmt {
             // Gets identifier/s of variable/s being defined
@@ -771,98 +758,16 @@ fn propagate_types(func: &syn::ItemFn) -> Result<HashMap<String, String>, ()> {
                 _ => panic!("propagate_types: local pat not ident:\n{:#?}", local.pat),
             };
             if let Some(init) = &local.init {
-                let output_type_opt = if let syn::Expr::Binary(bin_expr) = &*init.1 {
-                    // Sets result type
-                    let operation_sig = operation_signature(bin_expr, &map);
-                    // I think this is cleaner than embedding a `format!` within an `.expect`
-                    let out_sig = match SUPPORTED_OPERATIONS.get(&operation_sig) {
-                        Some(out_sig) => out_sig,
-                        None => {
-                            let error = format!("unsupported operation: {}", operation_sig);
-                            Diagnostic::spanned(
-                                bin_expr.span().unwrap(),
-                                proc_macro::Level::Error,
-                                error,
-                            )
-                            .emit();
-                            return Err(());
-                        }
-                    };
-                    Some(out_sig.output_type.clone())
-                } else if let syn::Expr::Call(call_expr) = &*init.1 {
-                    let function_sig = function_signature(call_expr, &map);
-                    let func_out_type = match SUPPORTED_FUNCTIONS.get(&function_sig) {
-                        Some(out_sig) => out_sig,
-                        None => {
-                            let error = format!("unsupported function: {}", function_sig);
-                            Diagnostic::spanned(
-                                call_expr.span().unwrap(),
-                                proc_macro::Level::Error,
-                                error,
-                            )
-                            .emit();
-                            return Err(());
-                        }
-                    };
-                    // Sets result type
-                    Some(func_out_type.output_type.clone())
-                } else if let syn::Expr::MethodCall(method_expr) = &*init.1 {
-                    let method_sig = method_signature(method_expr, &map);
-                    // Searches for supported function signature by function identifier and argument types.
-                    let method_out_type = match SUPPORTED_METHODS.get(&method_sig) {
-                        Some(out_sig) => out_sig,
-                        None => {
-                            let error = format!("unsupported method: {}", method_sig);
-                            Diagnostic::spanned(
-                                method_expr.span().unwrap(),
-                                proc_macro::Level::Error,
-                                error,
-                            )
-                            .emit();
-                            return Err(());
-                        }
-                    };
-                    // Sets result type
-                    Some(method_out_type.output_type.clone())
-                } else if let syn::Expr::Macro(macro_expr) = &*init.1 {
-                    assert_eq!(
-                        macro_expr.mac.path.segments[1].ident.to_string(),
-                        "dup",
-                        "Only rust_ad::dup! macro currently supported:\n{:#?}",
-                        macro_expr
-                    );
-                    // eprintln!("macro_expr: {:#?}", macro_expr);
-                    let macro_token_stream =
-                        proc_macro::TokenStream::from(macro_expr.mac.tokens.clone())
-                            .into_iter()
-                            .collect::<Vec<_>>();
-                    let dup_var = macro_token_stream[0]
-                        .ident()
-                        .expect("propagate_types: macro not ident")
-                        .to_string();
-                    let output_type = map
-                        .get(&dup_var)
-                        .expect("propagate_types: missing macro var")
-                        .clone();
-                    Some(output_type)
-                } else if let syn::Expr::Path(path_expr) = &*init.1 {
-                    let ident = path_expr.path.segments[0].ident.to_string();
-                    Some(map.get(&ident).expect("propagate_types: no path").clone())
-                } else if let syn::Expr::Lit(lit_expr) = &*init.1 {
-                    let lit_type = literal_type(lit_expr).expect("propagate_types: lit fail");
-                    Some(lit_type)
-                } else {
-                    None
+                let output_type = match expr_type(&*init.1, &type_map) {
+                    Ok(res) => res,
+                    Err(e) => return Err(e),
                 };
-                // If found output type, then assign this type to all output values
-                if let Some(output_type) = output_type_opt {
-                    for var_ident in var_idents.into_iter() {
-                        map.insert(var_ident, output_type.clone());
-                    }
+                for var_ident in var_idents.into_iter() {
+                    type_map.insert(var_ident, output_type.clone());
                 }
             }
         }
     }
     // eprintln!("final map: {:?}", map);
-    Ok(map)
+    Ok(type_map)
 }

@@ -1,12 +1,16 @@
 #![allow(incomplete_features)]
 #![feature(iter_intersperse)]
 #![feature(adt_const_params)]
+#![feature(proc_macro_diagnostic)]
 
 //! **I do not recommend using this directly, please sea [rust-ad](https://crates.io/crates/rust-ad).**
 //!
 //! Internal non-proc-macro functionality.
 
+extern crate proc_macro;
+use proc_macro::Diagnostic;
 use std::collections::HashMap;
+use syn::spanned::Spanned;
 
 /// Functions to compute derivatives (specific function support).
 ///
@@ -42,27 +46,97 @@ pub fn append_insert(key: &str, value: String, map: &mut HashMap<String, Vec<Str
         map.insert(String::from(key), vec![value]);
     }
 }
-
-/// Gets type of given expression (only supports literals and paths)
-pub fn expr_type(expr: &syn::Expr, type_map: &HashMap<String, String>) -> Result<String, String> {
+/// Gets type of a given expression as a string
+///
+/// e.g. for `let a = b + c`, given `b` and `c` are in `type_map` (lets say they are `f32` and `f64`) then we look for the operation `f32+f64` in supported operations, then we know the output type and we return this type.
+pub fn expr_type(
+    expr: &syn::Expr,
+    type_map: &HashMap<String, String>,
+) -> Result<String, PassError> {
     match expr {
         syn::Expr::Path(path_expr) => {
             let var = path_expr.path.segments[0].ident.to_string();
             match type_map.get(&var) {
                 Some(ident) => Ok(ident.clone()),
-                None => Err(format!(
-                    "expr_type: `{}` not found in type map `{:?}`",
-                    var, type_map
-                )),
+                None => {
+                    Diagnostic::spanned(
+                        path_expr.span().unwrap(),
+                        proc_macro::Level::Error,
+                        format!("variable not found in type map ({:?})", type_map),
+                    )
+                    .emit();
+                    return Err(String::from("expr_type"));
+                }
             }
         }
         syn::Expr::Lit(lit_expr) => literal_type(lit_expr),
-        _ => panic!("expr_type: unsupported type"),
+        syn::Expr::Call(call_expr) => {
+            let function_sig = pass!(function_signature(call_expr, type_map), "expr_type");
+            let func_out_type = match SUPPORTED_FUNCTIONS.get(&function_sig) {
+                Some(out_sig) => out_sig,
+                None => {
+                    let error = format!("expr_type: unsupported function: {}", function_sig);
+                    Diagnostic::spanned(call_expr.span().unwrap(), proc_macro::Level::Error, error)
+                        .emit();
+                    return Err(String::from("expr_type"));
+                }
+            };
+            // Sets result type
+            Ok(func_out_type.output_type.clone())
+        }
+        syn::Expr::MethodCall(method_expr) => {
+            let method_sig = pass!(method_signature(method_expr, type_map), "expr_type");
+            // Searches for supported function signature by function identifier and argument types.
+            let method_out_type = match SUPPORTED_METHODS.get(&method_sig) {
+                Some(out_sig) => out_sig,
+                None => {
+                    let error = format!("unsupported method: {}", method_sig);
+                    Diagnostic::spanned(
+                        method_expr.span().unwrap(),
+                        proc_macro::Level::Error,
+                        error,
+                    )
+                    .emit();
+                    return Err(String::from("expr_type"));
+                }
+            };
+            // Sets result type
+            Ok(method_out_type.output_type.clone())
+        }
+        syn::Expr::Binary(bin_expr) => {
+            let operation_sig = match operation_signature(bin_expr, type_map) {
+                Ok(types) => types,
+                Err(e) => return Err(e),
+            };
+            // I think this is cleaner than embedding a `format!` within an `.expect`
+            let out_sig = match SUPPORTED_OPERATIONS.get(&operation_sig) {
+                Some(out_sig) => out_sig,
+                None => {
+                    Diagnostic::spanned(
+                        bin_expr.span().unwrap(),
+                        proc_macro::Level::Error,
+                        format!("expr_type: unsupported binary operation: {}", operation_sig),
+                    )
+                    .emit();
+                    return Err(String::from("expr_type"));
+                }
+            };
+            Ok(out_sig.output_type.clone())
+        }
+        _ => {
+            Diagnostic::spanned(
+                expr.span().unwrap(),
+                proc_macro::Level::Error,
+                "expr_type: unsupported expression type",
+            )
+            .emit();
+            return Err(String::from("expr_type"));
+        }
     }
 }
 
 /// Gets type of literal (only supported numerical types)
-pub fn literal_type(expr_lit: &syn::ExprLit) -> Result<String, String> {
+pub fn literal_type(expr_lit: &syn::ExprLit) -> Result<String, PassError> {
     match &expr_lit.lit {
         syn::Lit::Float(float_lit) => {
             // Float literal is either f32 or f64
@@ -70,17 +144,23 @@ pub fn literal_type(expr_lit: &syn::ExprLit) -> Result<String, String> {
 
             let n = float_str.len();
             if !(n > 3) {
-                return Err(
-                    "All literals need a type suffix e.g. `10.2f32` -- Bad float literal (len)"
-                        .into(),
-                );
+                Diagnostic::spanned(
+                    expr_lit.span().unwrap(),
+                    proc_macro::Level::Error,
+                    "All literals need a type suffix e.g. `10.2f32` -- Bad float literal (len)",
+                )
+                .emit();
+                return Err(String::from("literal_type"));
             }
             let float_type_str = &float_str[n - 3..n];
             if !(float_type_str == "f32" || float_type_str == "f64") {
-                return Err(
-                    "All literals need a type suffix e.g. `10.2f32` -- Bad float literal (type)"
-                        .into(),
-                );
+                Diagnostic::spanned(
+                    expr_lit.span().unwrap(),
+                    proc_macro::Level::Error,
+                    "All literals need a type suffix e.g. `10.2f32` -- Bad float literal (type)",
+                )
+                .emit();
+                return Err(String::from("literal_type"));
             }
             Ok(String::from(float_type_str))
         }
@@ -124,12 +204,26 @@ pub fn literal_type(expr_lit: &syn::ExprLit) -> Result<String, String> {
 
             match large_type.or(standard_type).or(short_type) {
                 Some(int_lit_some) => Ok(int_lit_some),
-                None => Err(
-                    "All literals need a type suffix e.g. `10.2f32` -- Bad integer literal".into(),
-                ),
+                None => {
+                    Diagnostic::spanned(
+                        expr_lit.span().unwrap(),
+                        proc_macro::Level::Error,
+                        "All literals need a type suffix e.g. `10.2f32` -- Bad integer literal",
+                    )
+                    .emit();
+                    return Err(String::from("literal_type"));
+                }
             }
         }
-        _ => Err("Unsupported literal (only integer and float literals are supported)".into()),
+        _ => {
+            Diagnostic::spanned(
+                expr_lit.span().unwrap(),
+                proc_macro::Level::Error,
+                "Unsupported literal (only integer and float literals are supported)",
+            )
+            .emit();
+            return Err(String::from("literal_type"));
+        }
     }
 }
 
@@ -149,58 +243,100 @@ macro_rules! wrt {
         format!("{}_wrt_{}", $a, $b)
     }};
 }
+// TODO Is there not a nice inbuilt way to do this?
+#[macro_export]
+macro_rules! pass {
+    ($result: expr,$prefix:expr) => {
+        match $result {
+            Ok(res) => res,
+            Err(err) => {
+                return Err(format!("{}->{}", $prefix, err));
+            }
+        }
+    };
+}
+/// Used so its easier to change return error type.
+pub type PassError = String;
 
 /// Gets method signature for internal use
 pub fn method_signature(
     method_expr: &syn::ExprMethodCall,
     type_map: &HashMap<String, String>,
-) -> MethodSignature {
+) -> Result<MethodSignature, PassError> {
     // Gets method identifier
     let method_str = method_expr.method.to_string();
     // Gets receiver type
-    let receiver_type_str =
-        expr_type(&*method_expr.receiver, type_map).expect("method_signature: bad expr");
+    let receiver_type_str = pass!(
+        expr_type(&*method_expr.receiver, type_map),
+        "method_signature"
+    );
     // Gets argument types
-    let arg_types = method_expr
+    let arg_types_res = method_expr
         .args
         .iter()
-        .map(|p| expr_type(p, type_map).expect("method_signature: bad arg type"))
-        .collect::<Vec<_>>();
-    MethodSignature::new(method_str, receiver_type_str, arg_types)
+        .map(|p| expr_type(p, type_map))
+        .collect::<Result<Vec<_>, _>>();
+    let arg_types = pass!(arg_types_res, "method_signature");
+    Ok(MethodSignature::new(
+        method_str,
+        receiver_type_str,
+        arg_types,
+    ))
 }
 /// Gets function signature for internal use
 pub fn function_signature(
     function_expr: &syn::ExprCall,
     type_map: &HashMap<String, String>,
-) -> FunctionSignature {
+) -> Result<FunctionSignature, PassError> {
     // Gets argument types
-    let arg_types = function_expr
+
+    let arg_types_res = function_expr
         .args
         .iter()
-        .map(|arg| expr_type(arg, type_map).expect("function_signature: bad arg type"))
-        .collect::<Vec<_>>();
-    // Gets function identifier
+        .map(|arg| expr_type(arg, type_map))
+        .collect::<Result<Vec<_>, _>>();
+    let arg_types = pass!(arg_types_res, "function_signature");
+    // Gets function identifier1
     let func_ident_str = function_expr
         .func
         .path()
-        .expect("propagate_types: func not path")
+        .expect("function_signature: func not path")
         .path
         .segments[0]
         .ident
         .to_string();
     // Create function signature
-    FunctionSignature::new(func_ident_str, arg_types)
+    Ok(FunctionSignature::new(func_ident_str, arg_types))
 }
+
 /// Gets operation signature for internal use
 pub fn operation_signature(
     operation_expr: &syn::ExprBinary,
     type_map: &HashMap<String, String>,
-) -> OperationSignature {
+) -> Result<OperationSignature, PassError> {
     // Gets types of lhs and rhs of expression
-    let left_type =
-        expr_type(&*operation_expr.left, type_map).expect("operation_signature: bad left");
-    let right_type =
-        expr_type(&*operation_expr.right, type_map).expect("operation_signature: bad right");
-    // Creates operation signature struct
-    OperationSignature::from((left_type, operation_expr.op, right_type))
+    let (left, right) = (
+        expr_type(&*operation_expr.left, type_map),
+        expr_type(&*operation_expr.right, type_map),
+    );
+    if left.is_err() {
+        Diagnostic::spanned(
+            operation_expr.left.span().unwrap(),
+            proc_macro::Level::Error,
+            "operation_signature: unsupported left type",
+        )
+        .emit();
+    }
+    if right.is_err() {
+        Diagnostic::spanned(
+            operation_expr.right.span().unwrap(),
+            proc_macro::Level::Error,
+            "operation_signature: unsupported right type",
+        )
+        .emit();
+    }
+    match (left, right) {
+        (Ok(l), Ok(r)) => Ok(OperationSignature::from((l, operation_expr.op, r))),
+        _ => Err(String::from("operation_signature")),
+    }
 }

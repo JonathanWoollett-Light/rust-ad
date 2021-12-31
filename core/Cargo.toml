@@ -14,3 +14,4 @@ documentation = "https://docs.rs/rust-ad/"
 syn = { version="1.0.82", features=["full","extra-traits"] }
 lazy_static = "1.4.0"
 rust-ad-core-macros = { version = "0.7.0", path = "../core-macros" }
+quote = "1.0.10" # Just for ToTokens

@@ -70,7 +70,7 @@ pub fn intersperse_succeeding_stmts<K, R>(
 pub fn forward_derivative(
     stmt: &syn::Stmt,
     (type_map, function_inputs): &(&HashMap<String, String>, &[String]),
-) -> Result<Option<syn::Stmt>, ()> {
+) -> Result<Option<syn::Stmt>, PassError> {
     if let syn::Stmt::Local(local) = stmt {
         let local_ident = local
             .pat
@@ -82,7 +82,10 @@ pub fn forward_derivative(
             // eprintln!("init: {:#?}",init);
             if let syn::Expr::Binary(bin_expr) = &*init.1 {
                 // Creates operation signature struct
-                let operation_sig = operation_signature(bin_expr, type_map);
+                let operation_sig = pass!(
+                    operation_signature(bin_expr, type_map),
+                    "forward_derivative"
+                );
                 // Looks up operation with the given lhs type and rhs type and BinOp.
                 let operation_out_signature = match SUPPORTED_OPERATIONS.get(&operation_sig) {
                     Some(sig) => sig,
@@ -94,7 +97,7 @@ pub fn forward_derivative(
                             error,
                         )
                         .emit();
-                        return Err(());
+                        return Err(String::from("forward_derivative"));
                     }
                 };
                 // Applies the forward derivative function for the found operation.
@@ -109,7 +112,10 @@ pub fn forward_derivative(
                 return Ok(Some(new_stmt));
             } else if let syn::Expr::Call(call_expr) = &*init.1 {
                 // Create function in signature
-                let function_in_signature = function_signature(call_expr, type_map);
+                let function_in_signature = pass!(
+                    function_signature(call_expr, type_map),
+                    "forward_derivative"
+                );
                 // Gets function out signature
                 let function_out_signature = match SUPPORTED_FUNCTIONS.get(&function_in_signature) {
                     Some(sig) => sig,
@@ -121,7 +127,7 @@ pub fn forward_derivative(
                             error,
                         )
                         .emit();
-                        return Err(());
+                        return Err(String::from("forward_derivative"));
                     }
                 };
                 let args = call_expr
@@ -138,7 +144,10 @@ pub fn forward_derivative(
 
                 return Ok(Some(new_stmt));
             } else if let syn::Expr::MethodCall(method_expr) = &*init.1 {
-                let method_sig = method_signature(method_expr, type_map);
+                let method_sig = pass!(
+                    method_signature(method_expr, type_map),
+                    "forward_derivative"
+                );
                 let method_out = match SUPPORTED_METHODS.get(&method_sig) {
                     Some(sig) => sig,
                     None => {
@@ -149,7 +158,7 @@ pub fn forward_derivative(
                             error,
                         )
                         .emit();
-                        return Err(());
+                        return Err(String::from("forward_derivative"));
                     }
                 };
                 let args = {

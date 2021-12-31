@@ -62,29 +62,29 @@ fn multi_test() {
         return f;
     }
 }
-// #[test]
-// fn complex_test() {
-//     let (f, der_x, der_y, der_z) = reverse!(complex, 3f32, 5f32, 7f32);
-//     is_near(f, 10.1187260448);
-//     is_near!(der_x, 6.28571428571);
-//     is_near!(der_y, -0.034212882033);
-//     is_near!(der_z, -0.863608484107);
+#[test]
+fn complex_test() {
+    let (f, der_x, der_y, der_z) = reverse!(complex, 3f32, 5f32, 7f32);
+    is_near(f, 10.1187260448).unwrap();
+    is_near(der_x, 6.28571428571).unwrap();
+    is_near(der_y, -0.034212882033).unwrap();
+    is_near(der_z, -0.128914606556).unwrap();
 
-//     // f(x,y,z) = x^2 + 2x/z + 2/(y+z^0.5)
-//     // ∂x = 2(x+1/z)
-//     // ∂y = 2 / (y+z^0.5)^2
-//     // ∂z = -2x/z^2 -1/(z^0.5 * (y+z^0.5)^2)
-//     // Therefore:
-//     // f(3,5,7) = 10.1187260448
-//     // ∂x| = 6.28571428571
-//     // ∂y| = −0.034212882033
-//     // ∂z| = −0.863608484107
-//     #[reverse_autodiff]
-//     fn complex(x: f32, y: f32, z: f32) -> f32 {
-//         let a = x.powi(2i32);
-//         let b = x * 2f32 / z;
-//         let c = 2f32 / (z.sqrt()+y);
-//         let f = a + b + c;
-//         return f;
-//     }
-// }
+    // f(x,y,z) = x^2 + 2x/z + 2/(y+z^0.5)
+    // ∂x = 2(x+1/z)
+    // ∂y = -2 / (y+z^0.5)^2
+    // ∂z = -2x/z^2 -1/(z^0.5 * (y+z^0.5)^2)
+    // Therefore:
+    // f(3,5,7) = 10.1187260448
+    // ∂x| = 6.28571428571
+    // ∂y| = −0.034212882033
+    // ∂z| = −0.128914606556
+    #[reverse_autodiff]
+    fn complex(x: f32, y: f32, z: f32) -> f32 {
+        let a = x.powi(2i32);
+        let b = x * 2f32 / z;
+        let c = 2f32 / (z.sqrt() + y);
+        let f = a + b + c;
+        return f;
+    }
+}

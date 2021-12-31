@@ -3,7 +3,57 @@ extern crate proc_macro;
 
 type UnwrapResult<'a, T> = Result<&'a T, &'static str>;
 type UnwrapResultMut<'a, T> = Result<&'a mut T, &'static str>;
-
+pub trait Named {
+    fn name(&self) -> &'static str;
+}
+// TODO Can't this be done with a macro?
+impl Named for syn::Expr {
+    fn name(&self) -> &'static str {
+        match self {
+            Self::Array(_) => "Array",
+            Self::Assign(_) => "Assign",
+            Self::AssignOp(_) => "AssignOp",
+            Self::Async(_) => "Async",
+            Self::Await(_) => "Await",
+            Self::Binary(_) => "Binary",
+            Self::Block(_) => "Block",
+            Self::Box(_) => "Box",
+            Self::Break(_) => "Break",
+            Self::Call(_) => "Call",
+            Self::Cast(_) => "Cast",
+            Self::Closure(_) => "Closure",
+            Self::Continue(_) => "Continue",
+            Self::Field(_) => "Field",
+            Self::ForLoop(_) => "ForLoop",
+            Self::Group(_) => "Group",
+            Self::If(_) => "If",
+            Self::Index(_) => "Index",
+            Self::Let(_) => "Let",
+            Self::Lit(_) => "Lit",
+            Self::Loop(_) => "Loop",
+            Self::Macro(_) => "Macro",
+            Self::Match(_) => "Match",
+            Self::MethodCall(_) => "MethodCall",
+            Self::Paren(_) => "Paren",
+            Self::Path(_) => "Path",
+            Self::Range(_) => "Range",
+            Self::Reference(_) => "Reference",
+            Self::Repeat(_) => "Repeat",
+            Self::Return(_) => "Return",
+            Self::Struct(_) => "Struct",
+            Self::Try(_) => "Try",
+            Self::TryBlock(_) => "TryBlock",
+            Self::Tuple(_) => "Tuple",
+            Self::Type(_) => "Type",
+            Self::Unary(_) => "Unary",
+            Self::Unsafe(_) => "Unsafe",
+            Self::Verbatim(_) => "Verbatim",
+            Self::While(_) => "While",
+            Self::Yield(_) => "Yield",
+            _ => unreachable!(), // some variants omitted
+        }
+    }
+}
 pub trait UnwrapReturnType {
     fn type_(&self) -> UnwrapResult<syn::Type>;
 }
@@ -138,6 +188,8 @@ pub trait IsExpr {
     fn is_path(&self) -> bool;
     fn is_return(&self) -> bool;
     fn is_call(&self) -> bool;
+    fn is_method_call(&self) -> bool;
+    fn is_lit(&self) -> bool;
 }
 impl IsExpr for syn::Expr {
     fn is_binary(&self) -> bool {
@@ -152,6 +204,12 @@ impl IsExpr for syn::Expr {
     fn is_call(&self) -> bool {
         matches!(self, Self::Call(_))
     }
+    fn is_method_call(&self) -> bool {
+        matches!(self, Self::MethodCall(_))
+    }
+    fn is_lit(&self) -> bool {
+        matches!(self, Self::Lit(_))
+    }
 }
 pub trait UnwrapExpr {
     fn binary(&self) -> UnwrapResult<syn::ExprBinary>;
@@ -165,6 +223,7 @@ pub trait UnwrapExpr {
     fn call_mut(&mut self) -> UnwrapResultMut<syn::ExprCall>;
     fn method_call(&self) -> UnwrapResult<syn::ExprMethodCall>;
     fn method_call_mut(&mut self) -> UnwrapResultMut<syn::ExprMethodCall>;
+    fn paren(&self) -> UnwrapResult<syn::ExprParen>;
 }
 impl UnwrapExpr for syn::Expr {
     fn binary(&self) -> UnwrapResult<syn::ExprBinary> {
@@ -231,6 +290,12 @@ impl UnwrapExpr for syn::Expr {
         match self {
             Self::MethodCall(b) => Ok(b),
             _ => Err("called `Expr::method_call_mut()` on a non `MethodCall` value"),
+        }
+    }
+    fn paren(&self) -> UnwrapResult<syn::ExprParen> {
+        match self {
+            Self::Paren(b) => Ok(b),
+            _ => Err("called `Expr::paren()` on a non `Paren` value"),
         }
     }
 }

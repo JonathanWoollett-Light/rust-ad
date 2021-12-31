@@ -6,10 +6,11 @@ use rust_ad::{forward, forward_autodiff, reverse, reverse_autodiff};
 // use rust_ad_core_macros::compose;
 
 #[reverse_autodiff]
-fn quad(x: f32) -> f32 {
+fn complex(x: f32, y: f32, z: f32) -> f32 {
     let a = x.powi(2i32);
-    let c = 2f32;
-    let f = a + c;
+    let b = x * 2f32 / z;
+    let c = 2f32 / (z.sqrt() + y);
+    let f = a + b + c;
     return f;
 }
 
