@@ -5,7 +5,7 @@ use proc_macro::{TokenStream, TokenTree};
 use rust_ad_consts::{INTERNAL_FORWARD_PREFIX, INTERNAL_REVERSE_PREFIX};
 
 /// Same result as performing `forward_derivative_macro` and `reverse_derivative_macro` consecutively.
-/// 
+///
 /// But this does it a little neater and more efficiently.
 #[proc_macro]
 pub fn combined_derivative_macro(item: TokenStream) -> TokenStream {

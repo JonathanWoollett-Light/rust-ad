@@ -95,7 +95,6 @@ pub fn lm_identifiers(stmt: &syn::Stmt) -> (String, &syn::ExprMethodCall) {
     (local_ident, method_expr)
 }
 
-
 // TODO Replace `cumulative_derivative_wrt_rt` and `Type` with neater functionality.
 /// Gets cumulative derivative for given expression for a given input variable (only supports literals and paths).
 ///
