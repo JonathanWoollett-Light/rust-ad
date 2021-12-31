@@ -408,20 +408,12 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
             reverse_stmts.push(der);
         }
     }
+    // eprintln!("component_map: {:?}", component_map);
     reverse_stmts.push(reverse_accumulate_inputs(
         &function_inputs,
         &component_map,
         &type_map,
     ));
-    // let mut reverse_stmts = function
-    //     .block
-    //     .stmts
-    //     .iter()
-    //     .rev()
-    //     .filter_map(|s| reverse_derivative(s, &type_map, &mut component_map))
-    //     .collect::<Vec<_>>();
-
-    // eprintln!("component_map: {:?}", component_map);
 
     function.block.stmts.append(&mut reverse_stmts);
     // Appends return statement after adding reverse code.

@@ -52,7 +52,7 @@ pub fn reverse_accumulate_derivative(
         let local_ident = local
             .pat
             .ident()
-            .expect("reverse_derivative: not ident")
+            .expect("reverse_accumulate_derivative: not ident")
             .ident
             .to_string();
         let acc_der_stmt_str = format!(
@@ -60,14 +60,14 @@ pub fn reverse_accumulate_derivative(
             der!(local_ident),
             component_map
                 .get(&local_ident)
-                .expect("reverse_derivative: ident not in map")
+                .expect("reverse_accumulate_derivative: ident not in map")
                 .iter()
                 .map(|d| wrt!(local_ident, d))
                 .intersperse(String::from("+"))
                 .collect::<String>()
         );
-        let acc_der_stmt =
-            syn::parse_str(&acc_der_stmt_str).expect("reverse_derivative: acc parse fail");
+        let acc_der_stmt = syn::parse_str(&acc_der_stmt_str)
+            .expect("reverse_accumulate_derivative: acc parse fail");
         Some(acc_der_stmt)
     } else {
         None
@@ -79,6 +79,12 @@ pub fn reverse_derivative(
     component_map: &mut HashMap<String, Vec<String>>,
 ) -> Result<Option<syn::Stmt>, ()> {
     if let syn::Stmt::Local(local) = stmt {
+        let local_ident = local
+            .pat
+            .ident()
+            .expect("forward_derivative: not ident")
+            .ident
+            .to_string();
         if let Some(init) = &local.init {
             let init_expr = &*init.1;
             if let syn::Expr::Binary(bin_expr) = init_expr {
@@ -99,8 +105,15 @@ pub fn reverse_derivative(
                     }
                 };
                 // Applies the forward deriative function for the found operation.
-                let new_stmt = (operation_out_signature.reverse_derivative)(&stmt, component_map);
-                return Ok(new_stmt);
+                let new_stmt = (operation_out_signature.reverse_derivative)(
+                    local_ident,
+                    &[
+                        Arg::try_from(&*bin_expr.left).expect("reverse_derivative: bin left"),
+                        Arg::try_from(&*bin_expr.right).expect("reverse_derivative: bin right"),
+                    ],
+                    component_map,
+                );
+                return Ok(Some(new_stmt));
             } else if let syn::Expr::Call(call_expr) = &*init.1 {
                 // Create function in signature
                 let function_in_signature = function_signature(call_expr, type_map);
@@ -118,9 +131,19 @@ pub fn reverse_derivative(
                         return Err(());
                     }
                 };
+
+                let args = call_expr
+                    .args
+                    .iter()
+                    .map(|a| Arg::try_from(a).expect("reverse_derivative: call arg"))
+                    .collect::<Vec<_>>();
                 // Gets new stmt
-                let new_stmt = (function_out_signature.reverse_derivative)(&stmt, component_map);
-                return Ok(new_stmt);
+                let new_stmt = (function_out_signature.reverse_derivative)(
+                    local_ident,
+                    args.as_slice(),
+                    component_map,
+                );
+                return Ok(Some(new_stmt));
             } else if let syn::Expr::MethodCall(method_expr) = &*init.1 {
                 let method_sig = method_signature(method_expr, type_map);
                 let method_out = match SUPPORTED_METHODS.get(&method_sig) {
@@ -136,8 +159,23 @@ pub fn reverse_derivative(
                         return Err(());
                     }
                 };
-                let new_stmt = (method_out.reverse_derivative)(&stmt, component_map);
-                return Ok(new_stmt);
+
+                let args = {
+                    let mut base = Vec::new();
+                    let receiver = Arg::try_from(&*method_expr.receiver)
+                        .expect("reverse_derivative: method receiver");
+                    base.push(receiver);
+                    let mut args = method_expr
+                        .args
+                        .iter()
+                        .map(|a| Arg::try_from(a).expect("reverse_derivative: method arg"))
+                        .collect::<Vec<_>>();
+                    base.append(&mut args);
+                    base
+                };
+                let new_stmt =
+                    (method_out.reverse_derivative)(local_ident, args.as_slice(), component_map);
+                return Ok(Some(new_stmt));
             } else if let syn::Expr::Path(expr_path) = &*init.1 {
                 // Variable identifier
                 let out_ident = local
@@ -151,22 +189,6 @@ pub fn reverse_derivative(
 
                 append_insert(&in_ident, out_ident.clone(), component_map);
                 let stmt_str = format!("let {} = {};", wrt!(in_ident, out_ident), der!(out_ident));
-                let new_stmt: syn::Stmt =
-                    syn::parse_str(&stmt_str).expect("reverse_derivative: parse fail");
-
-                return Ok(Some(new_stmt));
-            } else if let syn::Expr::Lit(expr_lit) = &*init.1 {
-                let out_type = literal_type(expr_lit).expect("reverse_derivative: bad lit type");
-                let return_type = rust_ad_core::Type::try_from(out_type.as_str())
-                    .expect("reverse_derivative: unsupported return type");
-                let out_ident = local
-                    .pat
-                    .ident()
-                    .expect("reverse_derivative: not ident")
-                    .ident
-                    .to_string();
-
-                let stmt_str = format!("let {} = 0{};", der!(out_ident), return_type.to_string());
                 let new_stmt: syn::Stmt =
                     syn::parse_str(&stmt_str).expect("reverse_derivative: parse fail");
 

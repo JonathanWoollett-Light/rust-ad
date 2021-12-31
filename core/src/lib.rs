@@ -17,8 +17,6 @@ pub use dict::*;
 pub mod traits;
 use traits::*;
 
-mod utils;
-
 /// Prefix used for the derivatives of a variable (e.g. The derivative of `x` would be `der_x`).
 pub const DERIVATIVE_PREFIX: &'static str = "__der_";
 /// Prefix used to for the forward differentiation function.

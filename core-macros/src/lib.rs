@@ -63,6 +63,56 @@ pub fn forward_derivative_macro(item: TokenStream) -> TokenStream {
     out_str.parse().unwrap()
 }
 
+#[proc_macro]
+pub fn reverse_derivative_macro(item: TokenStream) -> TokenStream {
+    // eprintln!("\nitem:\n{:?}\n",item);
+    let mut iter = item.into_iter();
+    let name = match iter.next() {
+        Some(TokenTree::Ident(ident)) => ident,
+        _ => panic!("No function ident"),
+    };
+    let vec = iter.collect::<Vec<_>>();
+    assert_eq!(vec.len() % 2, 0, "Bad punctuation");
+    let num = (vec.len() - 1) / 2;
+    let mut iter = vec.chunks_exact(2);
+
+    let default = match iter.next() {
+        Some(item) => {
+            let (punc, lit) = (&item[0], &item[1]);
+            match (punc, lit) {
+                (TokenTree::Punct(_), TokenTree::Literal(default)) => default,
+                _ => panic!("Bad default value"),
+            }
+        }
+        _ => panic!("No default value"),
+    };
+
+    let iter = iter.enumerate();
+    let arg_fmt_str = (0..num)
+        .map(|i| format!("args[{}],", i))
+        .collect::<String>();
+
+    let der_functions = iter
+        .map(|(index, item)| {
+            let (punc, lit) = (&item[0], &item[1]);
+            match (punc, lit) {
+                (TokenTree::Punct(_), TokenTree::Literal(format_str)) => format!(
+                    "\tconst f{}: DFn = |args: &[Arg]| -> String {{ compose!({},{}) }};\n",
+                    index, format_str, arg_fmt_str
+                ),
+                _ => panic!("Bad format strings"),
+            }
+        })
+        .collect::<String>();
+    let fn_fmt_str = (0..num).map(|i| format!("f{},", i)).collect::<String>();
+    let out_str = format!(
+        "pub static {}: RgdType = {{\n{}\n\trgd::<{{ {} }},{{ &[{}] }}>\n}};",
+        name, der_functions, default, fn_fmt_str
+    );
+    // eprintln!("out_str: \n{}\n",out_str);
+    out_str.parse().unwrap()
+}
+
 /// `format!()` but:
 /// 1. only allows positional arguments e.g. `{0}`, `{1}`, etc.
 /// 2. allows unused arguments.

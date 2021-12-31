@@ -3,6 +3,39 @@ use crate::*;
 pub mod forward;
 pub mod reverse;
 
+/// Function argument type
+pub enum Arg {
+    /// e.g. `a`
+    Variable(String),
+    /// e.g. `7.3f32`
+    Literal(String),
+}
+impl std::fmt::Display for Arg {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Variable(s) => write!(f, "{}", s),
+            Self::Literal(s) => write!(f, "{}", s),
+        }
+    }
+}
+impl TryFrom<&syn::Expr> for Arg {
+    type Error = &'static str;
+    fn try_from(expr: &syn::Expr) -> Result<Self, Self::Error> {
+        match expr {
+            syn::Expr::Lit(l) => match &l.lit {
+                syn::Lit::Int(int) => Ok(Self::Literal(int.to_string())),
+                syn::Lit::Float(float) => Ok(Self::Literal(float.to_string())),
+                _ => Err("Unsupported literal type argument"),
+            },
+            syn::Expr::Path(p) => Ok(Self::Variable(p.path.segments[0].ident.to_string())),
+            _ => Err("Non literal or path argument"),
+        }
+    }
+}
+
+/// Derivative function type
+pub type DFn = fn(&[Arg]) -> String;
+
 /// Local identifier and method identifier
 pub fn lm_identifiers(stmt: &syn::Stmt) -> (String, &syn::ExprMethodCall) {
     let local = stmt.local().expect("lm_identifiers: not local");

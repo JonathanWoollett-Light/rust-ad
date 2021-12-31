@@ -1,6 +1,6 @@
 use proc_macro::Diagnostic;
-use rust_ad_core::forward::Arg;
 use rust_ad_core::traits::*;
+use rust_ad_core::Arg;
 use rust_ad_core::*;
 use std::collections::HashMap;
 use syn::spanned::Spanned;
