@@ -63,7 +63,10 @@ pub fn forward(_item: TokenStream) -> TokenStream {
 
     let call_str = format!(
         "{}{}({}{})",
-        FORWARD_MODE_PREFIX, function_ident, inputs_str, input_derivatives
+        rust_ad_consts::FORWARD_PREFIX,
+        function_ident,
+        inputs_str,
+        input_derivatives
     );
     call_str.parse().unwrap()
 }
@@ -106,7 +109,12 @@ pub fn reverse(_item: TokenStream) -> TokenStream {
         })
         .collect::<String>();
 
-    let call_str = format!("{}{}({}1f32)", REVERSE_MODE_PREFIX, function_ident, inputs);
+    let call_str = format!(
+        "{}{}({}1f32)",
+        rust_ad_consts::REVERSE_PREFIX,
+        function_ident,
+        inputs
+    );
     call_str.parse().unwrap()
 }
 
@@ -188,7 +196,11 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     // ---------------------------------------------------------------------------
     // Updates identifier
     function.sig.ident = syn::Ident::new(
-        &format!("{}{}", FORWARD_MODE_PREFIX, function.sig.ident.to_string()),
+        &format!(
+            "{}{}",
+            rust_ad_consts::FORWARD_PREFIX,
+            function.sig.ident.to_string()
+        ),
         function.sig.ident.span(),
     );
     // Appends derivative inputs to function signature, `f(x,y)` -> `f(x,y,dx,dy)`
@@ -424,7 +436,11 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     // Updates function identifier
     // ---------------------------------------------------------------------------
     function.sig.ident = syn::Ident::new(
-        &format!("{}{}", REVERSE_MODE_PREFIX, function.sig.ident.to_string()),
+        &format!(
+            "{}{}",
+            rust_ad_consts::REVERSE_PREFIX,
+            function.sig.ident.to_string()
+        ),
         function.sig.ident.span(),
     );
 

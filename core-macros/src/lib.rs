@@ -4,7 +4,9 @@
 use proc_macro::{TokenStream, TokenTree};
 use rust_ad_consts::{INTERNAL_FORWARD_PREFIX, INTERNAL_REVERSE_PREFIX};
 
-/// Effectively performs `forward_derivative_macro` and `reverse_derivative_macro` consecutively.
+/// Same result as performing `forward_derivative_macro` and `reverse_derivative_macro` consecutively.
+/// 
+/// But this does it a little neater and more efficiently.
 #[proc_macro]
 pub fn combined_derivative_macro(item: TokenStream) -> TokenStream {
     // eprintln!("\nitem:\n{:?}\n",item);
@@ -61,6 +63,7 @@ pub fn combined_derivative_macro(item: TokenStream) -> TokenStream {
     out_str.parse().unwrap()
 }
 
+/// Generates forward derivative functions.
 /// ```ignore
 /// static outer_test: FgdType = {
 ///     const base_fn: DFn = |args:&[String]| -> String { format!("{0}-{1}",args[0],args[1]) };
@@ -121,7 +124,7 @@ pub fn forward_derivative_macro(item: TokenStream) -> TokenStream {
     // eprintln!("out_str: \n{}\n",out_str);
     out_str.parse().unwrap()
 }
-
+/// Generates reverse derivative functions.
 #[proc_macro]
 pub fn reverse_derivative_macro(item: TokenStream) -> TokenStream {
     // eprintln!("\nitem:\n{:?}\n",item);
@@ -232,6 +235,7 @@ pub fn compose(item: TokenStream) -> TokenStream {
     out_str.parse().unwrap()
 }
 
+// TODO Can we replace these with declarative macros like `der!` (and then just move them into `rust-ad-core`)?
 /// Gets internal forward derivative function identifier
 #[proc_macro]
 pub fn f(item: TokenStream) -> TokenStream {

@@ -3,12 +3,18 @@
 #![feature(adt_const_params)]
 
 //! **I do not recommend using this directly, please sea [rust-ad](https://crates.io/crates/rust-ad).**
-//! 
+//!
 //! Internal non-proc-macro functionality.
 
 use std::collections::HashMap;
 
-/// Functions that given statements return the statements which compute the respective derivatives.
+/// Functions to compute derivatives (specific function support).
+///
+/// A function name may look like `__f_internal_powi_f32`:
+/// 1. `__f` represents a forward auto-diff function
+/// 2. `_internal_` is just the internal identifier.
+/// 3. `powi_` is the function being supported.
+/// 4. `f32` is the general type (while this doesn't technically enforce anything it will typically be the respective `Self`).
 pub mod derivatives;
 pub use derivatives::*;
 
@@ -21,10 +27,6 @@ use traits::*;
 
 /// Prefix used for the derivatives of a variable (e.g. The derivative of `x` would be `der_x`).
 pub const DERIVATIVE_PREFIX: &'static str = "__der_";
-/// Prefix used to for the forward differentiation function.
-pub const FORWARD_MODE_PREFIX: &'static str = "__for_";
-/// Prefix used to for the reverse differentiation function.
-pub const REVERSE_MODE_PREFIX: &'static str = "__rev_";
 /// Prefix used for flattening binary expressions in function arguments.
 pub const FUNCTION_PREFIX: &'static str = "f";
 /// Prefix used for flattening binary expressions as a receiver for a method.

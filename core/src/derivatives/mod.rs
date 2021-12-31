@@ -1,27 +1,39 @@
 use crate::*;
 
+/// Derivative functions for `f32`s.
 pub mod f32;
 pub use self::f32::*;
+/// Derivative functions for `f64`s.
 pub mod f64;
 pub use self::f64::*;
+/// Derivative functions for `i8`s.
 pub mod i8;
 pub use self::i8::*;
+/// Derivative functions for `i16`s.
 pub mod i16;
 pub use self::i16::*;
+/// Derivative functions for `i32`s.
 pub mod i32;
 pub use self::i32::*;
+/// Derivative functions for `i64`s.
 pub mod i64;
 pub use self::i64::*;
+/// Derivative functions for `i128`s.
 pub mod i128;
 pub use self::i128::*;
+/// Derivative functions for `u8`s.
 pub mod u8;
 pub use self::u8::*;
+/// Derivative functions for `u16`s.
 pub mod u16;
 pub use self::u16::*;
+/// Derivative functions for `u32`s.
 pub mod u32;
 pub use self::u32::*;
+/// Derivative functions for `u64`s.
 pub mod u64;
 pub use self::u64::*;
+/// Derivative functions for `u128`s.
 pub mod u128;
 pub use self::u128::*;
 
@@ -83,6 +95,8 @@ pub fn lm_identifiers(stmt: &syn::Stmt) -> (String, &syn::ExprMethodCall) {
     (local_ident, method_expr)
 }
 
+
+// TODO Replace `cumulative_derivative_wrt_rt` and `Type` with neater functionality.
 /// Gets cumulative derivative for given expression for a given input variable (only supports literals and paths).
 ///
 /// See `cumulative_derivative_wrt` for more documentation
@@ -115,7 +129,7 @@ pub fn cumulative_derivative_wrt_rt(
         _ => panic!("cumulative_derivative_wrt: unsupported expr"),
     }
 }
-
+/// Struct for some internal functionality (this will soon be removed).
 #[derive(PartialEq, Eq)]
 pub enum Type {
     F32,
