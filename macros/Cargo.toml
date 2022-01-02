@@ -1,6 +1,6 @@
 [package]
 name = "rust-ad-macros"
-version = "0.7.1"
+version = "0.7.2"
 edition = "2021"
 
 description = "Rust Auto-Differentiation."
@@ -13,8 +13,8 @@ documentation = "https://docs.rs/rust-ad/"
 [dependencies]
 syn = { version="1.0.82", features=["full","extra-traits"] }
 quote = "1.0.10"
-rust-ad-core = { version = "0.7.1", path = "../core" }
-rust-ad-consts = { version = "0.7.1", path = "../consts" }
+rust-ad-core = { version = "0.7.2", path = "../core" }
+rust-ad-consts = { version = "0.7.2", path = "../consts" }
 
 [lib]
 proc-macro = true

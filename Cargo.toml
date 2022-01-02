@@ -1,6 +1,6 @@
 [package]
 name = "rust-ad"
-version = "0.7.1"
+version = "0.7.2"
 edition = "2021"
 
 description = "Rust Auto-Differentiation."
@@ -14,10 +14,10 @@ exclude = ["/src/main.rs","/tests"]
 
 [dependencies]
 syn = { version="1.0.82", features=["full","extra-traits"] }
-rust-ad-macros = { version = "0.7.1", path = "macros" }
+rust-ad-macros = { version = "0.7.2", path = "macros" }
 
-# rust-ad-core-macros = { version = "0.7.1", path = "./core-macros" } # TEMP
-# rust-ad-core = { version = "0.7.1", path = "./core" } # TEMP
+# rust-ad-core-macros = { version = "0.7.2", path = "./core-macros" } # TEMP
+# rust-ad-core = { version = "0.7.2", path = "./core" } # TEMP
 
 [workspace]
 members = ["./macros","./core","./core-macros","./consts"]
