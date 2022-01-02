@@ -19,7 +19,7 @@ fn tuple_function(x1: f32, x2: f32, x3: f32, y1: f32, y2: f32, y3: f32) -> f32 {
     let a1 = x1 + y1;
     let a2 = x2 + y2;
     let a3 = x3 + y3;
-    let b = a1 + a2;
+    let b = a1 + a2 + a3;
     return b;
 }
 

@@ -233,8 +233,6 @@ pub fn fgd<const DEFAULT: &'static str, const TRANSLATION_FUNCTIONS: &'static [D
         "fgd args len mismatch"
     );
 
-    eprintln!("local_ident: {}", local_ident);
-
     // Gets vec of derivative idents and derivative functions
     let (idents, derivatives) = outer_fn_args
         .iter()
@@ -255,10 +253,6 @@ pub fn fgd<const DEFAULT: &'static str, const TRANSLATION_FUNCTIONS: &'static [D
                             None // Since we are multiplying by `DEFAULT` (e.g. `0.`) we can simply ignore this property
                         } else {
                             let der = wrt!(arg,outer_fn_input);
-
-                            // TEMP REMOVE THIS
-                            eprint!("{}, ",der);
-                            
                             // If the derivative has not been defined, we know it would've been defined as zero
                             non_zero_derivatives.get(&der).cloned()
                         };
@@ -282,10 +276,6 @@ pub fn fgd<const DEFAULT: &'static str, const TRANSLATION_FUNCTIONS: &'static [D
             }
         })
         .unzip::<_, _, Vec<_>, Vec<_>>();
-    // eprintln!("idents: {:?}",idents);
-
-    eprintln!("non_zero_derivatives: {:?}", non_zero_derivatives);
-    eprintln!("\n.\n");
 
     // Converts vec's to strings
     let (idents, derivatives) = (
@@ -298,11 +288,8 @@ pub fn fgd<const DEFAULT: &'static str, const TRANSLATION_FUNCTIONS: &'static [D
             .intersperse(String::from(","))
             .collect::<String>(),
     );
-    // eprintln!("idents: {}",idents);
-    // eprintln!("derivatives: {}",derivatives);
 
     let stmt_str = format!("let ({}) = ({});", idents, derivatives);
-    // eprintln!("stmt_str: {}",stmt_str);
     syn::parse_str(&stmt_str).expect("fgd: parse fail")
 }
 
@@ -347,6 +334,5 @@ pub fn rgd<const DEFAULT: &'static str, const TRANSLATION_FUNCTIONS: &'static [D
     );
 
     let stmt_str = format!("let ({}) = ({});", idents, derivatives);
-    // eprintln!("stmt_str: {}", stmt_str);
     syn::parse_str(&stmt_str).expect("fgd: parse fail")
 }
