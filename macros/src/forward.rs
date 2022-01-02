@@ -2,10 +2,15 @@ use proc_macro::Diagnostic;
 use rust_ad_core::traits::*;
 use rust_ad_core::Arg;
 use rust_ad_core::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use syn::spanned::Spanned;
 
-pub fn update_forward_return(s: Option<&mut syn::Stmt>, function_inputs: &[String]) {
+pub fn update_forward_return(
+    s: Option<&mut syn::Stmt>,
+    function_inputs: &[String],
+    type_map: HashMap<String, String>,
+    non_zero_derivatives: HashSet<String>,
+) {
     *s.unwrap() = match s {
         Some(syn::Stmt::Semi(syn::Expr::Return(expr_return), _)) => {
             let b = expr_return
@@ -25,7 +30,11 @@ pub fn update_forward_return(s: Option<&mut syn::Stmt>, function_inputs: &[Strin
                     .map(|input| if ident == input {
                         der!(input)
                     } else {
-                        wrt!(ident, input)
+                        let der = wrt!(ident, input);
+                        match non_zero_derivatives.contains(&der) {
+                            true => der,
+                            false => format!("0{}", type_map.get(input).unwrap()),
+                        }
                     })
                     .intersperse(String::from(","))
                     .collect::<String>()
@@ -37,39 +46,37 @@ pub fn update_forward_return(s: Option<&mut syn::Stmt>, function_inputs: &[Strin
 }
 
 /// Intersperses values with respect to the preceding values.
-pub fn intersperse_succeeding_stmts<K, R>(
-    x: Vec<syn::Stmt>,
-    extra: K,
-    f: fn(&syn::Stmt, &K) -> Result<Option<syn::Stmt>, R>,
-) -> Result<Vec<syn::Stmt>, R> {
+pub fn intersperse_succeeding_stmts<K>(
+    mut x: Vec<syn::Stmt>,
+    mut extra: K,
+    f: fn(&syn::Stmt, &mut K) -> Result<Option<syn::Stmt>, PassError>,
+) -> Result<Vec<syn::Stmt>, PassError> {
     let len = x.len();
     let new_len = len * 2 - 1;
     let mut y = Vec::with_capacity(new_len);
-    let mut x_iter = x.into_iter().rev();
-    if let Some(last) = x_iter.next() {
-        y.push(last);
-    }
-    for a in x_iter {
-        let res = f(&a, &extra);
-        let opt = match res {
-            Ok(r) => r,
-            Err(e) => return Err(e),
-        };
-        if let Some(b) = opt {
-            // for c in crate::unwrap_statement(&b).into_iter() {
-            //     y.push(c);
-            // }
-            y.push(b);
+
+    while x.len() > 1 {
+        y.push(x.remove(0));
+        let after_opt = pass!(
+            f(y.last().unwrap(), &mut extra),
+            "intersperse_succeeding_stmts"
+        );
+        if let Some(after) = after_opt {
+            y.push(after);
         }
-        y.push(a);
     }
-    Ok(y.into_iter().rev().collect())
+    y.push(x.remove(0));
+    Ok(y)
 }
 
 // TODO Reduce code duplication between `reverse_derivative` and `forward_derivative`
 pub fn forward_derivative(
     stmt: &syn::Stmt,
-    (type_map, function_inputs): &(&HashMap<String, String>, &[String]),
+    (type_map, function_inputs, non_zero_derivatives): &mut (
+        &HashMap<String, String>,
+        &[String],
+        &mut HashSet<String>,
+    ),
 ) -> Result<Option<syn::Stmt>, PassError> {
     if let syn::Stmt::Local(local) = stmt {
         let local_ident = local
@@ -102,12 +109,13 @@ pub fn forward_derivative(
                 };
                 // Applies the forward derivative function for the found operation.
                 let new_stmt = (operation_out_signature.forward_derivative)(
-                    function_inputs,
                     local_ident,
                     &[
                         Arg::try_from(&*bin_expr.left).expect("forward_derivative: bin left"),
                         Arg::try_from(&*bin_expr.right).expect("forward_derivative: bin right"),
                     ],
+                    function_inputs,
+                    non_zero_derivatives,
                 );
                 return Ok(Some(new_stmt));
             } else if let syn::Expr::Call(call_expr) = &*init.1 {
@@ -137,9 +145,10 @@ pub fn forward_derivative(
                     .collect::<Vec<_>>();
                 // Gets new stmt
                 let new_stmt = (function_out_signature.forward_derivative)(
-                    function_inputs,
                     local_ident,
                     args.as_slice(),
+                    function_inputs,
+                    non_zero_derivatives,
                 );
 
                 return Ok(Some(new_stmt));
@@ -175,8 +184,12 @@ pub fn forward_derivative(
                     base
                 };
 
-                let new_stmt =
-                    (method_out.forward_derivative)(function_inputs, local_ident, args.as_slice());
+                let new_stmt = (method_out.forward_derivative)(
+                    local_ident,
+                    args.as_slice(),
+                    function_inputs,
+                    non_zero_derivatives,
+                );
                 return Ok(Some(new_stmt));
             } else if let syn::Expr::Path(expr_path) = &*init.1 {
                 // Given `let x = y;`

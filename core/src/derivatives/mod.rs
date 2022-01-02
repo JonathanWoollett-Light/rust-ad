@@ -1,4 +1,5 @@
 use crate::*;
+use std::collections::HashSet;
 
 /// Derivative functions for `f32`s.
 pub mod f32;
@@ -41,7 +42,7 @@ pub use self::u128::*;
 // pub use self::ndarray::*;
 
 /// Forward General Derivative type
-pub type FgdType = fn(&[String], String, &[Arg]) -> syn::Stmt;
+pub type FgdType = fn(String, &[Arg], &[String], &mut HashSet<String>) -> syn::Stmt;
 /// Reverse General Derivative type
 pub type RgdType = fn(String, &[Arg], &mut HashMap<String, Vec<String>>) -> syn::Stmt;
 
@@ -221,9 +222,10 @@ impl TryFrom<&str> for Type {
 /// forward_derivative_macro!(outer_test,"0f32","{0}-{1}","{0}*{1}+{0}");
 /// ```
 pub fn fgd<const DEFAULT: &'static str, const TRANSLATION_FUNCTIONS: &'static [DFn]>(
-    outer_fn_args: &[String],
     local_ident: String,
     args: &[Arg],
+    outer_fn_args: &[String],
+    non_zero_derivatives: &mut HashSet<String>,
 ) -> syn::Stmt {
     assert_eq!(
         args.len(),
@@ -231,40 +233,59 @@ pub fn fgd<const DEFAULT: &'static str, const TRANSLATION_FUNCTIONS: &'static [D
         "fgd args len mismatch"
     );
 
+    eprintln!("local_ident: {}", local_ident);
+
     // Gets vec of derivative idents and derivative functions
     let (idents, derivatives) = outer_fn_args
         .iter()
-        .map(|outer_fn_input| {
+        .filter_map(|outer_fn_input| {
             let acc = args
                 .iter()
                 .zip(TRANSLATION_FUNCTIONS.iter())
-                .map(|(arg,t)|
+                .filter_map(|(arg,t)|
                 // See the docs for cumulative (these if's accomplish the same-ish thing)
                 // TODO Improve docs here directly
                 match arg {
-                    Arg::Literal(_) => DEFAULT.to_string(),
+                    Arg::Literal(_) => None, // Since we are multiplying by `DEFAULT` (e.g. `0.`) we can simply ignore this property
                     Arg::Variable(v) => {
-                        let (a,b) = (
-                            t(args),
-                        if v == outer_fn_input {
-                            der!(outer_fn_input)
+                        let a = t(args);
+                        let b = if v == outer_fn_input {
+                            Some(der!(outer_fn_input))
                         } else if outer_fn_args.contains(v) {
-                            DEFAULT.to_string()
+                            None // Since we are multiplying by `DEFAULT` (e.g. `0.`) we can simply ignore this property
                         } else {
-                            wrt!(arg,outer_fn_input)
-                        });
+                            let der = wrt!(arg,outer_fn_input);
+
+                            // TEMP REMOVE THIS
+                            eprint!("{}, ",der);
+                            
+                            // If the derivative has not been defined, we know it would've been defined as zero
+                            non_zero_derivatives.get(&der).cloned()
+                        };
                         // eprintln!("a: {}, b: {}",a,b);
-                        format!("({})*{}",a,b)
+                        match b {
+                            Some(acc_der) => Some(format!("({})*{}",a,acc_der)),
+                            None => None
+                        }
                     }
                 })
                 .intersperse(String::from("+"))
                 .collect::<String>();
-
-            (wrt!(local_ident, outer_fn_input), acc)
+            match acc.is_empty() {
+                true => None,
+                false => {
+                    let new_der = wrt!(local_ident, outer_fn_input);
+                    // If there are some non-zero components this derivative may be non-zero and is thus worth defining
+                    non_zero_derivatives.insert(new_der.clone());
+                    Some((new_der, acc))
+                }
+            }
         })
         .unzip::<_, _, Vec<_>, Vec<_>>();
     // eprintln!("idents: {:?}",idents);
-    // eprintln!("derivatives: {:?}",derivatives);
+
+    eprintln!("non_zero_derivatives: {:?}", non_zero_derivatives);
+    eprintln!("\n.\n");
 
     // Converts vec's to strings
     let (idents, derivatives) = (

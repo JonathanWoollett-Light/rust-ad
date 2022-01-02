@@ -14,7 +14,7 @@ use rust_ad_core::*;
 extern crate proc_macro;
 use proc_macro::TokenStream;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 mod forward;
 use forward::*;
@@ -35,8 +35,8 @@ use reverse::*;
 /// fn main() {
 ///     let (f, der_x, der_y) = rust_ad::forward!(multi, 3f32, 5f32);
 ///     assert_eq!(f, 15.4f32);
-///     assert_eq!(der_x, 8f32); // 2(x+1)
-///     assert_eq!(der_y, -0.08f32); // -2/y^2
+///     assert_eq!(der_x, 8f32);
+///     assert_eq!(der_y, -0.08f32);
 /// }
 /// ```
 #[proc_macro]
@@ -85,8 +85,8 @@ pub fn forward(_item: TokenStream) -> TokenStream {
 /// fn main() {
 ///     let (f, der_x, der_y) = rust_ad::reverse!(multi, 3f32, 5f32);
 ///     assert_eq!(f, 15.4f32);
-///     assert_eq!(der_x, 8f32); // 2(x+1)
-///     assert_eq!(der_y, -0.08f32); // -2/y^2
+///     assert_eq!(der_x, 8f32);
+///     assert_eq!(der_y, -0.08f32);
 /// }
 /// ```
 #[proc_macro]
@@ -175,8 +175,8 @@ pub fn unweave(_attr: TokenStream, item: TokenStream) -> TokenStream {
 /// fn main() {
 ///     let (f, der_x, der_y) = __for_multi(3f32, 5f32, 1f32, 1f32);
 ///     assert_eq!(f, 15.4f32);
-///     assert_eq!(der_x, 8f32); // 2(x+1)
-///     assert_eq!(der_y, -0.08f32); // -2/y^2
+///     assert_eq!(der_x, 8f32);
+///     assert_eq!(der_y, -0.08f32);
 /// }
 /// ```
 ///
@@ -273,16 +273,26 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Propagates types through function
     let type_map = propagate_types(&function).expect("forward_autodiff 1");
+    let mut non_zero_derivatives = HashSet::<String>::new();
     // Intersperses forward derivatives
     let derivative_stmts = intersperse_succeeding_stmts(
         function.block.stmts,
-        (&type_map, function_inputs.as_slice()),
+        (
+            &type_map,
+            function_inputs.as_slice(),
+            &mut non_zero_derivatives,
+        ),
         forward_derivative,
     )
     .expect("forward_autodiff 2");
     function.block.stmts = derivative_stmts;
     // Updates return statement
-    update_forward_return(function.block.stmts.last_mut(), function_inputs.as_slice());
+    update_forward_return(
+        function.block.stmts.last_mut(),
+        function_inputs.as_slice(),
+        type_map,
+        non_zero_derivatives,
+    );
 
     let new = quote::quote! { #function };
     let new_stream = TokenStream::from(new);
@@ -334,8 +344,8 @@ pub fn dup(_item: TokenStream) -> TokenStream {
 /// fn main() {
 ///     let (f, der_x, der_y) = __rev_multi(3f32, 5f32, 1f32);
 ///     assert_eq!(f, 15.4f32);
-///     assert_eq!(der_x, 8f32); // 2(x+1)
-///     assert_eq!(der_y, -0.08f32); // -2/y^2
+///     assert_eq!(der_x, 8f32);
+///     assert_eq!(der_y, -0.08f32);
 /// }
 /// ```
 ///
@@ -731,7 +741,7 @@ fn propagate_types(func: &syn::ItemFn) -> Result<HashMap<String, String>, PassEr
 
         let mut type_ident = typed.ty.to_token_stream().to_string();
         type_ident.remove_matches(" "); // Remove space separators in type
-        eprintln!("type_ident: {}", type_ident);
+                                        // eprintln!("type_ident: {}", type_ident);
 
         type_map.insert(ident.to_string(), type_ident);
     }
