@@ -1,6 +1,7 @@
 #![feature(proc_macro_span)]
 #![feature(iter_intersperse)]
 #![feature(proc_macro_diagnostic)]
+#![feature(string_remove_matches)]
 
 //! **I do not recommend using this directly, please sea [rust-ad](https://crates.io/crates/rust-ad).**
 //!
@@ -727,14 +728,12 @@ fn propagate_types(func: &syn::ItemFn) -> Result<HashMap<String, String>, PassEr
         let typed = arg.typed().expect("propagate_types: not typed");
         // eprintln!("typed: {:#?}",typed);
         let ident = &typed.pat.ident().expect("propagate_types: not ident").ident;
-        let type_ident = &typed
-            .ty
-            .path()
-            .expect("propagate_types: not path")
-            .path
-            .segments[0]
-            .ident;
-        type_map.insert(ident.to_string(), type_ident.to_string());
+
+        let mut type_ident = typed.ty.to_token_stream().to_string();
+        type_ident.remove_matches(" "); // Remove space separators in type
+        eprintln!("type_ident: {}", type_ident);
+
+        type_map.insert(ident.to_string(), type_ident);
     }
 
     // Propagates types through statements

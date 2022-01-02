@@ -36,6 +36,9 @@ pub use self::u64::*;
 /// Derivative functions for `u128`s.
 pub mod u128;
 pub use self::u128::*;
+// /// Derivative functions for [ndarray](https://docs.rs/ndarray/latest/ndarray/index.html).
+// pub mod ndarray;
+// pub use self::ndarray::*;
 
 /// Forward General Derivative type
 pub type FgdType = fn(&[String], String, &[Arg]) -> syn::Stmt;
@@ -222,10 +225,14 @@ pub fn fgd<const DEFAULT: &'static str, const TRANSLATION_FUNCTIONS: &'static [D
     local_ident: String,
     args: &[Arg],
 ) -> syn::Stmt {
-    assert_eq!(args.len(), TRANSLATION_FUNCTIONS.len());
+    assert_eq!(
+        args.len(),
+        TRANSLATION_FUNCTIONS.len(),
+        "fgd args len mismatch"
+    );
 
-    // Gets vec of deriative idents and derivative functions
-    let (idents, deriatives) = outer_fn_args
+    // Gets vec of derivative idents and derivative functions
+    let (idents, derivatives) = outer_fn_args
         .iter()
         .map(|outer_fn_input| {
             let acc = args
@@ -257,23 +264,23 @@ pub fn fgd<const DEFAULT: &'static str, const TRANSLATION_FUNCTIONS: &'static [D
         })
         .unzip::<_, _, Vec<_>, Vec<_>>();
     // eprintln!("idents: {:?}",idents);
-    // eprintln!("deriatives: {:?}",deriatives);
+    // eprintln!("derivatives: {:?}",derivatives);
 
     // Converts vec's to strings
-    let (idents, deriatives) = (
+    let (idents, derivatives) = (
         idents
             .into_iter()
             .intersperse(String::from(","))
             .collect::<String>(),
-        deriatives
+        derivatives
             .into_iter()
             .intersperse(String::from(","))
             .collect::<String>(),
     );
     // eprintln!("idents: {}",idents);
-    // eprintln!("deriatives: {}",deriatives);
+    // eprintln!("derivatives: {}",derivatives);
 
-    let stmt_str = format!("let ({}) = ({});", idents, deriatives);
+    let stmt_str = format!("let ({}) = ({});", idents, derivatives);
     // eprintln!("stmt_str: {}",stmt_str);
     syn::parse_str(&stmt_str).expect("fgd: parse fail")
 }
@@ -284,9 +291,13 @@ pub fn rgd<const DEFAULT: &'static str, const TRANSLATION_FUNCTIONS: &'static [D
     args: &[Arg],
     component_map: &mut HashMap<String, Vec<String>>,
 ) -> syn::Stmt {
-    assert_eq!(args.len(), TRANSLATION_FUNCTIONS.len());
+    assert_eq!(
+        args.len(),
+        TRANSLATION_FUNCTIONS.len(),
+        "rgd args len mismatch"
+    );
 
-    let (idents, deriatives) = args
+    let (idents, derivatives) = args
         .iter()
         .zip(TRANSLATION_FUNCTIONS.iter())
         .filter_map(|(arg, t)| match arg {
@@ -303,18 +314,18 @@ pub fn rgd<const DEFAULT: &'static str, const TRANSLATION_FUNCTIONS: &'static [D
         })
         .unzip::<_, _, Vec<_>, Vec<_>>();
 
-    let (idents, deriatives) = (
+    let (idents, derivatives) = (
         idents
             .into_iter()
             .intersperse(String::from(","))
             .collect::<String>(),
-        deriatives
+        derivatives
             .into_iter()
             .intersperse(String::from(","))
             .collect::<String>(),
     );
 
-    let stmt_str = format!("let ({}) = ({});", idents, deriatives);
+    let stmt_str = format!("let ({}) = ({});", idents, derivatives);
     // eprintln!("stmt_str: {}", stmt_str);
     syn::parse_str(&stmt_str).expect("fgd: parse fail")
 }

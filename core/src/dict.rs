@@ -212,7 +212,7 @@ lazy_static::lazy_static! {
     /// Internal map of currently supported methods.
     pub static ref SUPPORTED_METHODS: MethodMap = {
         let mut map = MethodMap::new();
-        // i32
+        // f32
         // ----------------------------
         // Exponents
         map.insert(("powi","f32",&["i32"]).into(),ProcedureOutputs::new("f32",f!(powi_f32),r!(powi_f32)));
@@ -293,6 +293,8 @@ lazy_static::lazy_static! {
     /// Internal map of currently supported operations.
     pub static ref SUPPORTED_OPERATIONS: OperationMap = {
         let mut map = OperationMap::new();
+        // Primitives
+        // ------------------------------------------------------------------------------------
         // f32 arithmetics
         map.insert(("f32","+","f32").into(),ProcedureOutputs::new("f32",f!(add_f32),r!(add_f32)));
         map.insert(("f32","*","f32").into(),ProcedureOutputs::new("f32",f!(mul_f32),r!(mul_f32)));
@@ -353,6 +355,8 @@ lazy_static::lazy_static! {
         map.insert(("u128","*","u128").into(),ProcedureOutputs::new("u128",f!(mul_u128),r!(mul_u128)));
         map.insert(("u128","/","u128").into(),ProcedureOutputs::new("u128",f!(div_u128),r!(div_u128)));
         map.insert(("u128","-","u128").into(),ProcedureOutputs::new("u128",f!(sub_u128),r!(sub_u128)));
+        // Return
+        // ------------------------------------------------------------------------------------
         map
     };
 }
