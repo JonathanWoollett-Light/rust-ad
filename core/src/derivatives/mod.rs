@@ -1,4 +1,5 @@
 use crate::*;
+#[cfg(not(debug_assertions))]
 use std::collections::HashSet;
 
 /// Derivative functions for `f32`s.
@@ -42,7 +43,11 @@ pub use self::u128::*;
 // pub use self::ndarray::*;
 
 /// Forward General Derivative type
+#[cfg(debug_assertions)]
+pub type FgdType = fn(String, &[Arg], &[String]) -> syn::Stmt;
+#[cfg(not(debug_assertions))]
 pub type FgdType = fn(String, &[Arg], &[String], &mut HashSet<String>) -> syn::Stmt;
+
 /// Reverse General Derivative type
 pub type RgdType = fn(String, &[Arg], &mut HashMap<String, Vec<String>>) -> syn::Stmt;
 
@@ -225,7 +230,7 @@ pub fn fgd<const DEFAULT: &'static str, const TRANSLATION_FUNCTIONS: &'static [D
     local_ident: String,
     args: &[Arg],
     outer_fn_args: &[String],
-    non_zero_derivatives: &mut HashSet<String>,
+    #[cfg(not(debug_assertions))] non_zero_derivatives: &mut HashSet<String>,
 ) -> syn::Stmt {
     assert_eq!(
         args.len(),
@@ -234,6 +239,39 @@ pub fn fgd<const DEFAULT: &'static str, const TRANSLATION_FUNCTIONS: &'static [D
     );
 
     // Gets vec of derivative idents and derivative functions
+    // TODO Put these 2 different implementations together more cleanly.
+    // TODO Improve docs here.
+    #[cfg(debug_assertions)]
+    let (idents, derivatives) = outer_fn_args
+        .iter()
+        .map(|outer_fn_input| {
+            let acc = args
+                .iter()
+                .zip(TRANSLATION_FUNCTIONS.iter())
+                .map(|(arg,t)|
+                // See the docs for cumulative (these if's accomplish the same-ish thing)
+                match arg {
+                    Arg::Literal(_) => DEFAULT.to_string(), // Since we are multiplying by `DEFAULT` (e.g. `0.`) we can simply ignore this property
+                    Arg::Variable(v) => {
+                        let a = t(args);
+                        let b = if v == outer_fn_input {
+                            der!(outer_fn_input)
+                        } else if outer_fn_args.contains(v) {
+                            DEFAULT.to_string() // Since we are multiplying by `DEFAULT` (e.g. `0.`) we can simply ignore this property
+                        } else {
+                            wrt!(arg,outer_fn_input)
+                        };
+                        // eprintln!("a: {}, b: {}",a,b);
+                        format!("({})*{}",a,b)
+                    }
+                })
+                .intersperse(String::from("+"))
+                .collect::<String>();
+            let new_der = wrt!(local_ident, outer_fn_input);
+            (new_der, acc)
+        })
+        .unzip::<_, _, Vec<_>, Vec<_>>();
+    #[cfg(not(debug_assertions))]
     let (idents, derivatives) = outer_fn_args
         .iter()
         .filter_map(|outer_fn_input| {

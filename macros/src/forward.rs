@@ -2,14 +2,16 @@ use proc_macro::Diagnostic;
 use rust_ad_core::traits::*;
 use rust_ad_core::Arg;
 use rust_ad_core::*;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use syn::spanned::Spanned;
+#[cfg(not(debug_assertions))]
+use std::collections::HashSet;
 
 pub fn update_forward_return(
     s: Option<&mut syn::Stmt>,
     function_inputs: &[String],
-    type_map: HashMap<String, String>,
-    non_zero_derivatives: HashSet<String>,
+    #[cfg(not(debug_assertions))] type_map: HashMap<String, String>,
+    #[cfg(not(debug_assertions))] non_zero_derivatives: HashSet<String>,
 ) {
     *s.unwrap() = match s {
         Some(syn::Stmt::Semi(syn::Expr::Return(expr_return), _)) => {
@@ -31,10 +33,13 @@ pub fn update_forward_return(
                         der!(input)
                     } else {
                         let der = wrt!(ident, input);
+                        #[cfg(not(debug_assertions))]
                         match non_zero_derivatives.contains(&der) {
                             true => der,
                             false => format!("0{}", type_map.get(input).unwrap()),
                         }
+                        #[cfg(debug_assertions)]
+                        der
                     })
                     .intersperse(String::from(","))
                     .collect::<String>()
@@ -72,10 +77,14 @@ pub fn intersperse_succeeding_stmts<K>(
 // TODO Reduce code duplication between `reverse_derivative` and `forward_derivative`
 pub fn forward_derivative(
     stmt: &syn::Stmt,
-    (type_map, function_inputs, non_zero_derivatives): &mut (
+    #[cfg(not(debug_assertions))] (type_map, function_inputs, non_zero_derivatives): &mut (
         &HashMap<String, String>,
         &[String],
         &mut HashSet<String>,
+    ),
+    #[cfg(debug_assertions)] (type_map, function_inputs): &mut (
+        &HashMap<String, String>,
+        &[String],
     ),
 ) -> Result<Option<syn::Stmt>, PassError> {
     if let syn::Stmt::Local(local) = stmt {
@@ -115,6 +124,7 @@ pub fn forward_derivative(
                         Arg::try_from(&*bin_expr.right).expect("forward_derivative: bin right"),
                     ],
                     function_inputs,
+                    #[cfg(not(debug_assertions))]
                     non_zero_derivatives,
                 );
                 return Ok(Some(new_stmt));
@@ -148,6 +158,7 @@ pub fn forward_derivative(
                     local_ident,
                     args.as_slice(),
                     function_inputs,
+                    #[cfg(not(debug_assertions))]
                     non_zero_derivatives,
                 );
 
@@ -188,6 +199,7 @@ pub fn forward_derivative(
                     local_ident,
                     args.as_slice(),
                     function_inputs,
+                    #[cfg(not(debug_assertions))]
                     non_zero_derivatives,
                 );
                 return Ok(Some(new_stmt));

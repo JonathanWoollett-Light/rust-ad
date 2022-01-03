@@ -14,7 +14,9 @@ use rust_ad_core::*;
 extern crate proc_macro;
 use proc_macro::TokenStream;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+#[cfg(not(debug_assertions))]
+use std::collections::HashSet;
 
 mod forward;
 use forward::*;
@@ -273,24 +275,33 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Propagates types through function
     let type_map = propagate_types(&function).expect("forward_autodiff 1");
+
+    // In release we apply optimizations which shrink the produced code (eliminating unneccessary code)
+    // These are not applied in debug mode so one might use debug to give a clearer view of fundemental process before optimization.
+    #[cfg(not(debug_assertions))]
     let mut non_zero_derivatives = HashSet::<String>::new();
+
+    #[cfg(debug_assertions)]
+    let der_info = (&type_map, function_inputs.as_slice());
+    #[cfg(not(debug_assertions))]
+    let der_info = (
+        &type_map,
+        function_inputs.as_slice(),
+        &mut non_zero_derivatives,
+    );
+
     // Intersperses forward derivatives
-    let derivative_stmts = intersperse_succeeding_stmts(
-        function.block.stmts,
-        (
-            &type_map,
-            function_inputs.as_slice(),
-            &mut non_zero_derivatives,
-        ),
-        forward_derivative,
-    )
-    .expect("forward_autodiff 2");
+    let derivative_stmts =
+        intersperse_succeeding_stmts(function.block.stmts, der_info, forward_derivative)
+            .expect("forward_autodiff 2");
     function.block.stmts = derivative_stmts;
     // Updates return statement
     update_forward_return(
         function.block.stmts.last_mut(),
         function_inputs.as_slice(),
+        #[cfg(not(debug_assertions))]
         type_map,
+        #[cfg(not(debug_assertions))]
         non_zero_derivatives,
     );
 
