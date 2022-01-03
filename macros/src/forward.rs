@@ -3,9 +3,9 @@ use rust_ad_core::traits::*;
 use rust_ad_core::Arg;
 use rust_ad_core::*;
 use std::collections::HashMap;
-use syn::spanned::Spanned;
 #[cfg(not(debug_assertions))]
 use std::collections::HashSet;
+use syn::spanned::Spanned;
 
 pub fn update_forward_return(
     s: Option<&mut syn::Stmt>,
