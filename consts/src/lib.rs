@@ -16,3 +16,4 @@ const INTERNAL_SUFFIX: &'static str = "internal_";
 pub const INTERNAL_FORWARD_PREFIX: &'static str = concatcp!(FORWARD_PREFIX, INTERNAL_SUFFIX);
 /// Prefix for internal reverse auto-diff functions (e.g. `__r_a_users_function` vs `__r_internal_powi_f32`).
 pub const INTERNAL_REVERSE_PREFIX: &'static str = concatcp!(REVERSE_PREFIX, INTERNAL_SUFFIX);
+pub const REVERSE_JOINED_DERIVATIVE: &'static str = "__der_rtn_";

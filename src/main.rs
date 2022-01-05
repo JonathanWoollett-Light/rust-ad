@@ -19,13 +19,13 @@ use rust_ad::{forward, forward_autodiff, reverse, reverse_autodiff};
 //     return f;
 // }
 
-#[forward_autodiff]
-fn tuple_function(x1: f32, x2: f32, x3: f32, y1: f32, y2: f32, y3: f32) -> f32 {
+#[reverse_autodiff]
+fn tuple_function(x1: f32, x2: f32, x3: f32, y1: f32, y2: f32, y3: f32) -> (f32, f32) {
     let a1 = x1 + y1;
     let a2 = x2 + y2;
     let _a3 = x3 + y3;
     let b = a1 + a2;
-    return b;
+    return (b, a1);
 }
 
 // #[forward_autodiff]

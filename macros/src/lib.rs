@@ -12,7 +12,8 @@ use rust_ad_core::traits::*;
 use rust_ad_core::*;
 
 extern crate proc_macro;
-use proc_macro::TokenStream;
+use proc_macro::{Diagnostic, TokenStream};
+use syn::spanned::Spanned;
 
 use std::collections::HashMap;
 #[cfg(not(debug_assertions))]
@@ -195,72 +196,67 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
         _ => panic!("Only `fn` items are supported."),
     };
 
-    // Updates signature
+    // Updates function signature
     // ---------------------------------------------------------------------------
-    // Updates identifier
-    function.sig.ident = syn::Ident::new(
-        &format!(
-            "{}{}",
-            rust_ad_consts::FORWARD_PREFIX,
-            function.sig.ident.to_string()
-        ),
-        function.sig.ident.span(),
-    );
-    // Appends derivative inputs to function signature, `f(x,y)` -> `f(x,y,dx,dy)`
-    let (sig_inputs, joined) = function
-        .sig
-        .inputs
-        .iter()
-        .map(|fn_arg| {
-            // eprintln!("fn_arg:\n{:#?}",fn_arg);
-            let typed = fn_arg.typed().expect("forward: signature input not typed");
-            let val_type = typed
-                .ty
-                .path()
-                .expect("forward: signature input not path")
-                .path
-                .segments[0]
-                .ident
-                .to_string();
-            let ident_str = typed
-                .pat
-                .ident()
-                .expect("forward: signature input not ident")
-                .ident
-                .to_string();
-            let string = format!("{}:{}", der!(&ident_str), val_type);
-            let arg: syn::FnArg = syn::parse_str(&string).expect("forward: failed input parse");
+    let function_input_identifiers = {
+        // Updates identifier.
+        function.sig.ident = syn::Ident::new(
+            &format!(
+                "{}{}",
+                rust_ad_consts::FORWARD_PREFIX,
+                function.sig.ident.to_string()
+            ),
+            function.sig.ident.span(),
+        );
+        // Gets function inputs in usable form `[(ident,type)]`.
+        let function_inputs = function
+            .sig
+            .inputs
+            .iter()
+            .map(|fn_arg| {
+                let typed = fn_arg.typed().expect("forward: signature input not typed");
+                let mut arg_type = typed.ty.to_token_stream().to_string();
+                arg_type.remove_matches(" "); // Remove space separators in type
 
-            (arg, (ident_str, val_type))
-        })
-        .unzip::<_, _, Vec<_>, Vec<_>>();
-    let (function_inputs, function_input_types) =
-        joined.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
-    for input in sig_inputs.into_iter() {
-        function.sig.inputs.push(input);
-    }
+                let arg_ident = typed.pat.to_token_stream().to_string();
+                (arg_ident, arg_type)
+            })
+            .collect::<Vec<_>>();
+        // Put existing inputs into tuple.
+        let inputs_tuple_str = format!(
+            "({})",
+            function_inputs
+                .iter()
+                .map(|(a, b)| format!("{}:{}", a, b))
+                .intersperse(String::from(","))
+                .collect::<String>()
+        );
+        let inputs_tuple =
+            syn::parse_str(&inputs_tuple_str).expect("forward: inputs tuple parse fail");
+        // Gets tuple of derivatives of inputs.
+        let derivative_inputs_tuple_str = format!(
+            "({})",
+            function_inputs
+                .iter()
+                .map(|(ident, arg_type)| format!("{}:{}", der!(ident), arg_type))
+                .intersperse(String::from(","))
+                .collect::<String>()
+        );
+        let derivative_inputs_tuple = syn::parse_str(&derivative_inputs_tuple_str)
+            .expect("forward: derivative inputs parse fail");
+        // Sets new function inputs
+        let mut new_fn_inputs = syn::punctuated::Punctuated::new();
+        new_fn_inputs.push(inputs_tuple);
+        new_fn_inputs.push(derivative_inputs_tuple);
+        function.sig.inputs = new_fn_inputs;
 
-    // Updates output signature
-    // eprint!("function.sig.output: {:#?}", function.sig.output);
-    let return_type = &function
-        .sig
-        .output
-        .type_()
-        .expect("forward: return not typed")
-        .path()
-        .expect("forward: return not path -- Currently only returning a single variable is support e.g. `return a;`")
-        .path
-        .segments[0]
-        .ident;
-    let return_string = format!(
-        "->({},{})",
-        return_type,
-        function_input_types
-            .into_iter()
-            .intersperse(String::from(","))
-            .collect::<String>()
-    );
-    function.sig.output = syn::parse_str(&return_string).expect("forward: failed output parse");
+        // Splits inputs vec into identifiers and types.
+        let (idents, types) = function_inputs.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
+        // Sets new function outputs
+        update_function_outputs(&mut function.sig, types).expect("forward_autodiff 0");
+        // Returns input identifiers
+        idents
+    };
 
     // Forward autodiff
     // ---------------------------------------------------------------------------
@@ -282,11 +278,11 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut non_zero_derivatives = HashSet::<String>::new();
 
     #[cfg(debug_assertions)]
-    let der_info = (&type_map, function_inputs.as_slice());
+    let der_info = (&type_map, function_input_identifiers.as_slice());
     #[cfg(not(debug_assertions))]
     let der_info = (
         &type_map,
-        function_inputs.as_slice(),
+        function_input_identifiers.as_slice(),
         &mut non_zero_derivatives,
     );
 
@@ -297,13 +293,14 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     function.block.stmts = derivative_stmts;
     // Updates return statement
     update_forward_return(
-        function.block.stmts.last_mut(),
-        function_inputs.as_slice(),
+        &mut function.block,
+        function_input_identifiers.as_slice(),
         #[cfg(not(debug_assertions))]
         type_map,
         #[cfg(not(debug_assertions))]
         non_zero_derivatives,
-    );
+    )
+    .expect("forward_autodiff 3");
 
     let new = quote::quote! { #function };
     let new_stream = TokenStream::from(new);
@@ -312,6 +309,62 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
 fn join_streams(mut a: TokenStream, b: TokenStream) -> TokenStream {
     a.extend(b.into_iter());
     a
+}
+
+fn update_function_outputs(
+    function_signature: &mut syn::Signature,
+    function_input_types: Vec<String>,
+) -> Result<(), PassError> {
+    let function_output = &mut function_signature.output;
+    // Updates output to include to derivatives for each output respective to each input
+    //  e.g. `fn(x:f32,x_:f32,y:f32,y_:f32)->(f32,f32)` => `fn(x:f32,y:f32)->((f32,(f32,f32)),(f32,(f32,f32)))`
+    // eprintln!("function_output:\n{:#?}",function_output);
+    let function_input_string = format!(
+        "({}),",
+        function_input_types
+            .into_iter()
+            .intersperse(String::from(","))
+            .collect::<String>()
+    );
+    let return_type_str = match function_output {
+        syn::ReturnType::Type(_, return_type) => match &**return_type {
+            syn::Type::Path(return_path) => {
+                let return_str = return_path.to_token_stream().to_string();
+                format!("->({},{})", return_str, function_input_string)
+            }
+            syn::Type::Tuple(return_tuple) => {
+                let return_str = return_tuple.to_token_stream().to_string();
+                format!(
+                    "->({},({}))",
+                    return_str,
+                    function_input_string.repeat(return_tuple.elems.len())
+                )
+            }
+            _ => {
+                let err = "Unsupported return type (supported types are tuples (e.g. `(f32,f32)`) or paths (e.g. `f32`))";
+                Diagnostic::spanned(return_type.span().unwrap(), proc_macro::Level::Error, err)
+                    .emit();
+                return Err(err.to_string());
+            }
+        },
+        // TODO What does this even look like?
+        syn::ReturnType::Default => {
+            let err = "Unsupported return form";
+            Diagnostic::spanned(
+                function_output.span().unwrap(),
+                proc_macro::Level::Error,
+                err,
+            )
+            .emit();
+            return Err(err.to_string());
+        }
+    };
+    // eprintln!("return_type_str: {}",return_type_str);
+    *function_output = pass!(
+        syn::parse_str(&return_type_str),
+        "forward: failed output parse"
+    );
+    Ok(())
 }
 
 /// Returns a tuple of a given number of clones of a variable.
@@ -370,18 +423,6 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
         syn::Item::Fn(func) => func,
         _ => panic!("Only `fn` items are supported."),
     };
-
-    let function_inputs = function
-        .sig
-        .inputs
-        .iter()
-        .map(|fn_arg| {
-            let ty = fn_arg.typed().expect("reverse: sig not type");
-            let pat = ty.pat.ident().expect("reverse: sig not ident");
-            pat.ident.to_string()
-        })
-        .collect::<Vec<_>>();
-
     // Unwraps nested binary expressions
     // ---------------------------------------------------------------------------
     let statements = function
@@ -397,10 +438,161 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     //     eprintln!("\t{}",stmt.to_token_stream().to_string());
     // }
 
-    // Add input derivatives to output signature & validates output signature.
+    // Updates function signature
     // ---------------------------------------------------------------------------
-    let return_stmt = reverse_update_signature(&mut function).expect("reverse_autodiff 1");
+    let (function_input_identifiers) = {
+        // Updates identifier.
+        function.sig.ident = syn::Ident::new(
+            &format!(
+                "{}{}",
+                rust_ad_consts::REVERSE_PREFIX,
+                function.sig.ident.to_string()
+            ),
+            function.sig.ident.span(),
+        );
+        // Gets function inputs in usable form `[(ident,type)]`.
+        let function_inputs = function
+            .sig
+            .inputs
+            .iter()
+            .map(|fn_arg| {
+                let typed = fn_arg.typed().expect("forward: signature input not typed");
+                let mut arg_type = typed.ty.to_token_stream().to_string();
+                arg_type.remove_matches(" "); // Remove space separators in type
 
+                let arg_ident = typed.pat.to_token_stream().to_string();
+                (arg_ident, arg_type)
+            })
+            .collect::<Vec<_>>();
+        let (input_idents, input_types) =
+            function_inputs.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
+        // Put existing inputs into tuple.
+        // -----------------------------------------------
+        let inputs_tuple_str = format!(
+            "({}):({})",
+            input_idents
+                .iter()
+                .cloned()
+                .intersperse(String::from(","))
+                .collect::<String>(),
+            input_types
+                .iter()
+                .cloned()
+                .intersperse(String::from(","))
+                .collect::<String>()
+        );
+        let inputs_tuple =
+            syn::parse_str(&inputs_tuple_str).expect("reverse: inputs tuple parse fail");
+        // Gets tuple of derivatives of inputs.
+        // -----------------------------------------------
+        let function_output = match &function.sig.output {
+            syn::ReturnType::Type(_, return_type) => return_type.to_token_stream().to_string(),
+            syn::ReturnType::Default => {
+                let err = "Unsupported return form";
+                Diagnostic::spanned(
+                    function.sig.output.span().unwrap(),
+                    proc_macro::Level::Error,
+                    err,
+                )
+                .emit();
+                panic!("{}", err);
+            }
+        };
+
+        // In this current implementation (support a single return statement) we simply name our
+        //  output derivative respective to the specific output variables or none if return value is a literal
+        // E.g `return (a,3.2f32,b,c)` make the input variables `(der_a,_,der_b,der_c):(f32,f32,f32,f32)`
+        let return_stmt = match function.block.stmts.last() {
+            Some(stmt) => stmt,
+            None => {
+                let err = "No return statement";
+                Diagnostic::spanned(
+                    function.block.span().unwrap(),
+                    proc_macro::Level::Error,
+                    err,
+                )
+                .emit();
+                panic!("{}", err);
+            }
+        };
+        let return_identifiers = match &return_stmt {
+            syn::Stmt::Semi(syn::Expr::Return(return_struct), _) => match &return_struct.expr {
+                Some(return_expr) => match &**return_expr {
+                    syn::Expr::Tuple(return_tuple) => {
+                        let return_idents = return_tuple.elems.iter().map(|e| match e {
+                                syn::Expr::Path(p) => Ok(Some(p.to_token_stream().to_string())),
+                                syn::Expr::Lit(_) => Ok(None),
+                                _ => {
+                                    let err = "Unsupported return tuple element. Elements in a returned tuple must be paths or literals (e.g. `return (a,b,2f32))` is supported, `return (a,(b,c))` is not supported).";
+                                    Diagnostic::spanned(
+                                        return_struct.span().unwrap(),
+                                        proc_macro::Level::Error,
+                                        err,
+                                    )
+                                    .emit();
+                                    Err(err)
+                                }
+                            }).collect::<Result<Vec<_>,_>>();
+                        return_idents.expect("reverse: bad return idents")
+                    }
+                    _ => {
+                        let err = "Unsupported return type. Only tuples (e.g. `return (a,b,c);`) and paths (e.g. `return a;`) are supported.";
+                        Diagnostic::spanned(
+                            return_struct.span().unwrap(),
+                            proc_macro::Level::Error,
+                            err,
+                        )
+                        .emit();
+                        panic!("{}", err);
+                    }
+                },
+                None => {
+                    let err = "No return expression";
+                    Diagnostic::spanned(
+                        return_struct.span().unwrap(),
+                        proc_macro::Level::Error,
+                        err,
+                    )
+                    .emit();
+                    panic!("{}", err);
+                }
+            },
+            _ => {
+                let err = "No return statement";
+                Diagnostic::spanned(
+                    function.block.span().unwrap(),
+                    proc_macro::Level::Error,
+                    err,
+                )
+                .emit();
+                panic!("{}", err);
+            }
+        };
+        let derivative_input_tuple_str = format!(
+            "({}):{}",
+            return_identifiers
+                .into_iter()
+                .map(|ident_opt| match ident_opt {
+                    Some(ident) => der!(ident),
+                    None => String::from("_"),
+                })
+                .intersperse(String::from(","))
+                .collect::<String>(),
+            function_output
+        );
+
+        let derivative_input_tuple =
+            syn::parse_str(&derivative_input_tuple_str).expect("reverse: output tuple parse fail");
+        // Sets new function inputs
+        // -----------------------------------------------
+        let mut new_fn_inputs = syn::punctuated::Punctuated::new();
+        new_fn_inputs.push(inputs_tuple);
+        new_fn_inputs.push(derivative_input_tuple);
+        function.sig.inputs = new_fn_inputs;
+        // Sets new function outputs
+        update_function_outputs(&mut function.sig, input_types).expect("reverse_autodiff 0");
+        (input_idents)
+    };
     // Propagates types through function
     // ---------------------------------------------------------------------------
     let type_map = propagate_types(&function).expect("propagate_types: ");
@@ -409,6 +601,27 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     // Generates reverse mode code
     // ---------------------------------------------------------------------------
     let mut component_map = HashMap::new();
+
+    let mut rev_iter = function.block.stmts.iter().rev().peekable();
+    let mut reverse_derivative_stmts = Vec::new();
+
+    // TODO TODO LOOK HERE HERE HERE HERE  New version
+    while let Some(next) = rev_iter.next() {
+        reverse_derivative_stmts
+            .push(reverse_derivative(next, &type_map, &mut component_map).expect("der temp"));
+        // If there is a statement before this one, accumulate derivative for this statement
+        reverse_derivative_stmts.push(if let Some(before) = rev_iter.peek() {
+            reverse_accumulate_derivative(before, &component_map)
+        }
+        // Else if no statement before then accumulate for function inputs
+        else {
+            Some(reverse_accumulate_inputs(
+                &function_input_identifiers,
+                &component_map,
+                &type_map,
+            ))
+        })
+    }
 
     let mut rev_iter = function.block.stmts.iter().rev();
     let mut reverse_stmts = Vec::new();
@@ -432,7 +645,7 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     }
     // eprintln!("component_map: {:?}", component_map);
     reverse_stmts.push(reverse_accumulate_inputs(
-        &function_inputs,
+        &function_input_identifiers,
         &component_map,
         &type_map,
     ));
@@ -742,20 +955,74 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
 ///
 /// CURRENTLY DOES NOT SUPPORT PROCEDURES WHICH RETURN MULTIPLE DIFFERENT TYPES
 fn propagate_types(func: &syn::ItemFn) -> Result<HashMap<String, String>, PassError> {
-    let mut type_map = HashMap::new();
-
-    // Add input types
-    for arg in func.sig.inputs.iter() {
-        let typed = arg.typed().expect("propagate_types: not typed");
-        // eprintln!("typed: {:#?}",typed);
-        let ident = &typed.pat.ident().expect("propagate_types: not ident").ident;
-
-        let mut type_ident = typed.ty.to_token_stream().to_string();
-        type_ident.remove_matches(" "); // Remove space separators in type
-                                        // eprintln!("type_ident: {}", type_ident);
-
-        type_map.insert(ident.to_string(), type_ident);
-    }
+    // Collects input tuples into initial `type_map`.
+    let input_types = func.sig.inputs
+        .iter()
+        .map(|input| match input {
+            syn::FnArg::Typed(pat_type) => match (&*pat_type.pat,&*pat_type.ty) {
+                (syn::Pat::Path(path_ident),syn::Type::Path(path_type)) => {
+                    let ident = path_ident.to_token_stream().to_string();
+                    let mut type_str = path_type.to_token_stream().to_string();
+                    type_str.remove_matches(" "); // Remove space separators in type
+                    Ok(vec![(ident,type_str)])
+                },
+                (syn::Pat::Tuple(tuple_ident),syn::Type::Tuple(tuple_type)) => {
+                    // eprintln!("tuple_ident: {}",tuple_ident.to_token_stream());
+                    let input_types_vec = tuple_ident.elems.iter().zip(tuple_type.elems.iter()).map(|(i,t)| match i {
+                        syn::Pat::Ident(ident) => {
+                            let ident_str = ident.to_token_stream().to_string();
+                            if ident_str == "_" {
+                                Ok(None)
+                            }
+                            else {
+                                let mut type_str = t.to_token_stream().to_string();
+                                type_str.remove_matches(" "); // Remove space separators in type
+                                Ok(Some((ident_str,type_str)))
+                            }
+                        }
+                        _ => {
+                            // eprintln!("ident i: {:#?}",i);
+                            let err = "Non-ident tuple type. `return (a,b,)` is supported. `return (a,(b,c))` is not supported.";
+                            Diagnostic::spanned(
+                                input.span().unwrap(),
+                                proc_macro::Level::Error,
+                                err,
+                            )
+                            .emit();
+                            Err(err)
+                        }
+                    }).collect::<Result<Vec<_>,_>>().expect("propagate_types: tuple input error");
+                    let input_types_vec = input_types_vec.into_iter().filter_map(|e|e).collect::<Vec<_>>();
+                    Ok(input_types_vec)
+                }
+                _ => {
+                    let err = "Unsupported input type combination";
+                    Diagnostic::spanned(
+                        input.span().unwrap(),
+                        proc_macro::Level::Error,
+                        err,
+                    )
+                    .emit();
+                    Err(err)
+                }
+            },
+            syn::FnArg::Receiver(_) => {
+                let err = "Unsupported input type";
+                Diagnostic::spanned(
+                    input.span().unwrap(),
+                    proc_macro::Level::Error,
+                    err,
+                )
+                .emit();
+                Err(err)
+            }
+        })
+        .collect::<Result<Vec<_>,_>>().expect("propagate_types: input types error");
+    let mut type_map = input_types
+        .into_iter()
+        .flatten()
+        .collect::<HashMap<String, String>>();
+    eprintln!("type_map: {:?}", type_map);
 
     // Propagates types through statements
     for stmt in func.block.stmts.iter() {
