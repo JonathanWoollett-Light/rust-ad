@@ -15,4 +15,5 @@ readme = "../README.md"
 syn = { version="1.0.82", features=["full","extra-traits"] }
 lazy_static = "1.4.0"
 rust-ad-core-macros = { version = "0.7.2", path = "../core-macros" }
+rust-ad-consts = { version = "0.7.2", path = "../consts" }
 quote = "1.0.10" # Just for ToTokens

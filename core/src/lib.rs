@@ -29,8 +29,6 @@ pub use dict::*;
 pub mod traits;
 use traits::*;
 
-/// Prefix used for the derivatives of a variable (e.g. The derivative of `x` would be `der_x`).
-pub const DERIVATIVE_PREFIX: &'static str = "__der_";
 /// Prefix used for flattening binary expressions in function arguments.
 pub const FUNCTION_PREFIX: &'static str = "f";
 /// Prefix used for flattening binary expressions as a receiver for a method.
@@ -227,11 +225,27 @@ pub fn literal_type(expr_lit: &syn::ExprLit) -> Result<String, PassError> {
     }
 }
 
+/// Given an index (e.g. `1`) appends `REVERSE_JOINED_DERIVATIVE` (e.g. `der_a`).
+#[macro_export]
+macro_rules! rtn {
+    ($a:expr) => {{
+        format!("{}{}", rust_ad_consts::REVERSE_RETURN_DERIVATIVE, $a)
+    }};
+}
 /// Given identifier string (e.g. `x`) appends `DERIVATIVE_PREFIX` (e.g. `der_a`).
 #[macro_export]
 macro_rules! der {
     ($a:expr) => {{
-        format!("{}{}", crate::DERIVATIVE_PREFIX, $a)
+        format!("{}{}", rust_ad_consts::DERIVATIVE_PREFIX, $a)
+    }};
+}
+/// With-Respect-To Nth
+///
+/// wrt!(a,b,1) = δa/δb_1
+#[macro_export]
+macro_rules! wrtn {
+    ($a:expr, $b:expr, $c: expr) => {{
+        format!("{}_wrt_{}_{}", $a, $b, $c)
     }};
 }
 /// With-Respect-To

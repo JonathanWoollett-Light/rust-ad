@@ -49,7 +49,15 @@ pub type FgdType = fn(String, &[Arg], &[String]) -> syn::Stmt;
 pub type FgdType = fn(String, &[Arg], &[String], &mut HashSet<String>) -> syn::Stmt;
 
 /// Reverse General Derivative type
-pub type RgdType = fn(String, &[Arg], &mut HashMap<String, Vec<String>>) -> syn::Stmt;
+#[cfg(debug_assertions)]
+pub type RgdType = fn(String, &[Arg], &mut Vec<HashMap<String, Vec<String>>>) -> Option<syn::Stmt>;
+#[cfg(not(debug_assertions))]
+pub type RgdType = fn(
+    String,
+    &[Arg],
+    &mut Vec<HashMap<String, Vec<String>>>,
+    &mut HashSet<String>,
+) -> Option<syn::Stmt>;
 
 /// Function argument type
 pub enum Arg {
@@ -335,42 +343,109 @@ pub fn fgd<const DEFAULT: &'static str, const TRANSLATION_FUNCTIONS: &'static [D
 pub fn rgd<const DEFAULT: &'static str, const TRANSLATION_FUNCTIONS: &'static [DFn]>(
     local_ident: String,
     args: &[Arg],
-    component_map: &mut HashMap<String, Vec<String>>,
-) -> syn::Stmt {
+    component_map: &mut Vec<HashMap<String, Vec<String>>>,
+    #[cfg(not(debug_assertions))] non_zero_derivatives: &mut HashSet<String>,
+) -> Option<syn::Stmt> {
     assert_eq!(
         args.len(),
         TRANSLATION_FUNCTIONS.len(),
         "rgd args len mismatch"
     );
+    #[cfg(not(debug_assertions))]
+    eprintln!("rgd: non_zero_derivatives: {:?}", non_zero_derivatives);
 
-    let (idents, derivatives) = args
-        .iter()
-        .zip(TRANSLATION_FUNCTIONS.iter())
-        .filter_map(|(arg, t)| match arg {
-            Arg::Variable(v) => Some((v, t)),
-            Arg::Literal(_) => None,
-        })
-        .map(|(arg, t)| {
-            let der_ident = wrt!(arg, local_ident);
-            append_insert(arg, local_ident.clone(), component_map);
+    eprintln!("component_map: {:?}", component_map);
 
-            let (derivative, accumulator) = (t(args), der!(local_ident));
-            let full_der = format!("({})*{}", derivative, accumulator);
-            (der_ident, full_der)
+    let (return_idents, return_derivatives) = component_map
+        .iter_mut()
+        .enumerate()
+        .filter_map(|(index, map)| {
+            let (idents, derivatives) = args
+                .iter()
+                .zip(TRANSLATION_FUNCTIONS.iter())
+                .filter_map(|(arg, t)| match arg {
+                    Arg::Variable(v) => Some((v, t)),
+                    Arg::Literal(_) => None,
+                })
+                .filter_map(|(arg, t)| {
+                    let rtn = rtn!(index);
+                    let der_ident = wrtn!(arg, local_ident, rtn);
+                    let wrt = wrt!(local_ident, rtn);
+
+                    // If component exists
+                    match map.get(&local_ident).map(|e| e.contains(&rtn)) {
+                        Some(true) => {
+                            append_insert(arg, local_ident.clone(), map);
+                            let (derivative, accumulator) = (t(args), wrt);
+                            let full_der = format!("({})*{}", derivative, accumulator);
+                            Some((der_ident, full_der))
+                        }
+                        _ => None,
+                    }
+                })
+                .unzip::<_, _, Vec<_>, Vec<_>>();
+            // let (idents, derivatives) = (idents.into_iter().intersperse(String::from(",")).collect::<String>(), derivatives.into_iter().intersperse(String::from(",")).collect::<String>());
+            (!idents.is_empty()).then(|| (idents, derivatives))
         })
         .unzip::<_, _, Vec<_>, Vec<_>>();
 
-    let (idents, derivatives) = (
-        idents
-            .into_iter()
-            .intersperse(String::from(","))
-            .collect::<String>(),
-        derivatives
-            .into_iter()
-            .intersperse(String::from(","))
-            .collect::<String>(),
-    );
-
-    let stmt_str = format!("let ({}) = ({});", idents, derivatives);
-    syn::parse_str(&stmt_str).expect("fgd: parse fail")
+    match return_idents.len() {
+        0 => None,
+        1 => match return_idents[0].len() {
+            0 => unreachable!(),
+            1 => Some(
+                syn::parse_str(&format!(
+                    "let {} = {};",
+                    return_idents[0][0], return_derivatives[0][0]
+                ))
+                .expect("fgd: 1 parse fail"),
+            ),
+            _ => Some(
+                syn::parse_str(&format!(
+                    "let ({}) = ({});",
+                    return_idents[0]
+                        .iter()
+                        .cloned()
+                        .intersperse(String::from(","))
+                        .collect::<String>(),
+                    return_derivatives[0]
+                        .iter()
+                        .cloned()
+                        .intersperse(String::from(","))
+                        .collect::<String>()
+                ))
+                .expect("fgd: 1 parse fail"),
+            ),
+        },
+        _ => {
+            let (return_idents, return_derivatives) = (
+                return_idents
+                    .into_iter()
+                    .map(|ri| {
+                        format!(
+                            "({})",
+                            ri.into_iter()
+                                .intersperse(String::from(","))
+                                .collect::<String>()
+                        )
+                    })
+                    .intersperse(String::from(","))
+                    .collect::<String>(),
+                return_derivatives
+                    .into_iter()
+                    .map(|rd| {
+                        format!(
+                            "({})",
+                            rd.into_iter()
+                                .intersperse(String::from(","))
+                                .collect::<String>()
+                        )
+                    })
+                    .intersperse(String::from(","))
+                    .collect::<String>(),
+            );
+            let stmt_str = format!("let ({}) = ({});", return_idents, return_derivatives);
+            Some(syn::parse_str(&stmt_str).expect("fgd: 3 parse fail"))
+        }
+    }
 }

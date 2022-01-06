@@ -272,8 +272,8 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     // Propagates types through function
     let type_map = propagate_types(&function).expect("forward_autodiff 1");
 
-    // In release we apply optimizations which shrink the produced code (eliminating unneccessary code)
-    // These are not applied in debug mode so one might use debug to give a clearer view of fundemental process before optimization.
+    // In release we apply optimizations which shrink the produced code (eliminating unnecessary code)
+    // These are not applied in debug mode so one might use debug to give a clearer view of the fundamental process.
     #[cfg(not(debug_assertions))]
     let mut non_zero_derivatives = HashSet::<String>::new();
 
@@ -440,7 +440,7 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Updates function signature
     // ---------------------------------------------------------------------------
-    let (function_input_identifiers) = {
+    let (function_input_identifiers, number_of_return_elements) = {
         // Updates identifier.
         function.sig.ident = syn::Ident::new(
             &format!(
@@ -485,8 +485,24 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
             syn::parse_str(&inputs_tuple_str).expect("reverse: inputs tuple parse fail");
         // Gets tuple of derivatives of inputs.
         // -----------------------------------------------
-        let function_output = match &function.sig.output {
-            syn::ReturnType::Type(_, return_type) => return_type.to_token_stream().to_string(),
+        let (function_output, number_of_return_elements) = match &function.sig.output {
+            syn::ReturnType::Type(_, return_type) => (
+                return_type.to_token_stream().to_string(),
+                match &**return_type {
+                    syn::Type::Tuple(type_tuple) => type_tuple.elems.len(),
+                    syn::Type::Path(_) => 1,
+                    _ => {
+                        let err = "Unsupported return type";
+                        Diagnostic::spanned(
+                            return_type.span().unwrap(),
+                            proc_macro::Level::Error,
+                            err,
+                        )
+                        .emit();
+                        panic!("{}", err);
+                    }
+                },
+            ),
             syn::ReturnType::Default => {
                 let err = "Unsupported return form";
                 Diagnostic::spanned(
@@ -498,84 +514,10 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 panic!("{}", err);
             }
         };
-
-        // In this current implementation (support a single return statement) we simply name our
-        //  output derivative respective to the specific output variables or none if return value is a literal
-        // E.g `return (a,3.2f32,b,c)` make the input variables `(der_a,_,der_b,der_c):(f32,f32,f32,f32)`
-        let return_stmt = match function.block.stmts.last() {
-            Some(stmt) => stmt,
-            None => {
-                let err = "No return statement";
-                Diagnostic::spanned(
-                    function.block.span().unwrap(),
-                    proc_macro::Level::Error,
-                    err,
-                )
-                .emit();
-                panic!("{}", err);
-            }
-        };
-        let return_identifiers = match &return_stmt {
-            syn::Stmt::Semi(syn::Expr::Return(return_struct), _) => match &return_struct.expr {
-                Some(return_expr) => match &**return_expr {
-                    syn::Expr::Tuple(return_tuple) => {
-                        let return_idents = return_tuple.elems.iter().map(|e| match e {
-                                syn::Expr::Path(p) => Ok(Some(p.to_token_stream().to_string())),
-                                syn::Expr::Lit(_) => Ok(None),
-                                _ => {
-                                    let err = "Unsupported return tuple element. Elements in a returned tuple must be paths or literals (e.g. `return (a,b,2f32))` is supported, `return (a,(b,c))` is not supported).";
-                                    Diagnostic::spanned(
-                                        return_struct.span().unwrap(),
-                                        proc_macro::Level::Error,
-                                        err,
-                                    )
-                                    .emit();
-                                    Err(err)
-                                }
-                            }).collect::<Result<Vec<_>,_>>();
-                        return_idents.expect("reverse: bad return idents")
-                    }
-                    _ => {
-                        let err = "Unsupported return type. Only tuples (e.g. `return (a,b,c);`) and paths (e.g. `return a;`) are supported.";
-                        Diagnostic::spanned(
-                            return_struct.span().unwrap(),
-                            proc_macro::Level::Error,
-                            err,
-                        )
-                        .emit();
-                        panic!("{}", err);
-                    }
-                },
-                None => {
-                    let err = "No return expression";
-                    Diagnostic::spanned(
-                        return_struct.span().unwrap(),
-                        proc_macro::Level::Error,
-                        err,
-                    )
-                    .emit();
-                    panic!("{}", err);
-                }
-            },
-            _ => {
-                let err = "No return statement";
-                Diagnostic::spanned(
-                    function.block.span().unwrap(),
-                    proc_macro::Level::Error,
-                    err,
-                )
-                .emit();
-                panic!("{}", err);
-            }
-        };
         let derivative_input_tuple_str = format!(
             "({}):{}",
-            return_identifiers
-                .into_iter()
-                .map(|ident_opt| match ident_opt {
-                    Some(ident) => der!(ident),
-                    None => String::from("_"),
-                })
+            (0..number_of_return_elements)
+                .map(|i| rtn!(i))
                 .intersperse(String::from(","))
                 .collect::<String>(),
             function_output
@@ -591,8 +533,9 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
         function.sig.inputs = new_fn_inputs;
         // Sets new function outputs
         update_function_outputs(&mut function.sig, input_types).expect("reverse_autodiff 0");
-        (input_idents)
+        (input_idents, number_of_return_elements)
     };
+
     // Propagates types through function
     // ---------------------------------------------------------------------------
     let type_map = propagate_types(&function).expect("propagate_types: ");
@@ -600,70 +543,89 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Generates reverse mode code
     // ---------------------------------------------------------------------------
-    let mut component_map = HashMap::new();
+    let mut component_map = vec![HashMap::new(); number_of_return_elements];
 
     let mut rev_iter = function.block.stmts.iter().rev().peekable();
     let mut reverse_derivative_stmts = Vec::new();
 
+    // In release we apply optimizations which shrink the produced code (eliminating unnecessary code)
+    // These are not applied in debug mode so one might use debug to give a clearer view of the fundamental process.
+    #[cfg(not(debug_assertions))]
+    let mut non_zero_derivatives = HashSet::<String>::new();
+
+    // let new_return = rev_iter.peek()
+
     // TODO TODO LOOK HERE HERE HERE HERE  New version
     while let Some(next) = rev_iter.next() {
-        reverse_derivative_stmts
-            .push(reverse_derivative(next, &type_map, &mut component_map).expect("der temp"));
+        #[cfg(not(debug_assertions))]
+        reverse_derivative_stmts.push(
+            reverse_derivative(
+                next,
+                &type_map,
+                &mut component_map,
+                &function_input_identifiers,
+                &mut non_zero_derivatives,
+            )
+            .expect("der temp"),
+        );
+        #[cfg(debug_assertions)]
+        reverse_derivative_stmts.push(
+            reverse_derivative(
+                next,
+                &type_map,
+                &mut component_map,
+                &function_input_identifiers,
+            )
+            .expect("der temp"),
+        );
+
         // If there is a statement before this one, accumulate derivative for this statement
         reverse_derivative_stmts.push(if let Some(before) = rev_iter.peek() {
-            reverse_accumulate_derivative(before, &component_map)
+            #[cfg(debug_assertions)]
+            {
+                reverse_accumulate_derivative(before, &component_map, &type_map).expect("acc temp")
+            }
+            #[cfg(not(debug_assertions))]
+            {
+                reverse_accumulate_derivative(before, &component_map, &mut non_zero_derivatives)
+                    .expect("acc temp")
+            }
         }
         // Else if no statement before then accumulate for function inputs
         else {
-            Some(reverse_accumulate_inputs(
-                &function_input_identifiers,
-                &component_map,
-                &type_map,
-            ))
+            #[cfg(debug_assertions)]
+            {
+                Some(reverse_accumulate_inputs(
+                    &function_input_identifiers,
+                    &component_map,
+                    &type_map,
+                ))
+            }
+
+            #[cfg(not(debug_assertions))]
+            {
+                Some(reverse_accumulate_inputs(
+                    &function_input_identifiers,
+                    &component_map,
+                    &type_map,
+                    &mut non_zero_derivatives,
+                ))
+            }
         })
     }
-
-    let mut rev_iter = function.block.stmts.iter().rev();
-    let mut reverse_stmts = Vec::new();
-    if let Some(first) = rev_iter.next() {
-        let der_opt =
-            reverse_derivative(first, &type_map, &mut component_map).expect("reverse_autodiff 2");
-        if let Some(der) = der_opt {
-            reverse_stmts.push(der);
-        }
-    }
-    while let Some(next) = rev_iter.next() {
-        if let Some(acc) = reverse_accumulate_derivative(next, &component_map) {
-            reverse_stmts.push(acc);
-        }
-
-        let der_opt =
-            reverse_derivative(next, &type_map, &mut component_map).expect("reverse_autodiff 3");
-        if let Some(der) = der_opt {
-            reverse_stmts.push(der);
-        }
-    }
-    // eprintln!("component_map: {:?}", component_map);
-    reverse_stmts.push(reverse_accumulate_inputs(
+    let new_return = reverse_append_derivatives(
+        function.block.stmts.pop().unwrap(),
         &function_input_identifiers,
-        &component_map,
-        &type_map,
-    ));
+    )
+    .expect("rtn temp");
 
-    function.block.stmts.append(&mut reverse_stmts);
-    // Appends return statement after adding reverse code.
-    function.block.stmts.push(return_stmt);
+    let mut reverse_derivative_stmts = reverse_derivative_stmts
+        .into_iter()
+        .filter_map(|d| d)
+        .collect::<Vec<_>>();
 
-    // Updates function identifier
-    // ---------------------------------------------------------------------------
-    function.sig.ident = syn::Ident::new(
-        &format!(
-            "{}{}",
-            rust_ad_consts::REVERSE_PREFIX,
-            function.sig.ident.to_string()
-        ),
-        function.sig.ident.span(),
-    );
+    function.block.stmts.append(&mut reverse_derivative_stmts);
+    function.block.stmts.push(new_return);
 
     let new = quote::quote! { #function };
     let new_stream = TokenStream::from(new);
