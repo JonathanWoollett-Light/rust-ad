@@ -1,6 +1,6 @@
 [package]
 name = "rust-ad-core"
-version = "0.8"
+version = "0.8.0"
 edition = "2021"
 
 description = "Rust Auto-Differentiation."
@@ -14,6 +14,6 @@ readme = "../README.md"
 [dependencies]
 syn = { version="1.0.82", features=["full","extra-traits"] }
 lazy_static = "1.4.0"
-rust-ad-core-macros = { version = "0.8", path = "../core-macros" }
-rust-ad-consts = { version = "0.8", path = "../consts" }
+rust-ad-core-macros = { version = "0.8.0", path = "../core-macros" }
+rust-ad-consts = { version = "0.8.0", path = "../consts" }
 quote = "1.0.10" # Just for ToTokens

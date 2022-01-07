@@ -1,6 +1,6 @@
 [package]
 name = "rust-ad-core-macros"
-version = "0.8"
+version = "0.8.0"
 edition = "2021"
 
 description = "Rust Auto-Differentiation."
@@ -12,7 +12,7 @@ readme = "../README.md"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rust-ad-consts = { version = "0.8", path = "../consts" }
+rust-ad-consts = { version = "0.8.0", path = "../consts" }
 
 [lib]
 proc-macro = true

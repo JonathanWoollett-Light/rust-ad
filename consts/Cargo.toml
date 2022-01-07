@@ -1,6 +1,6 @@
 [package]
 name = "rust-ad-consts"
-version = "0.8"
+version = "0.8.0"
 edition = "2021"
 
 description = "Rust Auto-Differentiation."
