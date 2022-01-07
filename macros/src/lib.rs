@@ -15,9 +15,7 @@ extern crate proc_macro;
 use proc_macro::{Diagnostic, TokenStream};
 use syn::spanned::Spanned;
 
-use std::collections::HashMap;
-#[cfg(not(debug_assertions))]
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 mod forward;
 use forward::*;
@@ -27,19 +25,30 @@ use reverse::*;
 /// Calls forward auto-differentiation function corresponding to a given function.
 ///
 /// ```
-/// #[rust_ad::forward_autodiff]
-/// fn multi(x: f32, y: f32) -> f32 {
-///     let a = x.powi(2i32);
-///     let b = x * 2f32;
-///     let c = 2f32 / y;
-///     let f = a + b + c;
-///     return f;
-/// }
-/// fn main() {
-///     let (f, der_x, der_y) = rust_ad::forward!(multi, 3f32, 5f32);
-///     assert_eq!(f, 15.4f32);
-///     assert_eq!(der_x, 8f32);
-///     assert_eq!(der_y, -0.08f32);
+/// fn complex_test() {
+///     let (f, (der_x, der_y, der_z)) = forward!(complex, 3f32, 5f32, 7f32);
+///     is_near(f, 10.1187260448).unwrap();
+///     is_near(der_x, 6.28571428571).unwrap();
+///     is_near(der_y, -0.034212882033).unwrap();
+///     is_near(der_z, -0.128914606556).unwrap();
+///
+///     // f(x,y,z) = x^2 + 2x/z + 2/(y+z^0.5)
+///     // ∂x = 2(x+1/z)
+///     // ∂y = -2 / (y+z^0.5)^2
+///     // ∂z = -2x/z^2 -1/(z^0.5 * (y+z^0.5)^2)
+///     // Therefore:
+///     // f(3,5,7) = 10.1187260448...
+///     // ∂x| = 6.28571428571...
+///     // ∂y| = −0.034212882033...
+///     // ∂z| = −0.128914606556...
+///     #[forward_autodiff]
+///     fn complex(x: f32, y: f32, z: f32) -> f32 {
+///         let a = x.powi(2i32);
+///         let b = x * 2f32 / z;
+///         let c = 2f32 / (z.sqrt() + y);
+///         let f = a + b + c;
+///         return f;
+///     }
 /// }
 /// ```
 #[proc_macro]
@@ -51,45 +60,105 @@ pub fn forward(_item: TokenStream) -> TokenStream {
     };
     let vec = items.collect::<Vec<_>>();
     let items = vec.chunks_exact(2);
-    let inputs = items
+    let (inputs, input_spans) = items
         .map(|item| {
             let (punc, lit) = (&item[0], &item[1]);
             match (punc, lit) {
                 (proc_macro::TokenTree::Punct(_), proc_macro::TokenTree::Literal(num)) => {
-                    format!("{},", num)
+                    (format!("{}", num), num.span())
                 }
-                _ => panic!("forward: bad"),
+                _ => {
+                    Diagnostic::spanned(
+                        punc.span().join(lit.span()).expect("forward: join error"),
+                        proc_macro::Level::Error,
+                        "Bad statement format, this should be `,<literal>` e.g. `,1f32`",
+                    )
+                    .emit();
+                    panic!();
+                }
             }
         })
-        .collect::<Vec<String>>();
-    let input_derivatives = "1f32,".repeat(inputs.len());
-    let inputs_str = inputs.into_iter().collect::<String>();
+        .unzip::<_, _, Vec<_>, Vec<_>>();
+    let input_derivatives = inputs
+        .iter()
+        .zip(input_spans.iter())
+        .map(|(input, span)| {
+            match literal_type(&syn::parse_str(input).expect("forward:lit parse fail")) {
+                Ok(lit_type) => Ok(format!("1{}", lit_type)),
+                Err(e) => {
+                    let err = "Unsupported literal type";
+                    Diagnostic::spanned(*span, proc_macro::Level::Error, err).emit();
+                    Err(format!("forward: {}", e))
+                }
+            }
+        })
+        .collect::<Result<Vec<_>, _>>();
+    let input_derivatives = match input_derivatives {
+        Ok(res) => res,
+        Err(_) => panic!(),
+    };
+
+    // let inputs_str = inputs.into_iter().collect::<String>();
+
+    let (inputs_str, derivatives_str) = match inputs.len() {
+        0 => (String::new(), String::new()),
+        1 => (inputs[0].clone(), input_derivatives[0].clone()),
+        _ => (
+            format!(
+                "({})",
+                inputs
+                    .into_iter()
+                    .intersperse(String::from(","))
+                    .collect::<String>()
+            ),
+            format!(
+                "({})",
+                input_derivatives
+                    .into_iter()
+                    .intersperse(String::from(","))
+                    .collect::<String>()
+            ),
+        ),
+    };
 
     let call_str = format!(
-        "{}{}({}{})",
+        "{}{}({},{})",
         rust_ad_consts::FORWARD_PREFIX,
         function_ident,
         inputs_str,
-        input_derivatives
+        derivatives_str
     );
     call_str.parse().unwrap()
 }
 /// Calls reverse auto-differentiation function corresponding to a given function.
 ///
+/// Note that since this macro doesn't know the number of outputs of the `complex` you need to specify the output seed derivatives manually. In this case for 1 `f32` we do `(1f32)` (for 2 it would be `(1f32,1f32)` etc.).
+///
 /// ```
-/// #[rust_ad::reverse_autodiff]
-/// fn multi(x: f32, y: f32) -> f32 {
-///     let a = x.powi(2i32);
-///     let b = x * 2f32;
-///     let c = 2f32 / y;
-///     let f = a + b + c;
-///     return f;
-/// }
-/// fn main() {
-///     let (f, der_x, der_y) = rust_ad::reverse!(multi, 3f32, 5f32);
-///     assert_eq!(f, 15.4f32);
-///     assert_eq!(der_x, 8f32);
-///     assert_eq!(der_y, -0.08f32);
+/// fn complex_test() {
+///     let (f, (der_x, der_y, der_z)) = reverse!(complex, (3f32, 5f32, 7f32), (1f32));
+///     is_near(f, 10.1187260448).unwrap();
+///     is_near(der_x, 6.28571428571).unwrap();
+///     is_near(der_y, -0.034212882033).unwrap();
+///     is_near(der_z, -0.128914606556).unwrap();
+///
+///     // f(x,y,z) = x^2 + 2x/z + 2/(y+z^0.5)
+///     // ∂x = 2(x+1/z)
+///     // ∂y = -2 / (y+z^0.5)^2
+///     // ∂z = -2x/z^2 -1/(z^0.5 * (y+z^0.5)^2)
+///     // Therefore:
+///     // f(3,5,7) = 10.1187260448...
+///     // ∂x| = 6.28571428571...
+///     // ∂y| = −0.034212882033...
+///     // ∂z| = −0.128914606556...
+///     #[reverse_autodiff]
+///     fn complex(x: f32, y: f32, z: f32) -> f32 {
+///         let a = x.powi(2i32);
+///         let b = x * 2f32 / z;
+///         let c = 2f32 / (z.sqrt() + y);
+///         let f = a + b + c;
+///         return f;
+///     }
 /// }
 /// ```
 #[proc_macro]
@@ -99,25 +168,160 @@ pub fn reverse(_item: TokenStream) -> TokenStream {
         Some(proc_macro::TokenTree::Ident(ident)) => ident,
         _ => panic!("Requires function identifier"),
     };
-    let vec = items.collect::<Vec<_>>();
-    let items = vec.chunks_exact(2);
-    let inputs = items
-        .map(|item| {
-            let (punc, lit) = (&item[0], &item[1]);
-            match (punc, lit) {
-                (proc_macro::TokenTree::Punct(_), proc_macro::TokenTree::Literal(num)) => {
-                    format!("{},", num)
-                }
-                _ => panic!("reverse: bad"),
+
+    // Checks `,`
+    match items.next() {
+        Some(proc_macro::TokenTree::Punct(p)) => {
+            if p.to_string() != "," {
+                Diagnostic::spanned(
+                    p.span(),
+                    proc_macro::Level::Error,
+                    "This should be a comma e.g. `,`",
+                )
+                .emit();
+                panic!();
             }
-        })
-        .collect::<String>();
+        }
+        Some(e) => {
+            Diagnostic::spanned(
+                e.span(),
+                proc_macro::Level::Error,
+                "This should be a comma e.g. `,`",
+            )
+            .emit();
+            panic!();
+        }
+        None => {
+            return format!("{}{}()", rust_ad_consts::REVERSE_PREFIX, function_ident)
+                .parse()
+                .unwrap();
+        }
+    }
+
+    // Gets inputs tuple
+    let inputs = match items.next() {
+        Some(proc_macro::TokenTree::Group(inputs_group)) => {
+            let inputs_stream = inputs_group.stream();
+            let inputs_vec = inputs_stream.into_iter().collect::<Vec<_>>();
+            let inputs = inputs_vec
+                .chunks(2)
+                .map(|items| match &items[0] {
+                    proc_macro::TokenTree::Literal(num) => num.to_string(),
+                    _ => panic!("reverse: bad"),
+                })
+                .collect::<Vec<_>>();
+            inputs
+        }
+        Some(e) => {
+            Diagnostic::spanned(e.span(), proc_macro::Level::Error, "Bad inputs").emit();
+            panic!();
+        }
+        _ => {
+            panic!("No inputs");
+        }
+    };
+
+    // Checks `,`
+    match items.next() {
+        Some(proc_macro::TokenTree::Punct(p)) => {
+            if p.to_string() != "," {
+                Diagnostic::spanned(
+                    p.span(),
+                    proc_macro::Level::Error,
+                    "This should be a comma e.g. `,`",
+                )
+                .emit();
+                panic!();
+            }
+        }
+        Some(e) => {
+            Diagnostic::spanned(
+                e.span(),
+                proc_macro::Level::Error,
+                "This should be a comma e.g. `,`",
+            )
+            .emit();
+            panic!();
+        }
+        None => {
+            return format!("{}{}()", rust_ad_consts::REVERSE_PREFIX, function_ident)
+                .parse()
+                .unwrap();
+        }
+    }
+
+    // Gets output derivatives tuple
+    let output_derivatives = match items.next() {
+        Some(proc_macro::TokenTree::Group(output_derivatives_group)) => {
+            let output_derivatives_stream = output_derivatives_group.stream();
+            let output_derivatives_vec = output_derivatives_stream.into_iter().collect::<Vec<_>>();
+            let output_derivatives = output_derivatives_vec
+                .chunks(2)
+                .map(|items| match &items[0] {
+                    proc_macro::TokenTree::Literal(num) => num.to_string(),
+                    _ => panic!("reverse: bad"),
+                })
+                .collect::<Vec<_>>();
+            output_derivatives
+        }
+        Some(e) => {
+            Diagnostic::spanned(e.span(), proc_macro::Level::Error, "Bad outputs").emit();
+            panic!();
+        }
+        _ => {
+            panic!("No output derivatives");
+        }
+    };
+
+    let inputs_str = match inputs.len() {
+        0 => unreachable!(),
+        1 => match output_derivatives.len() {
+            0 => inputs[0].to_string(),
+            1 => format!("{},{}", inputs[0], output_derivatives[0]),
+            _ => format!(
+                "{},({})",
+                inputs[0],
+                output_derivatives
+                    .into_iter()
+                    .intersperse(String::from(","))
+                    .collect::<String>()
+            ),
+        },
+        _ => match output_derivatives.len() {
+            0 => format!(
+                "({})",
+                inputs
+                    .into_iter()
+                    .intersperse(String::from(","))
+                    .collect::<String>()
+            ),
+            1 => format!(
+                "({}),{}",
+                inputs
+                    .into_iter()
+                    .intersperse(String::from(","))
+                    .collect::<String>(),
+                output_derivatives[0]
+            ),
+            _ => format!(
+                "({}),({})",
+                inputs
+                    .into_iter()
+                    .intersperse(String::from(","))
+                    .collect::<String>(),
+                output_derivatives
+                    .into_iter()
+                    .intersperse(String::from(","))
+                    .collect::<String>()
+            ),
+        },
+    };
 
     let call_str = format!(
-        "{}{}({}1f32)",
+        "{}{}({})",
         rust_ad_consts::REVERSE_PREFIX,
         function_ident,
-        inputs
+        inputs_str
     );
     call_str.parse().unwrap()
 }
@@ -156,7 +360,7 @@ pub fn unweave(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let statements = block
         .stmts
         .iter()
-        .flat_map(|statement| unwrap_statement(statement))
+        .flat_map(unwrap_statement)
         .collect::<Vec<_>>();
     block.stmts = statements;
 
@@ -165,25 +369,34 @@ pub fn unweave(_attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 /// Generates the forward auto-differentiation function for a given function.
-///
 /// ```
-/// #[rust_ad::forward_autodiff]
-/// fn multi(x: f32, y: f32) -> f32 {
-///     let a = x.powi(2i32);
-///     let b = x * 2f32;
-///     let c = 2f32 / y;
-///     let f = a + b + c;
-///     return f;
-/// }
-/// fn main() {
-///     let (f, der_x, der_y) = __for_multi(3f32, 5f32, 1f32, 1f32);
-///     assert_eq!(f, 15.4f32);
-///     assert_eq!(der_x, 8f32);
-///     assert_eq!(der_y, -0.08f32);
+/// fn complex_test() {
+///     let (f, (der_x, der_y, der_z)) = __f_complex((3f32, 5f32, 7f32),(1f32,1f32,1f32));
+///     is_near(f, 10.1187260448).unwrap();
+///     is_near(der_x, 6.28571428571).unwrap();
+///     is_near(der_y, -0.034212882033).unwrap();
+///     is_near(der_z, -0.128914606556).unwrap();
+///
+///     // f(x,y,z) = x^2 + 2x/z + 2/(y+z^0.5)
+///     // ∂x = 2(x+1/z)
+///     // ∂y = -2 / (y+z^0.5)^2
+///     // ∂z = -2x/z^2 -1/(z^0.5 * (y+z^0.5)^2)
+///     // Therefore:
+///     // f(3,5,7) = 10.1187260448...
+///     // ∂x| = 6.28571428571...
+///     // ∂y| = −0.034212882033...
+///     // ∂z| = −0.128914606556...
+///     #[forward_autodiff]
+///     fn complex(x: f32, y: f32, z: f32) -> f32 {
+///         let a = x.powi(2i32);
+///         let b = x * 2f32 / z;
+///         let c = 2f32 / (z.sqrt() + y);
+///         let f = a + b + c;
+///         return f;
+///     }
 /// }
 /// ```
-///
-/// Much like a derive macro, this is appended to your code, the original `function_name` function remains unedited.
+/// Like a derive macro, this new function is appended to your code, the original `function_name` function remains unedited.
 #[proc_macro_attribute]
 pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let start_item = item.clone();
@@ -201,15 +414,11 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let function_input_identifiers = {
         // Updates identifier.
         function.sig.ident = syn::Ident::new(
-            &format!(
-                "{}{}",
-                rust_ad_consts::FORWARD_PREFIX,
-                function.sig.ident.to_string()
-            ),
+            &format!("{}{}", rust_ad_consts::FORWARD_PREFIX, function.sig.ident),
             function.sig.ident.span(),
         );
         // Gets function inputs in usable form `[(ident,type)]`.
-        let function_inputs = function
+        let (input_idents, input_types) = function
             .sig
             .inputs
             .iter()
@@ -221,41 +430,60 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 let arg_ident = typed.pat.to_token_stream().to_string();
                 (arg_ident, arg_type)
             })
-            .collect::<Vec<_>>();
+            .unzip::<_, _, Vec<_>, Vec<_>>();
         // Put existing inputs into tuple.
-        let inputs_tuple_str = format!(
-            "({})",
-            function_inputs
-                .iter()
-                .map(|(a, b)| format!("{}:{}", a, b))
-                .intersperse(String::from(","))
-                .collect::<String>()
-        );
+        // -----------------------------------------------
+        let inputs_tuple_str = match input_idents.len() {
+            0 => String::new(),
+            1 => format!("{}:{}", input_idents[0], input_types[0]),
+            _ => format!(
+                "({}):({})",
+                input_idents
+                    .iter()
+                    .cloned()
+                    .intersperse(String::from(","))
+                    .collect::<String>(),
+                input_types
+                    .iter()
+                    .cloned()
+                    .intersperse(String::from(","))
+                    .collect::<String>()
+            ),
+        };
         let inputs_tuple =
             syn::parse_str(&inputs_tuple_str).expect("forward: inputs tuple parse fail");
         // Gets tuple of derivatives of inputs.
-        let derivative_inputs_tuple_str = format!(
-            "({})",
-            function_inputs
-                .iter()
-                .map(|(ident, arg_type)| format!("{}:{}", der!(ident), arg_type))
-                .intersperse(String::from(","))
-                .collect::<String>()
-        );
-        let derivative_inputs_tuple = syn::parse_str(&derivative_inputs_tuple_str)
-            .expect("forward: derivative inputs parse fail");
+        // -----------------------------------------------
+        let derivative_input_tuple_str = match input_idents.len() {
+            0 => String::new(),
+            1 => format!("{}:{}", der!(input_idents[0]), input_types[0]),
+            _ => format!(
+                "({}):({})",
+                input_idents
+                    .iter()
+                    .cloned()
+                    .map(|i| der!(i))
+                    .intersperse(String::from(","))
+                    .collect::<String>(),
+                input_types
+                    .iter()
+                    .cloned()
+                    .intersperse(String::from(","))
+                    .collect::<String>()
+            ),
+        };
+
+        let derivative_input_tuple =
+            syn::parse_str(&derivative_input_tuple_str).expect("forward: output tuple parse fail");
         // Sets new function inputs
+        // -----------------------------------------------
         let mut new_fn_inputs = syn::punctuated::Punctuated::new();
         new_fn_inputs.push(inputs_tuple);
-        new_fn_inputs.push(derivative_inputs_tuple);
+        new_fn_inputs.push(derivative_input_tuple);
         function.sig.inputs = new_fn_inputs;
-
-        // Splits inputs vec into identifiers and types.
-        let (idents, types) = function_inputs.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
         // Sets new function outputs
-        update_function_outputs(&mut function.sig, types).expect("forward_autodiff 0");
-        // Returns input identifiers
-        idents
+        update_function_outputs(&mut function.sig, input_types).expect("forward_autodiff 0");
+        input_idents
     };
 
     // Forward autodiff
@@ -266,7 +494,7 @@ pub fn forward_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
         .block
         .stmts
         .iter()
-        .flat_map(|statement| unwrap_statement(statement))
+        .flat_map(unwrap_statement)
         .collect::<Vec<_>>();
 
     // Propagates types through function
@@ -319,13 +547,17 @@ fn update_function_outputs(
     // Updates output to include to derivatives for each output respective to each input
     //  e.g. `fn(x:f32,x_:f32,y:f32,y_:f32)->(f32,f32)` => `fn(x:f32,y:f32)->((f32,(f32,f32)),(f32,(f32,f32)))`
     // eprintln!("function_output:\n{:#?}",function_output);
-    let function_input_string = format!(
-        "({}),",
-        function_input_types
-            .into_iter()
-            .intersperse(String::from(","))
-            .collect::<String>()
-    );
+    let function_input_string = match function_input_types.len() {
+        0 => String::new(),
+        1 => function_input_types[0].clone(),
+        _ => format!(
+            "({}),",
+            function_input_types
+                .into_iter()
+                .intersperse(String::from(","))
+                .collect::<String>()
+        ),
+    };
     let return_type_str = match function_output {
         syn::ReturnType::Type(_, return_type) => match &**return_type {
             syn::Type::Path(return_path) => {
@@ -369,10 +601,8 @@ fn update_function_outputs(
 
 /// Returns a tuple of a given number of clones of a variable.
 /// ```
-/// fn main() {
-///     let x = 2;
-///     assert_eq!(rust_ad::dup!(x,3),(x.clone(),x.clone(),x.clone()));
-/// }
+/// let x = 2;
+/// assert_eq!(rust_ad::dup!(x,3),(x.clone(),x.clone(),x.clone()));
 /// ```
 #[proc_macro]
 pub fn dup(_item: TokenStream) -> TokenStream {
@@ -386,7 +616,7 @@ pub fn dup(_item: TokenStream) -> TokenStream {
         ) => {
             let tuple = format!(
                 "({})",
-                format!("{}.clone(),", var.to_string()).repeat(num.to_string().parse().unwrap())
+                format!("{}.clone(),", var).repeat(num.to_string().parse().unwrap())
             );
             tuple.parse().unwrap()
         }
@@ -395,25 +625,34 @@ pub fn dup(_item: TokenStream) -> TokenStream {
 }
 
 /// Generates the reverse auto-differentiation function for a given function.
-///
 /// ```
-/// #[rust_ad::reverse_autodiff]
-/// fn multi(x: f32, y: f32) -> f32 {
-///     let a = x.powi(2i32);
-///     let b = x * 2f32;
-///     let c = 2f32 / y;
-///     let f = a + b + c;
-///     return f;
-/// }
-/// fn main() {
-///     let (f, der_x, der_y) = __rev_multi(3f32, 5f32, 1f32);
-///     assert_eq!(f, 15.4f32);
-///     assert_eq!(der_x, 8f32);
-///     assert_eq!(der_y, -0.08f32);
+/// fn complex_test() {
+///     let (f, (der_x, der_y, der_z)) = __r_complex((3f32, 5f32, 7f32), (1f32));
+///     is_near(f, 10.1187260448).unwrap();
+///     is_near(der_x, 6.28571428571).unwrap();
+///     is_near(der_y, -0.034212882033).unwrap();
+///     is_near(der_z, -0.128914606556).unwrap();
+///
+///     // f(x,y,z) = x^2 + 2x/z + 2/(y+z^0.5)
+///     // ∂x = 2(x+1/z)
+///     // ∂y = -2 / (y+z^0.5)^2
+///     // ∂z = -2x/z^2 -1/(z^0.5 * (y+z^0.5)^2)
+///     // Therefore:
+///     // f(3,5,7) = 10.1187260448
+///     // ∂x| = 6.28571428571
+///     // ∂y| = −0.034212882033
+///     // ∂z| = −0.128914606556
+///     #[reverse_autodiff]
+///     fn complex(x: f32, y: f32, z: f32) -> f32 {
+///         let a = x.powi(2i32);
+///         let b = x * 2f32 / z;
+///         let c = 2f32 / (z.sqrt() + y);
+///         let f = a + b + c;
+///         return f;
+///     }
 /// }
 /// ```
-///
-/// Much like a derive macro, this is appended to your code, the original `function_name` function remains unedited.
+/// Like a derive macro, this new function is appended to your code, the original `function_name` function remains unedited.
 #[proc_macro_attribute]
 pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let start_item = item.clone();
@@ -429,58 +668,51 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
         .block
         .stmts
         .iter()
-        .flat_map(|statement| unwrap_statement(statement))
+        .flat_map(unwrap_statement)
         .collect::<Vec<_>>();
     function.block.stmts = statements;
-
-    // eprintln!("function.block.stmts:");
-    // for stmt in function.block.stmts.iter() {
-    //     eprintln!("\t{}",stmt.to_token_stream().to_string());
-    // }
 
     // Updates function signature
     // ---------------------------------------------------------------------------
     let (function_input_identifiers, number_of_return_elements) = {
         // Updates identifier.
         function.sig.ident = syn::Ident::new(
-            &format!(
-                "{}{}",
-                rust_ad_consts::REVERSE_PREFIX,
-                function.sig.ident.to_string()
-            ),
+            &format!("{}{}", rust_ad_consts::REVERSE_PREFIX, function.sig.ident),
             function.sig.ident.span(),
         );
         // Gets function inputs in usable form `[(ident,type)]`.
-        let function_inputs = function
+        let (input_idents, input_types) = function
             .sig
             .inputs
             .iter()
             .map(|fn_arg| {
-                let typed = fn_arg.typed().expect("forward: signature input not typed");
+                let typed = fn_arg.typed().expect("reverse: signature input not typed");
                 let mut arg_type = typed.ty.to_token_stream().to_string();
                 arg_type.remove_matches(" "); // Remove space separators in type
 
                 let arg_ident = typed.pat.to_token_stream().to_string();
                 (arg_ident, arg_type)
             })
-            .collect::<Vec<_>>();
-        let (input_idents, input_types) =
-            function_inputs.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
+            .unzip::<_, _, Vec<_>, Vec<_>>();
         // Put existing inputs into tuple.
         // -----------------------------------------------
-        let inputs_tuple_str = format!(
-            "({}):({})",
-            input_idents
-                .iter()
-                .cloned()
-                .intersperse(String::from(","))
-                .collect::<String>(),
-            input_types
-                .iter()
-                .cloned()
-                .intersperse(String::from(","))
-                .collect::<String>()
-        );
+        let inputs_tuple_str = match input_idents.len() {
+            0 => String::new(),
+            1 => format!("{}:{}", input_idents[0], input_types[0]),
+            _ => format!(
+                "({}):({})",
+                input_idents
+                    .iter()
+                    .cloned()
+                    .intersperse(String::from(","))
+                    .collect::<String>(),
+                input_types
+                    .iter()
+                    .cloned()
+                    .intersperse(String::from(","))
+                    .collect::<String>()
+            ),
+        };
         let inputs_tuple =
             syn::parse_str(&inputs_tuple_str).expect("reverse: inputs tuple parse fail");
         // Gets tuple of derivatives of inputs.
@@ -514,14 +746,18 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 panic!("{}", err);
             }
         };
-        let derivative_input_tuple_str = format!(
-            "({}):{}",
-            (0..number_of_return_elements)
-                .map(|i| rtn!(i))
-                .intersperse(String::from(","))
-                .collect::<String>(),
-            function_output
-        );
+        let derivative_input_tuple_str = match number_of_return_elements {
+            0 => String::new(),
+            1 => format!("{}:{}", rtn!(0), function_output),
+            _ => format!(
+                "({}):{}",
+                (0..number_of_return_elements)
+                    .map(|i| rtn!(i))
+                    .intersperse(String::from(","))
+                    .collect::<String>(),
+                function_output
+            ),
+        };
 
         let derivative_input_tuple =
             syn::parse_str(&derivative_input_tuple_str).expect("reverse: output tuple parse fail");
@@ -539,11 +775,11 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     // Propagates types through function
     // ---------------------------------------------------------------------------
     let type_map = propagate_types(&function).expect("propagate_types: ");
-    // eprintln!("type_map: {:?}",type_map);
 
     // Generates reverse mode code
     // ---------------------------------------------------------------------------
     let mut component_map = vec![HashMap::new(); number_of_return_elements];
+    let mut return_derivatives = vec![HashSet::new(); number_of_return_elements];
 
     let mut rev_iter = function.block.stmts.iter().rev().peekable();
     let mut reverse_derivative_stmts = Vec::new();
@@ -553,77 +789,43 @@ pub fn reverse_autodiff(_attr: TokenStream, item: TokenStream) -> TokenStream {
     #[cfg(not(debug_assertions))]
     let mut non_zero_derivatives = HashSet::<String>::new();
 
-    // let new_return = rev_iter.peek()
-
-    // TODO TODO LOOK HERE HERE HERE HERE  New version
-    while let Some(next) = rev_iter.next() {
-        #[cfg(not(debug_assertions))]
-        reverse_derivative_stmts.push(
-            reverse_derivative(
-                next,
+    // For the last statement (which we presume to be a return) we skip the accumulation for the next stage since we can set the accumulative derivatives directly.
+    if let Some(return_stmt) = rev_iter.next() {
+        reverse_derivative_stmts.append(
+            &mut reverse_derivative(
+                return_stmt,
                 &type_map,
                 &mut component_map,
-                &function_input_identifiers,
-                &mut non_zero_derivatives,
+                &mut return_derivatives,
             )
-            .expect("der temp"),
+            .expect("rtn der temp"),
         );
-        #[cfg(debug_assertions)]
-        reverse_derivative_stmts.push(
-            reverse_derivative(
-                next,
-                &type_map,
-                &mut component_map,
-                &function_input_identifiers,
-            )
-            .expect("der temp"),
-        );
-
-        // If there is a statement before this one, accumulate derivative for this statement
-        reverse_derivative_stmts.push(if let Some(before) = rev_iter.peek() {
-            #[cfg(debug_assertions)]
-            {
-                reverse_accumulate_derivative(before, &component_map, &type_map).expect("acc temp")
-            }
-            #[cfg(not(debug_assertions))]
-            {
-                reverse_accumulate_derivative(before, &component_map, &mut non_zero_derivatives)
-                    .expect("acc temp")
-            }
-        }
-        // Else if no statement before then accumulate for function inputs
-        else {
-            #[cfg(debug_assertions)]
-            {
-                Some(reverse_accumulate_inputs(
-                    &function_input_identifiers,
-                    &component_map,
-                    &type_map,
-                ))
-            }
-
-            #[cfg(not(debug_assertions))]
-            {
-                Some(reverse_accumulate_inputs(
-                    &function_input_identifiers,
-                    &component_map,
-                    &type_map,
-                    &mut non_zero_derivatives,
-                ))
-            }
-        })
     }
+    // For the statement preceding the return statement
+    let mut rest = rev_iter
+        .flat_map(|next| {
+            reverse_derivative(next, &type_map, &mut component_map, &mut return_derivatives)
+                .expect("der temp")
+        })
+        .collect::<Vec<_>>();
+    reverse_derivative_stmts.append(&mut rest);
+    // Collects inputs for return statement.
+    if let Some(input_accumulation) = reverse_accumulate_inputs(
+        &function_input_identifiers,
+        &component_map,
+        &type_map,
+        &return_derivatives,
+    ) {
+        reverse_derivative_stmts.push(input_accumulation);
+    }
+
+    // Gets new return statement
     let new_return = reverse_append_derivatives(
         function.block.stmts.pop().unwrap(),
         &function_input_identifiers,
     )
-    .expect("rtn temp");
-
-    let mut reverse_derivative_stmts = reverse_derivative_stmts
-        .into_iter()
-        .filter_map(|d| d)
-        .collect::<Vec<_>>();
-
+    .expect("rtn acc temp");
+    // Adds derivatives to block
     function.block.stmts.append(&mut reverse_derivative_stmts);
     function.block.stmts.push(new_return);
 
@@ -667,7 +869,7 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
         let local_ident = &local
             .pat
             .ident()
-            .expect(&format!("unwrap_statement: non-ident local pattern (must be `let x =...;`, cannot be a tuple etc.): {{\n{:#?}\n}}",local))
+            .unwrap_or_else(|_|panic!("unwrap_statement: non-ident local pattern (must be `let x =...;`, cannot be a tuple etc.): {{\n{:#?}\n}}",local))
             .ident.to_string();
         // If our statement has some initialization (e.g. `let a = 3;`).
         if let Some(init) = local.init.as_ref() {
@@ -789,8 +991,7 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
                         let receiver_local = receiver_stmt
                             .local_mut()
                             .expect("unwrap: receiver statement not local");
-                        let receiver_ident =
-                            format!("{}_{}", RECEIVER_PREFIX, local_ident.to_string());
+                        let receiver_ident = format!("{}_{}", RECEIVER_PREFIX, local_ident);
                         receiver_local
                             .pat
                             .ident_mut()
@@ -870,37 +1071,34 @@ fn unwrap_statement(stmt: &syn::Stmt) -> Vec<syn::Stmt> {
                 return statements;
             }
         }
-    } else if let syn::Stmt::Semi(semi_expr, _) = stmt {
-        if let syn::Expr::Return(rtn_expr) = semi_expr {
-            if let Some(rtn) = &rtn_expr.expr {
-                if let syn::Expr::Binary(_bin_expr) = &**rtn {
-                    let new_ident = format!("_{}", RETURN_SUFFIX);
-                    let new_stmt_str = format!("let {};", new_ident);
-                    let mut new_stmt: syn::Stmt =
-                        syn::parse_str(&new_stmt_str).expect("unwrap: return stmt parse fail");
-                    let new_local = new_stmt
-                        .local_mut()
-                        .expect("unwrap: return statement not local");
-                    new_local
-                        .pat
-                        .ident_mut()
-                        .expect("unwrap: return not ident")
-                        .ident =
-                        syn::parse_str(&new_ident).expect("unwrap: return ident parse fail");
+    } else if let syn::Stmt::Semi(syn::Expr::Return(rtn_expr), _) = stmt {
+        if let Some(rtn) = &rtn_expr.expr {
+            if let syn::Expr::Binary(_bin_expr) = &**rtn {
+                let new_ident = format!("_{}", RETURN_SUFFIX);
+                let new_stmt_str = format!("let {};", new_ident);
+                let mut new_stmt: syn::Stmt =
+                    syn::parse_str(&new_stmt_str).expect("unwrap: return stmt parse fail");
+                let new_local = new_stmt
+                    .local_mut()
+                    .expect("unwrap: return statement not local");
+                new_local
+                    .pat
+                    .ident_mut()
+                    .expect("unwrap: return not ident")
+                    .ident = syn::parse_str(&new_ident).expect("unwrap: return ident parse fail");
 
-                    // TODO Create `eq_token` some better way.
-                    let eq_token = syn::parse_str("=").expect("unwrap: fml this is dumb");
+                // TODO Create `eq_token` some better way.
+                let eq_token = syn::parse_str("=").expect("unwrap: fml this is dumb");
 
-                    new_local.init = Some((eq_token, rtn.clone()));
-                    // Recurse
-                    statements.append(&mut unwrap_statement(&new_stmt));
+                new_local.init = Some((eq_token, rtn.clone()));
+                // Recurse
+                statements.append(&mut unwrap_statement(&new_stmt));
 
-                    // Updates statement to contain variable referencing new statement.
-                    let new_rtn_str = format!("return {};", new_ident);
-                    let new_rtn_expr: syn::Stmt =
-                        syn::parse_str(&new_rtn_str).expect("unwrap: return parse fail");
-                    base_statement = new_rtn_expr;
-                }
+                // Updates statement to contain variable referencing new statement.
+                let new_rtn_str = format!("return {};", new_ident);
+                let new_rtn_expr: syn::Stmt =
+                    syn::parse_str(&new_rtn_str).expect("unwrap: return parse fail");
+                base_statement = new_rtn_expr;
             }
         }
     }
@@ -922,7 +1120,7 @@ fn propagate_types(func: &syn::ItemFn) -> Result<HashMap<String, String>, PassEr
         .iter()
         .map(|input| match input {
             syn::FnArg::Typed(pat_type) => match (&*pat_type.pat,&*pat_type.ty) {
-                (syn::Pat::Path(path_ident),syn::Type::Path(path_type)) => {
+                (syn::Pat::Ident(path_ident),syn::Type::Path(path_type)) => {
                     let ident = path_ident.to_token_stream().to_string();
                     let mut type_str = path_type.to_token_stream().to_string();
                     type_str.remove_matches(" "); // Remove space separators in type
@@ -954,10 +1152,13 @@ fn propagate_types(func: &syn::ItemFn) -> Result<HashMap<String, String>, PassEr
                             Err(err)
                         }
                     }).collect::<Result<Vec<_>,_>>().expect("propagate_types: tuple input error");
-                    let input_types_vec = input_types_vec.into_iter().filter_map(|e|e).collect::<Vec<_>>();
+                    let input_types_vec = input_types_vec.into_iter().flatten().collect::<Vec<_>>();
                     Ok(input_types_vec)
                 }
                 _ => {
+                    eprintln!("pat_type.pat: \n{:#?}",pat_type.pat);
+                    eprintln!("pat_type.ty: \n{:#?}",pat_type.ty);
+
                     let err = "Unsupported input type combination";
                     Diagnostic::spanned(
                         input.span().unwrap(),
@@ -984,12 +1185,9 @@ fn propagate_types(func: &syn::ItemFn) -> Result<HashMap<String, String>, PassEr
         .into_iter()
         .flatten()
         .collect::<HashMap<String, String>>();
-    eprintln!("type_map: {:?}", type_map);
 
     // Propagates types through statements
     for stmt in func.block.stmts.iter() {
-        // eprintln!("type_map: {:?}", type_map);
-        // eprintln!("stmt:\n{:#?}\n", stmt);
         if let syn::Stmt::Local(local) = stmt {
             // Gets identifier/s of variable/s being defined
             let var_idents = match &local.pat {

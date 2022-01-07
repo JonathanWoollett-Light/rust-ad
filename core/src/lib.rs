@@ -30,11 +30,11 @@ pub mod traits;
 use traits::*;
 
 /// Prefix used for flattening binary expressions in function arguments.
-pub const FUNCTION_PREFIX: &'static str = "f";
+pub const FUNCTION_PREFIX: &str = "f";
 /// Prefix used for flattening binary expressions as a receiver for a method.
-pub const RECEIVER_PREFIX: &'static str = "r";
+pub const RECEIVER_PREFIX: &str = "r";
 /// Prefix used for flattening return statements;
-pub const RETURN_SUFFIX: &'static str = "rtn";
+pub const RETURN_SUFFIX: &str = "rtn";
 
 /// Insert key into map with initial value element or append to existing value
 pub fn append_insert(key: &str, value: String, map: &mut HashMap<String, Vec<String>>) {
@@ -63,30 +63,28 @@ pub fn expr_type(
                         format!("variable not found in type map ({:?})", type_map),
                     )
                     .emit();
-                    return Err(String::from("expr_type"));
+                    Err(String::from("expr_type"))
                 }
             }
         }
         syn::Expr::Lit(lit_expr) => literal_type(lit_expr),
         syn::Expr::Call(call_expr) => {
             let function_sig = pass!(function_signature(call_expr, type_map), "expr_type");
-            let func_out_type = match SUPPORTED_FUNCTIONS.get(&function_sig) {
-                Some(out_sig) => out_sig,
+            match SUPPORTED_FUNCTIONS.get(&function_sig) {
+                Some(out_sig) => Ok(out_sig.output_type.clone()),
                 None => {
                     let error = format!("expr_type: unsupported function: {}", function_sig);
                     Diagnostic::spanned(call_expr.span().unwrap(), proc_macro::Level::Error, error)
                         .emit();
-                    return Err(String::from("expr_type"));
+                    Err(String::from("expr_type"))
                 }
-            };
-            // Sets result type
-            Ok(func_out_type.output_type.clone())
+            }
         }
         syn::Expr::MethodCall(method_expr) => {
             let method_sig = pass!(method_signature(method_expr, type_map), "expr_type");
             // Searches for supported function signature by function identifier and argument types.
-            let method_out_type = match SUPPORTED_METHODS.get(&method_sig) {
-                Some(out_sig) => out_sig,
+            match SUPPORTED_METHODS.get(&method_sig) {
+                Some(out_sig) => Ok(out_sig.output_type.clone()),
                 None => {
                     let error = format!("unsupported method: {}", method_sig);
                     Diagnostic::spanned(
@@ -95,11 +93,9 @@ pub fn expr_type(
                         error,
                     )
                     .emit();
-                    return Err(String::from("expr_type"));
+                    Err(String::from("expr_type"))
                 }
-            };
-            // Sets result type
-            Ok(method_out_type.output_type.clone())
+            }
         }
         syn::Expr::Binary(bin_expr) => {
             let operation_sig = match operation_signature(bin_expr, type_map) {
@@ -107,8 +103,8 @@ pub fn expr_type(
                 Err(e) => return Err(e),
             };
             // I think this is cleaner than embedding a `format!` within an `.expect`
-            let out_sig = match SUPPORTED_OPERATIONS.get(&operation_sig) {
-                Some(out_sig) => out_sig,
+            match SUPPORTED_OPERATIONS.get(&operation_sig) {
+                Some(out_sig) => Ok(out_sig.output_type.clone()),
                 None => {
                     Diagnostic::spanned(
                         bin_expr.span().unwrap(),
@@ -116,10 +112,9 @@ pub fn expr_type(
                         format!("expr_type: unsupported binary operation: {}", operation_sig),
                     )
                     .emit();
-                    return Err(String::from("expr_type"));
+                    Err(String::from("expr_type"))
                 }
-            };
-            Ok(out_sig.output_type.clone())
+            }
         }
         _ => {
             Diagnostic::spanned(
@@ -128,7 +123,7 @@ pub fn expr_type(
                 "expr_type: unsupported expression type",
             )
             .emit();
-            return Err(String::from("expr_type"));
+            Err(String::from("expr_type"))
         }
     }
 }
@@ -141,7 +136,8 @@ pub fn literal_type(expr_lit: &syn::ExprLit) -> Result<String, PassError> {
             let float_str = float_lit.to_string();
 
             let n = float_str.len();
-            if !(n > 3) {
+            // If n<=3 then there is not enough space for the float type identifier, since they require 3 chars
+            if n <= 3 {
                 Diagnostic::spanned(
                     expr_lit.span().unwrap(),
                     proc_macro::Level::Error,
@@ -209,7 +205,7 @@ pub fn literal_type(expr_lit: &syn::ExprLit) -> Result<String, PassError> {
                         "All literals need a type suffix e.g. `10.2f32` -- Bad integer literal",
                     )
                     .emit();
-                    return Err(String::from("literal_type"));
+                    Err(String::from("literal_type"))
                 }
             }
         }
@@ -220,7 +216,7 @@ pub fn literal_type(expr_lit: &syn::ExprLit) -> Result<String, PassError> {
                 "Unsupported literal (only integer and float literals are supported)",
             )
             .emit();
-            return Err(String::from("literal_type"));
+            Err(String::from("literal_type"))
         }
     }
 }

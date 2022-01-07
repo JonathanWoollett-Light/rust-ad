@@ -11,7 +11,7 @@ pub fn is_near(a: f32, b: f32) -> Result<(), String> {
 
 #[test]
 fn empty_test() {
-    let (x, der_x) = reverse!(empty, 1f32);
+    let (x, der_x) = reverse!(empty, (1f32), (1f32));
     assert_eq!(x, 1.);
     assert_eq!(der_x, 1.);
 
@@ -22,7 +22,7 @@ fn empty_test() {
 }
 #[test]
 fn plus_test() {
-    let (x, der_x) = reverse!(plus, 1f32);
+    let (x, der_x) = reverse!(plus, (1f32), (1f32));
     assert_eq!(x, 2f32);
     assert_eq!(der_x, 1f32);
 
@@ -33,7 +33,7 @@ fn plus_test() {
 }
 #[test]
 fn quad_test() {
-    let (x, der_x) = reverse!(quad, 3f32);
+    let (x, der_x) = reverse!(quad, (3f32), (1f32));
     assert_eq!(x, 17f32);
     assert_eq!(der_x, 8f32);
 
@@ -48,7 +48,7 @@ fn quad_test() {
 }
 #[test]
 fn multi_test() {
-    let (f, der_x, der_y) = reverse!(multi, 3f32, 5f32);
+    let (f, (der_x, der_y)) = reverse!(multi, (3f32, 5f32), (1f32));
     assert_eq!(f, 15.4f32);
     assert_eq!(der_x, 8f32); // 2(x+1)
     assert_eq!(der_y, -0.08f32); // -2/y^2
@@ -64,7 +64,7 @@ fn multi_test() {
 }
 #[test]
 fn complex_test() {
-    let (f, der_x, der_y, der_z) = reverse!(complex, 3f32, 5f32, 7f32);
+    let (f, (der_x, der_y, der_z)) = reverse!(complex, (3f32, 5f32, 7f32), (1f32));
     is_near(f, 10.1187260448).unwrap();
     is_near(der_x, 6.28571428571).unwrap();
     is_near(der_y, -0.034212882033).unwrap();

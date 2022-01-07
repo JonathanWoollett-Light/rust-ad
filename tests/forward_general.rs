@@ -48,7 +48,7 @@ fn quad_test() {
 }
 #[test]
 fn multi_test() {
-    let (f, der_x, der_y) = forward!(multi, 3f32, 5f32);
+    let (f, (der_x, der_y)) = forward!(multi, 3f32, 5f32);
     assert_eq!(f, 15.4f32);
     assert_eq!(der_x, 8f32); // 2(x+1)
     assert_eq!(der_y, -0.08f32); // -2/y^2
@@ -68,7 +68,7 @@ fn multi_test() {
 
 #[test]
 fn complex_test() {
-    let (f, der_x, der_y, der_z) = forward!(complex, 3f32, 5f32, 7f32);
+    let (f, (der_x, der_y, der_z)) = forward!(complex, 3f32, 5f32, 7f32);
     is_near(f, 10.1187260448).unwrap();
     is_near(der_x, 6.28571428571).unwrap();
     is_near(der_y, -0.034212882033).unwrap();

@@ -34,7 +34,7 @@ pub fn update_forward_return(
                         syn::Expr::Tuple(expr_tuple) => {
                             let return_idents = expr_tuple.to_token_stream().to_string();
                             eprintln!("return_idents: {}", return_idents);
-                            let return_str = format!("return ({},{});",
+                            let return_str = format!("return ({},({}));",
                                 return_idents,
                                 expr_tuple.elems.iter()
                                     .map(|e|
@@ -72,24 +72,49 @@ pub fn update_forward_return(
 
                             // The if case where `ident == input` is for when you are returning an input.
                             let return_str = format!(
-                                "return ({},({}));",
+                                "return ({},{});",
                                 return_ident,
-                                function_inputs
-                                    .iter()
-                                    .map(|input| if return_ident == *input {
-                                        der!(input)
-                                    } else {
-                                        let der = wrt!(return_ident, input);
-                                        #[cfg(not(debug_assertions))]
-                                        match non_zero_derivatives.contains(&der) {
-                                            true => der,
-                                            false => format!("0{}", type_map.get(input).unwrap()),
+                                match function_inputs.len() {
+                                    0 => String::new(),
+                                    1 => {
+                                        let input = &function_inputs[0];
+                                        if return_ident == *input {
+                                            der!(input)
+                                        } else {
+                                            let der = wrt!(return_ident, input);
+                                            #[cfg(not(debug_assertions))]
+                                            match non_zero_derivatives.contains(&der) {
+                                                true => der,
+                                                false => {
+                                                    format!("0{}", type_map.get(input).unwrap())
+                                                }
+                                            }
+                                            #[cfg(debug_assertions)]
+                                            der
                                         }
-                                        #[cfg(debug_assertions)]
-                                        der
-                                    })
-                                    .intersperse(String::from(","))
-                                    .collect::<String>()
+                                    }
+                                    _ => format!(
+                                        "({})",
+                                        function_inputs
+                                            .iter()
+                                            .map(|input| if return_ident == *input {
+                                                der!(input)
+                                            } else {
+                                                let der = wrt!(return_ident, input);
+                                                #[cfg(not(debug_assertions))]
+                                                match non_zero_derivatives.contains(&der) {
+                                                    true => der,
+                                                    false => {
+                                                        format!("0{}", type_map.get(input).unwrap())
+                                                    }
+                                                }
+                                                #[cfg(debug_assertions)]
+                                                der
+                                            })
+                                            .intersperse(String::from(","))
+                                            .collect::<String>()
+                                    ),
+                                }
                             );
                             syn::parse_str(&return_str)
                                 .expect("update_forward_return: path parse fail")

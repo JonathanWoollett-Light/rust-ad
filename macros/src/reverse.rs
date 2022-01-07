@@ -5,17 +5,15 @@ use proc_macro::Level::Error;
 use quote::ToTokens;
 use rust_ad_core::*;
 use std::collections::HashMap;
-use syn::spanned::Spanned;
-
-#[cfg(not(debug_assertions))]
 use std::collections::HashSet;
+use syn::spanned::Spanned;
 
 // Given return statement outputs return statement with appended derivatives
 pub fn reverse_append_derivatives(
     stmt: syn::Stmt,
-    function_input_identifiers: &Vec<String>,
+    function_input_identifiers: &[String],
 ) -> Result<syn::Stmt, PassError> {
-    const NAME: &'static str = "reverse_append_derivatives";
+    const NAME: &str = "reverse_append_derivatives";
     if let syn::Stmt::Semi(syn::Expr::Return(return_struct), _) = stmt {
         if let Some(return_expr) = &return_struct.expr {
             match &**return_expr {
@@ -26,25 +24,16 @@ pub fn reverse_append_derivatives(
                             let path_ident = p.to_token_stream().to_string();
                             let rtn_ident = rtn!(index);
 
-                            let (ident,der) = (wrt!(path_ident,rtn_ident),format!("({})",
+                            let (ident,der) = (path_ident,format!("({})",
                             function_input_identifiers
                                 .iter()
                                 .map(|input|wrt!(input,rtn_ident))
                                 .intersperse(String::from(","))
                                 .collect::<String>()
                             ));
-                            // eprintln!("tuple_str: {:?}",tuple_str);
                             Ok((ident,der))
                         },
                         syn::Expr::Lit(l) => {
-                            let rtn_ident = rtn!(index);
-                            #[cfg(debug_assertions)]
-                            let der = function_input_identifiers
-                                .iter()
-                                .map(|input|wrt!(input,rtn_ident))
-                                .intersperse(String::from(","))
-                                .collect::<String>();
-                            #[cfg(not(debug_assertions))]
                             let der = function_input_identifiers
                                 .iter()
                                 .map(|_|format!("0{}",literal_type(l).expect("reverse_append_derivatives: unsupported literal type")))
@@ -81,7 +70,6 @@ pub fn reverse_append_derivatives(
                             .intersperse(String::from(","))
                             .collect::<String>(),
                     );
-                    // eprintln!("new_return_stmt_str: {}",new_return_stmt_str);
                     let new_return_stmt = pass!(syn::parse_str(&new_return_stmt_str), NAME);
                     Ok(new_return_stmt)
                 }
@@ -89,14 +77,18 @@ pub fn reverse_append_derivatives(
                 syn::Expr::Path(return_path) => {
                     let path_ident = return_path.to_token_stream().to_string();
                     let rtn_ident = rtn!(0);
-                    let tuple_str = format!(
-                        "({})",
-                        function_input_identifiers
-                            .iter()
-                            .map(|input| wrt!(input, rtn_ident))
-                            .intersperse(String::from(","))
-                            .collect::<String>()
-                    );
+                    let tuple_str = match function_input_identifiers.len() {
+                        0 => String::new(),
+                        1 => wrt!(function_input_identifiers[0], rtn_ident),
+                        _ => format!(
+                            "({})",
+                            function_input_identifiers
+                                .iter()
+                                .map(|input| wrt!(input, rtn_ident))
+                                .intersperse(String::from(","))
+                                .collect::<String>()
+                        ),
+                    };
                     let new_return_stmt_str = format!("return ({},{});", path_ident, tuple_str);
                     let new_return_stmt = pass!(syn::parse_str(&new_return_stmt_str), NAME);
                     Ok(new_return_stmt)
@@ -136,109 +128,143 @@ pub fn reverse_append_derivatives(
 
 pub fn reverse_accumulate_inputs(
     function_inputs: &[String],
-    component_map: &Vec<HashMap<String, Vec<String>>>,
+    component_map: &[HashMap<String, Vec<String>>],
     type_map: &HashMap<String, String>,
-    #[cfg(not(debug_assertions))] non_zero_derivatives: &mut HashSet<String>,
-) -> syn::Stmt {
-    let (inputs, derivative) = component_map
-        .iter()
-        .enumerate()
-        .map(|(index, map)| {
+    return_derivatives: &[HashSet<String>],
+) -> Option<syn::Stmt> {
+    debug_assert_eq!(component_map.len(), return_derivatives.len());
+
+    let (inputs, derivative) = (0..component_map.len())
+        .filter_map(|index| {
             let rtn = rtn!(index);
             let (idents, derivatives) = function_inputs
                 .iter()
                 .filter_map(|input| {
-                    let ident = wrt!(input, rtn);
+                    (!return_derivatives[index].contains(input)).then(|| {
+                        let ident = wrt!(input, rtn);
 
-                    map.get(input).map(|e|{
-                        (
-                            ident,
-                            e.iter().map(|s|wrt!(s,rtn))
-                            .intersperse(String::from(","))
-                            .collect::<String>()
-                        )
-                    })
-                })
-                .unzip::<_, _, Vec<_>, Vec<_>>();
-            (
-                format!(
-                    "({})",
-                    idents
-                        .into_iter()
-                        .intersperse(String::from(","))
-                        .collect::<String>()
-                ),
-                format!(
-                    "({})",
-                    derivatives
-                        .into_iter()
-                        .intersperse(String::from(","))
-                        .collect::<String>()
-                ),
-            )
-        })
-        .unzip::<_, _, Vec<_>, Vec<_>>();
-    let stmt_str = format!(
-        "let ({}) = ({});",
-        inputs
-            .into_iter()
-            .intersperse(String::from(","))
-            .collect::<String>(),
-        derivative
-            .into_iter()
-            .intersperse(String::from(","))
-            .collect::<String>()
-    );
-    syn::parse_str(&stmt_str).expect("reverse_accumulate_inputs: parse fail")
-}
-pub fn reverse_accumulate_derivative(
-    stmt: &syn::Stmt,
-    component_map: &Vec<HashMap<String, Vec<String>>>,
-    #[cfg(debug_assertions)] type_map: &HashMap<String, String>,
-    #[cfg(not(debug_assertions))] non_zero_derivatives: &mut HashSet<String>,
-) -> Result<Option<syn::Stmt>, PassError> {
-    const NAME: &'static str = "reverse_accumulate_derivative";
-    match stmt {
-        // If we have a local variable declaration statement e.g. `let a;`.
-        syn::Stmt::Local(local) => match &local.pat {
-            syn::Pat::Ident(local_ident) => {
-                // eprintln!("local: {:#?}",local);
-                // panic!("just stop here");
-                let ident_str = local_ident.to_token_stream().to_string();
-                let (accumulative_derivatives, derivative_sums) = component_map
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(index, map)| {
-                        let acc = wrt!(ident_str, rtn!(index));
-
-                        #[cfg(debug_assertions)]
-                        let der_res = Some(match map.get(&ident_str) {
-                            Some(der) => der
+                        let sum_str = match component_map[index].get(input) {
+                            Some(component_vec) => component_vec
                                 .iter()
-                                .map(|d| d.clone())
+                                .map(|component| wrtn!(input, component, rtn))
                                 .intersperse(String::from("+"))
                                 .collect::<String>(),
                             None => format!(
                                 "0{}",
                                 type_map
-                                    .get(&ident_str)
-                                    .expect("reverse_accumulate_derivative: not found in type map")
+                                    .get(&rtn)
+                                    .expect("reverse_accumulate_inputs: missed return")
                             ),
-                        });
-                        #[cfg(not(debug_assertions))]
-                        let der_res = map.get(&ident_str).map(|der| {
-                            non_zero_derivatives.insert(acc.clone());
-                            der.iter()
-                                .map(|d| d.clone())
-                                .intersperse(String::from("+"))
-                                .collect::<String>()
-                        });
-                        der_res.map(|der| (acc, der))
+                        };
+                        (ident, sum_str)
+                    })
+                })
+                .unzip::<_, _, Vec<_>, Vec<_>>();
+            match idents.len() {
+                0 => None,
+                _ => Some((idents, derivatives)),
+            }
+        })
+        .unzip::<_, _, Vec<_>, Vec<_>>();
+
+    let stmt_str = match inputs.len() {
+        0 => String::new(),
+        1 => match inputs[0].len() {
+            0 => String::new(),
+            1 => format!("let {} = {};", inputs[0][0], derivative[0][0]),
+            _ => format!(
+                "let ({}) = ({});",
+                inputs[0]
+                    .iter()
+                    .cloned()
+                    .intersperse(String::from(","))
+                    .collect::<String>(),
+                derivative[0]
+                    .iter()
+                    .cloned()
+                    .intersperse(String::from(","))
+                    .collect::<String>()
+            ),
+        },
+        _ => format!(
+            "let ({}) = ({});",
+            inputs
+                .into_iter()
+                .map(|i| format!(
+                    "({})",
+                    i.into_iter()
+                        .intersperse(String::from(","))
+                        .collect::<String>()
+                ))
+                .intersperse(String::from(","))
+                .collect::<String>(),
+            derivative
+                .into_iter()
+                .map(|i| format!(
+                    "({})",
+                    i.into_iter()
+                        .intersperse(String::from(","))
+                        .collect::<String>()
+                ))
+                .intersperse(String::from(","))
+                .collect::<String>()
+        ),
+    };
+    (!stmt_str.is_empty()).then(|| {
+        syn::parse_str(&stmt_str)
+            .unwrap_or_else(|_| panic!("reverse_accumulate_inputs: parse fail `{}`", stmt_str))
+    })
+}
+fn reverse_accumulate_derivative(
+    stmt: &syn::Stmt,
+    component_map: &[HashMap<String, Vec<String>>],
+    return_derivatives: &mut Vec<HashSet<String>>,
+) -> Result<Option<syn::Stmt>, PassError> {
+    debug_assert_eq!(component_map.len(), return_derivatives.len());
+    const NAME: &str = "reverse_accumulate_derivative";
+    match stmt {
+        // If we have a local variable declaration statement e.g. `let a;`.
+        syn::Stmt::Local(local) => match &local.pat {
+            syn::Pat::Ident(local_ident) => {
+                let ident_str = local_ident.to_token_stream().to_string();
+                let (accumulative_derivatives, derivative_sums) = (0..component_map.len())
+                    .filter_map(|index| {
+                        component_map[index].get(&ident_str).map(|components| {
+                            let rtn = rtn!(index);
+                            let acc = wrt!(ident_str, rtn);
+                            // Inserting here, notes that now we have a derivative for `ident_str` affecting `rtn!(index)`
+                            return_derivatives[index].insert(ident_str.clone());
+                            (
+                                acc,
+                                components
+                                    .iter()
+                                    .map(|d| wrtn!(ident_str, d, rtn))
+                                    .collect::<Vec<_>>(),
+                            )
+                        })
                     })
                     .unzip::<_, _, Vec<_>, Vec<_>>();
-                // equivalent to derivative_sums.is_empty()
-                if accumulative_derivatives.is_empty() {
-                    let acc_der_stmt_str = format!(
+
+                // equivalent to `derivative_sums.len()`
+                let rtn_str = match accumulative_derivatives.len() {
+                    0 => Ok(None),
+                    1 => match derivative_sums[0].len() {
+                        0 => unreachable!(),
+                        1 => Ok(Some(format!(
+                            "let {} = {};",
+                            accumulative_derivatives[0], derivative_sums[0][0]
+                        ))),
+                        _ => Ok(Some(format!(
+                            "let {} = ({});",
+                            accumulative_derivatives[0],
+                            derivative_sums[0]
+                                .iter()
+                                .cloned()
+                                .intersperse(String::from("+"))
+                                .collect::<String>(),
+                        ))),
+                    },
+                    _ => Ok(Some(format!(
                         "let ({}) = ({});",
                         accumulative_derivatives
                             .into_iter()
@@ -246,19 +272,21 @@ pub fn reverse_accumulate_derivative(
                             .collect::<String>(),
                         derivative_sums
                             .into_iter()
+                            .map(|d| format!(
+                                "({})",
+                                d.into_iter()
+                                    .intersperse(String::from("+"))
+                                    .collect::<String>()
+                            ))
                             .intersperse(String::from(","))
-                            .collect::<String>()
-                    );
-                    match syn::parse_str(&acc_der_stmt_str) {
-                        Ok(r) => Ok(Some(r)),
-                        Err(e) => Err(format!(
-                            "reverse_accumulate_derivative: parse error on `{}`: {}",
-                            acc_der_stmt_str, e
-                        )),
-                    }
-                } else {
-                    Ok(None)
-                }
+                            .collect::<String>(),
+                    ))),
+                };
+                rtn_str.map(|res| {
+                    res.map(|opt| {
+                        syn::parse_str(&opt).expect("reverse_accumulate_derivative: parse fail")
+                    })
+                })
             }
             _ => {
                 let err = "Unsupported local declaration type. Only path declarations are supported (e.g. `let a = ... ;`)";
@@ -269,14 +297,14 @@ pub fn reverse_accumulate_derivative(
         _ => Ok(None),
     }
 }
+
 pub fn reverse_derivative(
     stmt: &syn::Stmt,
     type_map: &HashMap<String, String>,
     component_map: &mut Vec<HashMap<String, Vec<String>>>,
-    function_input_identifiers: &Vec<String>,
-    #[cfg(not(debug_assertions))] non_zero_derivatives: &mut HashSet<String>,
-) -> Result<Option<syn::Stmt>, PassError> {
-    const NAME: &'static str = "reverse_derivative";
+    return_derivatives: &mut Vec<HashSet<String>>,
+) -> Result<Vec<syn::Stmt>, PassError> {
+    const NAME: &str = "reverse_derivative";
     match stmt {
         // If we have a local variable declaration e.g. `let a;`
         syn::Stmt::Local(local_stmt) => {
@@ -287,22 +315,36 @@ pub fn reverse_derivative(
                     match &**init {
                         // If we have local variable declaration with a binary expression as initialization e.g. `let a = b + c;`.
                         syn::Expr::Binary(bin_init_expr) => {
+                            // Accumulate derivatives for multiplying by components
+                            let accumulation_stmt_opt = pass!(
+                                reverse_accumulate_derivative(
+                                    stmt,
+                                    component_map,
+                                    return_derivatives
+                                ),
+                                NAME
+                            );
+                            let mut rtn_vec = vec![accumulation_stmt_opt];
+                            // if let Some(accumulation_stmt)  = accumulation_stmt_opt {
+                            //     rtn_vec.push(accumulation_stmt);
+                            // }
                             // Create binary operation signature (formed with the lhs type, rhs type and operation symbol (`+`, `-` etc.)).
                             let op_sig = pass!(operation_signature(bin_init_expr, type_map), NAME);
                             // Looks up binary operation of the formed signature in our supported operations map.
                             match SUPPORTED_OPERATIONS.get(&op_sig) {
                                 // If we find an entry for an output signature, this means the operation is supported.
                                 // Applies the reverse derivative function for the found operation.
-                                Some(out_sig) => Ok((out_sig.reverse_derivative)(
-                                    local_ident,
-                                    &[
-                                        pass!(Arg::try_from(&*bin_init_expr.left), NAME),
-                                        pass!(Arg::try_from(&*bin_init_expr.right), NAME),
-                                    ],
-                                    component_map,
-                                    #[cfg(not(debug_assertions))]
-                                    non_zero_derivatives,
-                                )),
+                                Some(out_sig) => {
+                                    rtn_vec.push((out_sig.reverse_derivative)(
+                                        local_ident,
+                                        &[
+                                            pass!(Arg::try_from(&*bin_init_expr.left), NAME),
+                                            pass!(Arg::try_from(&*bin_init_expr.right), NAME),
+                                        ],
+                                        component_map,
+                                        return_derivatives,
+                                    ));
+                                }
                                 // If we don't find an entry, this means the operation is not supported.
                                 None => {
                                     // Since we do not support this operation and without considering it the whole process will not be accurate, we throw an error.
@@ -313,12 +355,23 @@ pub fn reverse_derivative(
                                         err.clone(),
                                     )
                                     .emit();
-                                    Err(format!("{}: {}", NAME, err))
+                                    return Err(format!("{}: {}", NAME, err));
                                 }
                             }
+                            Ok(rtn_vec.into_iter().flatten().collect::<Vec<_>>())
                         }
                         // If we have local variable declaration with a function call expression as initialization e.g. `let a = f(b,c);`.
                         syn::Expr::Call(call_init_expr) => {
+                            // Accumulate derivatives for multiplying by components
+                            let accumulation_stmt_opt = pass!(
+                                reverse_accumulate_derivative(
+                                    stmt,
+                                    component_map,
+                                    return_derivatives
+                                ),
+                                NAME
+                            );
+                            let mut rtn_vec = vec![accumulation_stmt_opt];
                             // Create function signature (formed with function identifier and argument types)
                             let fn_sig = pass!(function_signature(call_init_expr, type_map), NAME);
                             // Looks up function of our formed function signature in our supported functions map.
@@ -330,15 +383,7 @@ pub fn reverse_derivative(
                                         call_init_expr
                                             .args
                                             .iter()
-                                            .map(|a| {
-                                                Diagnostic::spanned(
-                                                    a.span().unwrap(),
-                                                    Error,
-                                                    "Unsupported function argument",
-                                                )
-                                                .emit();
-                                                Arg::try_from(a)
-                                            })
+                                            .map(Arg::try_from)
                                             .collect::<Result<Vec<_>, _>>(),
                                         NAME
                                     );
@@ -347,10 +392,9 @@ pub fn reverse_derivative(
                                         local_ident,
                                         args.as_slice(),
                                         component_map,
-                                        #[cfg(not(debug_assertions))]
-                                        non_zero_derivatives,
+                                        return_derivatives,
                                     );
-                                    Ok(new_stmt)
+                                    rtn_vec.push(new_stmt);
                                 }
                                 // If we don't find an entry, this means the function is not supported.
                                 None => {
@@ -362,12 +406,23 @@ pub fn reverse_derivative(
                                         err.clone(),
                                     )
                                     .emit();
-                                    Err(format!("{}: {}", NAME, err))
+                                    return Err(format!("{}: {}", NAME, err));
                                 }
                             }
+                            Ok(rtn_vec.into_iter().flatten().collect::<Vec<_>>())
                         }
                         // If we have local variable declaration with a method call expression as initialization e.g. `let a = b.f(c);`.
                         syn::Expr::MethodCall(method_init_expr) => {
+                            // Accumulate derivatives for multiplying by components
+                            let accumulation_stmt_opt = pass!(
+                                reverse_accumulate_derivative(
+                                    stmt,
+                                    component_map,
+                                    return_derivatives
+                                ),
+                                NAME
+                            );
+                            let mut rtn_vec = vec![accumulation_stmt_opt];
                             // Create function signature (formed with function identifier and argument types)
                             let mt_sig = pass!(method_signature(method_init_expr, type_map), NAME);
                             // Looks up function of our formed function signature in our supported functions map.
@@ -379,15 +434,7 @@ pub fn reverse_derivative(
                                         method_init_expr
                                             .args
                                             .iter()
-                                            .map(|a| {
-                                                Diagnostic::spanned(
-                                                    a.span().unwrap(),
-                                                    Error,
-                                                    "Unsupported method argument",
-                                                )
-                                                .emit();
-                                                Arg::try_from(a)
-                                            })
+                                            .map(Arg::try_from)
                                             .collect::<Result<Vec<_>, _>>(),
                                         NAME
                                     );
@@ -400,10 +447,9 @@ pub fn reverse_derivative(
                                         local_ident,
                                         args.as_slice(),
                                         component_map,
-                                        #[cfg(not(debug_assertions))]
-                                        non_zero_derivatives,
+                                        return_derivatives,
                                     );
-                                    Ok(new_stmt)
+                                    rtn_vec.push(new_stmt);
                                 }
                                 // If we don't find an entry, this means the method is not supported.
                                 None => {
@@ -415,70 +461,63 @@ pub fn reverse_derivative(
                                         err.clone(),
                                     )
                                     .emit();
-                                    Err(format!("{}: {}", NAME, err))
+                                    return Err(format!("{}: {}", NAME, err));
                                 }
                             }
+                            Ok(rtn_vec.into_iter().flatten().collect::<Vec<_>>())
                         }
                         // If we have local variable declaration with an assignment expression as initialization e.g. `let a = b;`.
                         syn::Expr::Path(path_init_expr) => {
                             // Variable being assigned (e.g. `b`).
                             let in_ident = path_init_expr.to_token_stream().to_string();
-                            eprintln!("in_ident: {}",in_ident);
 
-                            let (ident_str, der_str) = component_map
-                                .iter_mut()
-                                .enumerate()
-                                .filter_map(|(index, map)| {
+                            let (ident_str, der_str) = (0..component_map.len())
+                                .filter_map(|index| {
                                     let rtn = rtn!(index);
                                     let from_wrt = wrt!(local_ident, rtn);
-                                    let to_wrt = wrt!(in_ident, rtn);
+                                    let to_wrt = wrt!(&in_ident, rtn);
 
-                                    
                                     // If component exists
-                                    match map.get(&local_ident).map(|e| e.contains(&rtn)) {
+                                    match component_map[index]
+                                        .get(&local_ident)
+                                        .map(|e| e.contains(&rtn))
+                                    {
                                         Some(true) => {
-                                            append_insert(&in_ident, from_wrt.clone(), map);
+                                            return_derivatives[index].insert(in_ident.clone());
                                             Some((to_wrt, from_wrt))
                                         }
                                         _ => None,
                                     }
-
-                                    // #[cfg(debug_assertions)]
-                                    // {
-                                    //     // We insert `a` derivative `b wrt a` which notes that b affects (and that we have defined this variable).
-                                    //     append_insert(&in_ident, wrt.clone(), map);
-                                    //     // In this simple case `b` is identical to `a`, so the accumulative derivative is identical to `a`.
-                                    //     Some((wrtn, wrt))
-                                    // }
-                                    // #[cfg(not(debug_assertions))]
-                                    // non_zero_derivatives.contains(&wrt).then(|| {
-                                    //     non_zero_derivatives.insert(wrtn.clone());
-                                    //     // We insert `a` derivative `b wrt a` which notes that b affects (and that we have defined this variable).
-                                    //     append_insert(&in_ident, wrt.clone(), map);
-                                    //     // In this simple case `b` is identical to `a`, so the accumulative derivative is identical to `a`.
-                                    //     (wrtn, wrt)
-                                    // })
                                 })
                                 .unzip::<_, _, Vec<String>, Vec<String>>();
 
-                            let stmt_str = format!(
-                                "let ({}) = ({});",
-                                ident_str
-                                    .into_iter()
-                                    .intersperse(String::from(","))
-                                    .collect::<String>(),
-                                der_str
-                                    .into_iter()
-                                    .intersperse(String::from(","))
-                                    .collect::<String>()
-                            );
-                            let new_stmt = pass!(syn::parse_str(&stmt_str), NAME);
-                            Ok(Some(new_stmt))
+                            // equivalent to `der_str.len()`
+                            let stmt_str = match ident_str.len() {
+                                0 => None,
+                                1 => Some(format!("let {} = {};", ident_str[0], der_str[0])),
+                                _ => Some(format!(
+                                    "let ({}) = ({});",
+                                    ident_str
+                                        .into_iter()
+                                        .intersperse(String::from(","))
+                                        .collect::<String>(),
+                                    der_str
+                                        .into_iter()
+                                        .intersperse(String::from(","))
+                                        .collect::<String>(),
+                                )),
+                            };
+                            Ok(match stmt_str {
+                                Some(s) => {
+                                    vec![syn::parse_str(&s).expect("blah blah blah parse fail")]
+                                }
+                                None => Vec::new(),
+                            })
                         }
-                        _ => Ok(None),
+                        _ => Ok(Vec::new()),
                     }
                 }
-                None => Ok(None),
+                None => Ok(Vec::new()),
             }
         }
         // If we have a return statement e.g. `return (a,b);`
@@ -494,10 +533,9 @@ pub fn reverse_derivative(
                                 let path_ident = p.to_token_stream().to_string();
                                 let rtn_ident = rtn!(index);
 
-                                append_insert(&path_ident,rtn_ident.clone(), &mut component_map[index]);
+                                return_derivatives[index].insert(path_ident.clone());
 
                                 let (ident,der) = (wrt!(path_ident,rtn_ident),rtn_ident);
-                                // eprintln!("tuple_str: {:?}",tuple_str);
                                 Some(Ok((ident,der)))
                             },
                             syn::Expr::Lit(_) => None,
@@ -526,21 +564,23 @@ pub fn reverse_derivative(
                                 .intersperse(String::from(","))
                                 .collect::<String>(),
                         );
-                        eprintln!("new_return_stmt_str: {}", new_return_stmt_str);
+
                         let new_return_stmt = pass!(syn::parse_str(&new_return_stmt_str), NAME);
-                        Ok(Some(new_return_stmt))
+                        Ok(vec![new_return_stmt])
                     }
                     // If return expression is path e.g. `return a;`
                     syn::Expr::Path(return_path) => {
                         let path_ident = return_path.to_token_stream().to_string();
                         let rtn_ident = rtn!(0);
-                        append_insert(&rtn_ident, path_ident.clone(), &mut component_map[0]);
 
-                        let new_stmt_str = format!("let {} = {};", path_ident, rtn_ident);
+                        return_derivatives[0].insert(path_ident.clone());
+
+                        let new_stmt_str =
+                            format!("let {} = {};", wrt!(path_ident, rtn_ident), rtn_ident);
                         let new_stmt = pass!(syn::parse_str(&new_stmt_str), NAME);
-                        Ok(Some(new_stmt))
+                        Ok(vec![new_stmt])
                     }
-                    syn::Expr::Lit(_) => Ok(None),
+                    syn::Expr::Lit(_) => Ok(Vec::new()),
                     _ => {
                         let err = "Unsupported return type. Only tuples (e.g. `return (a,b,c);`), paths (e.g. `return a;`) and literals (e.g. `return 5f32;`) are supported.";
                         Diagnostic::spanned(
@@ -553,9 +593,9 @@ pub fn reverse_derivative(
                     }
                 },
                 // If there is no return expression e.g. `return;`
-                None => Ok(None),
+                None => Ok(Vec::new()),
             }
         }
-        _ => Ok(None),
+        _ => Ok(Vec::new()),
     }
 }

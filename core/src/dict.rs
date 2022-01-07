@@ -206,8 +206,7 @@ type OperationMap = HashMap<OperationSignature, ProcedureOutputs>;
 lazy_static::lazy_static! {
     /// Internal map of currently supported functions.
     pub static ref SUPPORTED_FUNCTIONS: FunctionMap = {
-        let map = FunctionMap::new();
-        map
+        FunctionMap::new()
     };
     /// Internal map of currently supported methods.
     pub static ref SUPPORTED_METHODS: MethodMap = {

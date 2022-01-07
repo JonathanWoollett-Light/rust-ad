@@ -11,7 +11,7 @@ pub fn is_near(a: f32, b: f32) -> Result<(), String> {
 
 #[test]
 fn powi_test() {
-    let (f, der_x, der_y) = forward!(powi_fn, 3f32, 5f32);
+    let (f, (der_x, der_y)) = forward!(powi_fn, 3f32, 5f32);
     assert_eq!(f, 63.4f32);
     assert_eq!(der_x, 60f32);
     assert_eq!(der_y, -0.08f32);
@@ -35,7 +35,7 @@ fn powi_test() {
 }
 #[test]
 fn powf_test() {
-    let (f, der_x, der_y) = forward!(powf_fn, 3f32, 5f32);
+    let (f, (der_x, der_y)) = forward!(powf_fn, 3f32, 5f32);
     assert_eq!(f, 63.4f32);
     assert_eq!(der_x, 60f32);
     assert_eq!(der_y, -0.08f32);
@@ -59,7 +59,7 @@ fn powf_test() {
 }
 #[test]
 fn sqrt_test() {
-    let (f, der_x, der_y) = forward!(sqrt_fn, 3f32, 5f32);
+    let (f, (der_x, der_y)) = forward!(sqrt_fn, 3f32, 5f32);
     is_near(f, 12.524355653f32).unwrap();
     is_near(der_x, 5.4848275573f32).unwrap();
     is_near(der_y, -0.08f32).unwrap();
@@ -83,7 +83,7 @@ fn sqrt_test() {
 }
 #[test]
 fn ln_test() {
-    let (f, der_x, der_y) = forward!(ln_fn, 3f32, 5f32);
+    let (f, (der_x, der_y)) = forward!(ln_fn, 3f32, 5f32);
     is_near(f, 8.09028602068f32).unwrap();
     is_near(der_x, 4.53055791067f32).unwrap();
     is_near(der_y, -0.08f32).unwrap();
@@ -107,7 +107,7 @@ fn ln_test() {
 }
 #[test]
 fn log_test() {
-    let (f, der_x, der_y) = forward!(log_fn, 3f32, 5f32);
+    let (f, (der_x, der_y)) = forward!(log_fn, 3f32, 5f32);
     is_near(f, 11.494737505f32).unwrap();
     is_near(der_x, 6.53621343018f32).unwrap();
     is_near(der_y, -0.08f32).unwrap();

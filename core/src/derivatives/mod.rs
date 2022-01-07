@@ -1,5 +1,4 @@
 use crate::*;
-#[cfg(not(debug_assertions))]
 use std::collections::HashSet;
 
 /// Derivative functions for `f32`s.
@@ -49,14 +48,11 @@ pub type FgdType = fn(String, &[Arg], &[String]) -> syn::Stmt;
 pub type FgdType = fn(String, &[Arg], &[String], &mut HashSet<String>) -> syn::Stmt;
 
 /// Reverse General Derivative type
-#[cfg(debug_assertions)]
-pub type RgdType = fn(String, &[Arg], &mut Vec<HashMap<String, Vec<String>>>) -> Option<syn::Stmt>;
-#[cfg(not(debug_assertions))]
 pub type RgdType = fn(
     String,
     &[Arg],
     &mut Vec<HashMap<String, Vec<String>>>,
-    &mut HashSet<String>,
+    &mut Vec<HashSet<String>>,
 ) -> Option<syn::Stmt>;
 
 /// Function argument type
@@ -323,19 +319,22 @@ pub fn fgd<const DEFAULT: &'static str, const TRANSLATION_FUNCTIONS: &'static [D
         })
         .unzip::<_, _, Vec<_>, Vec<_>>();
 
-    // Converts vec's to strings
-    let (idents, derivatives) = (
-        idents
-            .into_iter()
-            .intersperse(String::from(","))
-            .collect::<String>(),
-        derivatives
-            .into_iter()
-            .intersperse(String::from(","))
-            .collect::<String>(),
-    );
-
-    let stmt_str = format!("let ({}) = ({});", idents, derivatives);
+    // Equivalent to `derivatives.len()`
+    let stmt_str = match idents.len() {
+        0 => unreachable!(),
+        1 => format!("let {} = {};", idents[0], derivatives[0]),
+        _ => format!(
+            "let ({}) = ({});",
+            idents
+                .into_iter()
+                .intersperse(String::from(","))
+                .collect::<String>(),
+            derivatives
+                .into_iter()
+                .intersperse(String::from(","))
+                .collect::<String>()
+        ),
+    };
     syn::parse_str(&stmt_str).expect("fgd: parse fail")
 }
 
@@ -344,22 +343,17 @@ pub fn rgd<const DEFAULT: &'static str, const TRANSLATION_FUNCTIONS: &'static [D
     local_ident: String,
     args: &[Arg],
     component_map: &mut Vec<HashMap<String, Vec<String>>>,
-    #[cfg(not(debug_assertions))] non_zero_derivatives: &mut HashSet<String>,
+    return_derivatives: &mut Vec<HashSet<String>>,
 ) -> Option<syn::Stmt> {
-    assert_eq!(
+    debug_assert_eq!(
         args.len(),
         TRANSLATION_FUNCTIONS.len(),
         "rgd args len mismatch"
     );
-    #[cfg(not(debug_assertions))]
-    eprintln!("rgd: non_zero_derivatives: {:?}", non_zero_derivatives);
+    debug_assert_eq!(component_map.len(), return_derivatives.len());
 
-    eprintln!("component_map: {:?}", component_map);
-
-    let (return_idents, return_derivatives) = component_map
-        .iter_mut()
-        .enumerate()
-        .filter_map(|(index, map)| {
+    let (output_idents, output_derivatives) = (0..component_map.len())
+        .filter_map(|index| {
             let (idents, derivatives) = args
                 .iter()
                 .zip(TRANSLATION_FUNCTIONS.iter())
@@ -373,14 +367,14 @@ pub fn rgd<const DEFAULT: &'static str, const TRANSLATION_FUNCTIONS: &'static [D
                     let wrt = wrt!(local_ident, rtn);
 
                     // If component exists
-                    match map.get(&local_ident).map(|e| e.contains(&rtn)) {
-                        Some(true) => {
-                            append_insert(arg, local_ident.clone(), map);
+                    match return_derivatives[index].contains(&local_ident) {
+                        true => {
+                            append_insert(arg, local_ident.clone(), &mut component_map[index]);
                             let (derivative, accumulator) = (t(args), wrt);
                             let full_der = format!("({})*{}", derivative, accumulator);
                             Some((der_ident, full_der))
                         }
-                        _ => None,
+                        false => None,
                     }
                 })
                 .unzip::<_, _, Vec<_>, Vec<_>>();
@@ -389,26 +383,26 @@ pub fn rgd<const DEFAULT: &'static str, const TRANSLATION_FUNCTIONS: &'static [D
         })
         .unzip::<_, _, Vec<_>, Vec<_>>();
 
-    match return_idents.len() {
+    match output_idents.len() {
         0 => None,
-        1 => match return_idents[0].len() {
+        1 => match output_idents[0].len() {
             0 => unreachable!(),
             1 => Some(
                 syn::parse_str(&format!(
                     "let {} = {};",
-                    return_idents[0][0], return_derivatives[0][0]
+                    output_idents[0][0], output_derivatives[0][0]
                 ))
                 .expect("fgd: 1 parse fail"),
             ),
             _ => Some(
                 syn::parse_str(&format!(
                     "let ({}) = ({});",
-                    return_idents[0]
+                    output_idents[0]
                         .iter()
                         .cloned()
                         .intersperse(String::from(","))
                         .collect::<String>(),
-                    return_derivatives[0]
+                    output_derivatives[0]
                         .iter()
                         .cloned()
                         .intersperse(String::from(","))
@@ -418,8 +412,8 @@ pub fn rgd<const DEFAULT: &'static str, const TRANSLATION_FUNCTIONS: &'static [D
             ),
         },
         _ => {
-            let (return_idents, return_derivatives) = (
-                return_idents
+            let (output_idents, output_derivatives) = (
+                output_idents
                     .into_iter()
                     .map(|ri| {
                         format!(
@@ -431,7 +425,7 @@ pub fn rgd<const DEFAULT: &'static str, const TRANSLATION_FUNCTIONS: &'static [D
                     })
                     .intersperse(String::from(","))
                     .collect::<String>(),
-                return_derivatives
+                output_derivatives
                     .into_iter()
                     .map(|rd| {
                         format!(
@@ -444,7 +438,7 @@ pub fn rgd<const DEFAULT: &'static str, const TRANSLATION_FUNCTIONS: &'static [D
                     .intersperse(String::from(","))
                     .collect::<String>(),
             );
-            let stmt_str = format!("let ({}) = ({});", return_idents, return_derivatives);
+            let stmt_str = format!("let ({}) = ({});", output_idents, output_derivatives);
             Some(syn::parse_str(&stmt_str).expect("fgd: 3 parse fail"))
         }
     }
