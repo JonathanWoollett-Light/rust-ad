@@ -29,34 +29,42 @@ A restrictive WIP beginnings of a library attempting to implement auto-different
 Auto-differentiation is implemented via 2 attribute procedural macros, e.g.
 
 ```rust
-#[rust_ad::forward_autodiff]
-fn multi(x: f32, y: f32) -> f32 {
-    let a = x.powi(2i32);
-    let b = x * 2f32;
-    let c = 2f32 / y;
-    let f = a + b + c;
-    return f;
-}
-fn main() {
-    let (f, der_x, der_y) = rust_ad::forward!(multi, 3f32, 5f32);
+fn multi_test() {
+    let (f, (der_x, der_y)) = forward!(multi, 3f32, 5f32);
     assert_eq!(f, 15.4f32);
     assert_eq!(der_x, 8f32);
     assert_eq!(der_y, -0.08f32);
+
+    /// f = x^2 + 2x + 2/y
+    /// δx|y=5 = 2x + 2
+    /// δy|x=3 = 2
+    #[forward_autodiff]
+    fn multi(x: f32, y: f32) -> f32 {
+        let a = x.powi(2i32);
+        let b = x * 2f32;
+        let c = 2f32 / y;
+        let f = a + b + c;
+        return f;
+    }
 }
 ```
 ```rust
-#[rust_ad::reverse_autodiff]
-fn multi(x: f32, y: f32) -> f32 {
-    let a = x.powi(2i32);
-    let b = x * 2f32;
-    let c = 2f32 / y;
-    let f = a + b + c;
-    return f;
-}
-fn main() {
-    let (f, der_x, der_y) = rust_ad::reverse!(multi, 3f32, 5f32);
+fn multi_test() {
+    let (f, (der_x, der_y)) = reverse!(multi, (3f32, 5f32), (1f32));
     assert_eq!(f, 15.4f32);
     assert_eq!(der_x, 8f32);
     assert_eq!(der_y, -0.08f32);
+
+    /// f = x^2 + 2x + 2/y
+    /// δx|y=5 = 2x + 2
+    /// δy|x=3 = 2
+    #[reverse_autodiff]
+    fn multi(x: f32, y: f32) -> f32 {
+        let a = x.powi(2i32);
+        let b = x * 2f32;
+        let c = 2f32 / y;
+        let f = a + b + c;
+        return f;
+    }
 }
 ```
