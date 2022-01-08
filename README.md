@@ -37,7 +37,7 @@ fn multi_test() {
 
     /// f = x^2 + 2x + 2/y
     /// δx|y=5 = 2x + 2
-    /// δy|x=3 = 2
+    /// δy|x=3 = -2/y^2
     #[forward_autodiff]
     fn multi(x: f32, y: f32) -> f32 {
         let a = x.powi(2i32);
@@ -57,7 +57,7 @@ fn multi_test() {
 
     /// f = x^2 + 2x + 2/y
     /// δx|y=5 = 2x + 2
-    /// δy|x=3 = 2
+    /// δy|x=3 = -2/y^2
     #[reverse_autodiff]
     fn multi(x: f32, y: f32) -> f32 {
         let a = x.powi(2i32);
