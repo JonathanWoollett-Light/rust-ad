@@ -12,7 +12,7 @@ A restrictive WIP beginnings of a library attempting to implement auto-different
 
 ## Status
 
-*These are not ordered*
+*These are not ordered.*
 
 - [x] Forward Auto-differentiation
 - [x] Reverse Auto-differentiation
