@@ -12,6 +12,8 @@ A restrictive WIP beginnings of a library attempting to implement auto-different
 
 ## Status
 
+*These are not ordered*
+
 - [x] Forward Auto-differentiation
 - [x] Reverse Auto-differentiation
 - [x] Numerical primitives (e.g. `f32`, `u32` etc.) support*
