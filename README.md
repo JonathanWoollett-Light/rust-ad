@@ -27,8 +27,6 @@ This transition will occur when all support items are covered.
 
 *`typeof` (e.g. [`decltype`](https://en.cppreference.com/w/cpp/language/decltype)) not being currently implemented in Rust makes support more difficult.
 
-°Support limited to the basic blas-like operations.
-
 ## Application
 
 Auto-differentiation is implemented via 2 attribute procedural macros, e.g.
