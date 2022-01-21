@@ -11,16 +11,19 @@ A restrictive WIP beginnings of a library attempting to implement auto-different
 **It's all messy be warned.**
 
 ## Status
+ 
+I'm thinking of transitioning this project to a binary where running `cargo rust-ad` performs auto-diff on any Rust code. This would allow support for [ndarray](https://docs.rs/ndarray/latest/ndarray/), [nalgebra](https://docs.rs/nalgebra/latest/nalgebra/) and any library written in Rust code by performing auto-diff through all dependencies. This would allow a fully generalized conveniant approach to auto-diff producing high level code which can be optimized by the compiler.
 
+This transition will occur when all support items are covered.
+ 
 *These are not ordered.*
 
 - [x] Forward Auto-differentiation
 - [x] Reverse Auto-differentiation
 - [x] Numerical primitives (e.g. `f32`, `u32` etc.) support*
-- [ ] limited° [ndarray](https://github.com/rust-ndarray/ndarray) support*
-- [ ] limited° [nalgebra](https://docs.rs/nalgebra/latest/nalgebra/) support*
 - [ ] `if`, `if else` and `else` support
 - [ ] `for`, `while` and `loop` support
+- [ ] `map` and `fold`
 
 *`typeof` (e.g. [`decltype`](https://en.cppreference.com/w/cpp/language/decltype)) not being currently implemented in Rust makes support more difficult.
 
